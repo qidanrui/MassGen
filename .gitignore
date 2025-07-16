@@ -1,0 +1,20 @@
+# directories
+__pycache__/
+__deprecated__/
+output/
+deprecated/
+logs/
+
+# files
+test*.py
+*.pyc
+.DS_Store
+.env
+sync.sh
+
+# keys
+swarm/.env
+
+# backup files
+data_backup/
+output_backup/

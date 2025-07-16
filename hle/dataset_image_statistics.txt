@@ -1,0 +1,8 @@
+Dataset: cais/hle (test split)
+Image Statistics Analysis
+========================================
+
+Total items in dataset: 2,500
+Items with images: 342 (13.7%)
+Items with empty images: 2,158 (86.3%)
+Items without image field: 0 (0.0%)

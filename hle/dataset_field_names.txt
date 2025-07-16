@@ -1,0 +1,17 @@
+Dataset: cais/hle (test split)
+Total items: 2500
+Total unique field names: 12
+
+Field names:
+ 1. answer
+ 2. answer_type
+ 3. author_name
+ 4. canary
+ 5. category
+ 6. id
+ 7. image
+ 8. image_preview
+ 9. question
+10. rationale
+11. rationale_image
+12. raw_subject
