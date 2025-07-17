@@ -174,14 +174,14 @@ agent_configs = [
     {
         "type": "openai",
         "kwargs": {
-            "model": "o3",
+            "model": "o4-mini",
             "temperature": 0.3
         }
     },
     {
         "type": "gemini", 
         "kwargs": {
-            "model": "gemini-2.5-pro",
+            "model": "gemini-2.5-flash",
             "temperature": 0.5
         }
     }

@@ -74,7 +74,7 @@ def parse_completion(completion, add_citations=True):
 
     return {"text": text, "code": code, "citations": citations}
 
-def process_message(messages, model="gemini-2.5-pro", tools=["live_search", "code_execution"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None):
+def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "code_execution"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None):
     """
     Generate content using Gemini API.
     

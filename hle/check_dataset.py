@@ -393,8 +393,8 @@ def analyze_field_values(dataset, fields_to_analyze=['answer_type', 'category', 
     
     return field_stats, summary
 
-def create_category_sample_subset(dataset, category_field='raw_subject', min_examples=5):
-    """Create a subset by randomly selecting one example from each category with >= min_examples"""
+def create_category_sample_subset(dataset, category_field='raw_subject', min_examples=10, samples_per_category=50):
+    """Create a subset by randomly selecting multiple examples from each category with >= min_examples"""
     print(f"\n{'='*60}")
     print("CREATING CATEGORY SAMPLE SUBSET")
     print(f"{'='*60}")
@@ -433,16 +433,16 @@ def create_category_sample_subset(dataset, category_field='raw_subject', min_exa
     
     # Display category statistics
     print(f"\nQualifying categories:")
-    sorted_categories = sorted(qualifying_categories.items(), key=lambda x: len(x[1]), reverse=True)
+    sorted_categories = sorted(qualifying_categories.items(), key=lambda x: (x[0]))  # Sort by category name
     for category, items in sorted_categories:
         print(f"  {category:<40} : {len(items):>4} examples")
     
-    # Randomly select one example from each qualifying category (without images)
+    # Randomly select multiple examples from each qualifying category (without images)
     selected_samples = []
     
-    print(f"\nRandomly selecting one example from each qualifying category (without images)...")
+    print(f"\nRandomly selecting up to {samples_per_category} examples from each qualifying category (without images)...")
     
-    for category, items in qualifying_categories.items():
+    for category, items in sorted_categories:  # Use sorted categories to maintain order
         # Filter items without images
         items_without_images = []
         for item_data in items:
@@ -452,31 +452,33 @@ def create_category_sample_subset(dataset, category_field='raw_subject', min_exa
                 items_without_images.append(item_data)
         
         if items_without_images:
-            # Randomly select one item from those without images
-            selected_item_data = random.choice(items_without_images)
-            selected_item = selected_item_data['item']
+            # Randomly select up to samples_per_category items from those without images
+            num_to_select = min(samples_per_category, len(items_without_images))
+            selected_items_data = random.sample(items_without_images, num_to_select)
             
-            print(f"  {category:<40} : Selected index {selected_item_data['dataset_index']} (no image, {len(items_without_images)}/{len(items)} available)")
+            print(f"  {category:<40} : Selected {num_to_select} indices (no images, {len(items_without_images)}/{len(items)} available)")
+            
+            # Add each selected item to the samples list
+            for idx, selected_item_data in enumerate(selected_items_data):
+                selected_item = selected_item_data['item']
+                
+                # Create a clean copy for JSON serialization
+                sample = {
+                    'dataset_index': selected_item_data['dataset_index'],
+                    'category': category,
+                    'category_sample_index': idx + 1,  # 1-based index within category
+                    'selected_from_total': len(items),
+                    'available_without_images': len(items_without_images),
+                    'item_data': convert_to_json_serializable(selected_item)
+                }
+                
+                selected_samples.append(sample)
         else:
             print(f"  {category:<40} : ⚠️  SKIPPED - no items without images ({len(items)} total)")
             continue
-        
-        # Create a clean copy for JSON serialization
-        sample = {
-            'dataset_index': selected_item_data['dataset_index'],
-            'category': category,
-            'selected_from_total': len(items),
-            'available_without_images': len(items_without_images),
-            'item_data': convert_to_json_serializable(selected_item)
-        }
-        
-        selected_samples.append(sample)
-    
-    # Sort samples by category name for consistent output
-    selected_samples.sort(key=lambda x: x['category'])
     
     # Save to JSON file
-    output_filename = f'category_sample_subset_{category_field}.json'
+    output_filename = f'category_sample_subset_{category_field}_{samples_per_category}each.json'
     
     with open(output_filename, 'w', encoding='utf-8') as f:
         json.dump({
@@ -485,9 +487,10 @@ def create_category_sample_subset(dataset, category_field='raw_subject', min_exa
                 'total_dataset_items': len(dataset),
                 'category_field': category_field,
                 'min_examples_threshold': min_examples,
+                'samples_per_category': samples_per_category,
                 'total_categories': len(category_items),
                 'qualifying_categories': len(qualifying_categories),
-                'selected_samples': len(selected_samples),
+                'total_selected_samples': len(selected_samples),
                 'creation_timestamp': str(np.datetime64('now'))
             },
             'samples': selected_samples
@@ -501,15 +504,31 @@ def create_category_sample_subset(dataset, category_field='raw_subject', min_exa
     print(f"{'='*40}")
     print(f"Total samples selected: {len(selected_samples)}")
     print(f"Categories included: {len(qualifying_categories)} (out of {len(category_items)} total)")
+    print(f"Samples per category: up to {samples_per_category}")
     print(f"Minimum examples per category: {min_examples}")
+    
+    # Show category-wise breakdown
+    print(f"\nCategory breakdown:")
+    current_category = None
+    category_count = 0
+    for sample in selected_samples:
+        if sample['category'] != current_category:
+            if current_category is not None:
+                print(f"  {current_category:<40} : {category_count} samples")
+            current_category = sample['category']
+            category_count = 1
+        else:
+            category_count += 1
+    # Print the last category
+    if current_category is not None:
+        print(f"  {current_category:<40} : {category_count} samples")
     
     # Show some examples of what was selected
     print(f"\nFirst 5 selected samples:")
     for i, sample in enumerate(selected_samples[:5]):
         item = sample['item_data']
-        print(f"\n{i+1}. Category: {sample['category']}")
+        print(f"\n{i+1}. Category: {sample['category']} (sample {sample['category_sample_index']})")
         print(f"   Dataset Index: {sample['dataset_index']}")
-        print(f"   Selected from: {sample['selected_from_total']} total examples")
         print(f"   Question: {item.get('question', 'N/A')[:100]}...")
         print(f"   Answer: {item.get('answer', 'N/A')}")
     
@@ -584,7 +603,7 @@ for field, info in field_summary.items():
 print("\n" + "="*60)
 print("CREATING CATEGORY SAMPLE SUBSET")
 print("="*60)
-selected_samples = create_category_sample_subset(dataset, category_field='raw_subject', min_examples=5)
+selected_samples = create_category_sample_subset(dataset, category_field='raw_subject', min_examples=10, samples_per_category=50)
 
 if selected_samples:
     print(f"\n🎉 Successfully created a sample subset with {len(selected_samples)} examples!")

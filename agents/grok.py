@@ -35,7 +35,7 @@ def parse_completion(response, add_citations=True):
     
     return {"text": text, "code": code, "citations": citations}
 
-def process_message(messages, model="grok-4", tools=["live_search"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None):
+def process_message(messages, model="grok-4", tools=["live_search"], max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None):
     """
     Generate content using Grok API.
     

@@ -36,7 +36,7 @@ except ImportError:
 class OpenAIMassAgent(MassAgent):
     """MassAgent wrapper for OpenAI agent implementation."""
     
-    def __init__(self, agent_id: int, coordination_system=None, model: str = "o3", **kwargs):
+    def __init__(self, agent_id: int, coordination_system=None, model: str = "o4-mini", **kwargs):
         super().__init__(agent_id, coordination_system)
         self.model = model
         self.kwargs = kwargs
@@ -102,7 +102,7 @@ class OpenAIMassAgent(MassAgent):
 class GeminiMassAgent(MassAgent):
     """MassAgent wrapper for Gemini agent implementation."""
     
-    def __init__(self, agent_id: int, coordination_system=None, model: str = "gemini-2.5-pro", **kwargs):
+    def __init__(self, agent_id: int, coordination_system=None, model: str = "gemini-2.5-flash", **kwargs):
         super().__init__(agent_id, coordination_system)
         self.model = model
         self.kwargs = kwargs
