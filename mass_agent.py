@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import time
+import os
 
 @dataclass
 class AgentState:
@@ -92,7 +93,7 @@ class MassAgent(ABC):
     
     @abstractmethod
     def process_message(self, messages: List[Dict[str, str]], tools: List[str] = None, 
-                       temperature: float = 0.5, **kwargs) -> AgentResponse:
+                       temperature: float = 0.7, **kwargs) -> AgentResponse:
         """
         Core LLM inference function for task processing.
         
@@ -110,6 +111,16 @@ class MassAgent(ABC):
         """
         pass
     
+    def cleanup(self):
+        """
+        Clean up agent resources (HTTP clients, sessions, etc.).
+        
+        This method should be implemented by agents that maintain persistent
+        connections or background resources that need explicit cleanup.
+        Default implementation does nothing.
+        """
+        pass
+    
     def update_summary(self, summary_report: str, final_answer: str = ""):
         """
         Record working process and summary report for sharing with other agents.
@@ -120,9 +131,9 @@ class MassAgent(ABC):
         """
         if self.coordination_system:
             self.coordination_system.update_agent_summary(self.agent_id, summary_report, final_answer)
-        
-        # Update local state
-        self.state.add_update(summary_report, final_answer)
+        else:
+            # Fallback: Update local state only if no coordination system
+            self.state.add_update(summary_report, final_answer)
     
     def check_updates(self) -> Dict[str, Any]:
         """
@@ -139,7 +150,7 @@ class MassAgent(ABC):
                 check_new_only=True
             )
             
-            # Mark the updates we've seen
+            # Mark the other agents' updates we've seen
             if updates.get("agents"):
                 seen_updates = {}
                 for agent_id, agent_info in updates["agents"].items():
@@ -160,26 +171,28 @@ class MassAgent(ABC):
             Dictionary containing all updates from all agents
         """
         if self.coordination_system:
+            # Get all updates (including previously seen ones)
             return self.coordination_system.get_all_updates(
                 exclude_agent_id=self.agent_id, 
                 check_new_only=False
             )
         return {}
     
-    def vote(self, target_agent_id: int):
+    def vote(self, target_agent_id: int, response_text: str = ""):
         """
-        Vote for the best solution among all agents.
+        Vote for the representative agent.
         
         Args:
-            target_agent_id: ID of the agent whose solution this agent votes for
+            target_agent_id: ID of the voted representative agent
+            response_text: The full response text that led to this vote (optional)
         """
         if self.coordination_system:
-            self.coordination_system.cast_vote(self.agent_id, target_agent_id)
-        
-        # Update local state
-        self.state.status = "voted"
-        self.state.vote_target = target_agent_id
-        self.state.execution_end_time = time.time()
+            self.coordination_system.cast_vote(self.agent_id, target_agent_id, response_text)
+        else:
+            # Update local state
+            self.state.status = "voted"
+            self.state.vote_target = target_agent_id
+            self.state.execution_end_time = time.time()
     
     def get_workflow_instructions(self, phase: str) -> str:
         """
@@ -192,90 +205,85 @@ class MassAgent(ABC):
             Detailed instructions for the specified phase
         """
         instructions = {
-            "initial": f"""
-You are Agent {self.agent_id} working with other agents to solve a task. 
-
-Your goals:
-1. Process the given task using your reasoning capabilities and available tools (search and code interpreter)
-2. Provide a clear, and comprehensive summary report at the end of your response that will be shared with other agents
-
-Response format:
-```
-### Summary Report
-[Your summary report]
-
-### Answer
-[Your final answer to this question]
-```
-
+            "initial": """
+Provide a comprehensive yet concise report in response to the user's question.
+It should include the key information and reasoning steps to solve the question.
 """,
+            
             "collaboration": f"""
-You are Agent {self.agent_id} working with other agents to solve a task.
+You are Agent {self.agent_id} working with other agents as a team to solve a task.
 
-You will be shown your own previous summary and other agents' working summaries below for reference. 
+You will be shown the your previous solution and other agents' solution.
 
-You should use your tools to verify the accuracy of these solutions and the final answers.
+**Your Goal**:
+1. Review your own solution and all peer solutions against the original task
+2. Check each step, statement, assumption, and conclusion of all provided solutions
+3. Evaluate whether any agent (including yourself) has found the correct solution
+4. Decide: 
+ - If you are sure that your own or other agent's solution is 100% correct, vote for that agent to be the representative.
+ - If you are not the team has found the most correct solution, continue working on finding the correct solution.
 
-After reviewing all summaries, you have two options:
-
-**Option 1: Update Your Solution**
-If you want to continue working on finding a better solution, provide an updated summary report and conclude with:
+**Response Format**:
+- Your response should be comprehensive, detailed and grounded.
+- To clarify your decision, your response must conclude with the following response format:
 ```
-### Summary Report
-[Your updated summary report]
-
-### Answer
-[Your final answer to this question]
+### Voting Decision
+{{"voting": agent_id or None}}
 ```
+*Replace agent_id with the actual agent ID you're voting for, or use "None" if no satisfactory solution exists yet and you propose a new solution.*
 
-**Option 2: Vote for Best Solution**  
-If you believe one of the existing solutions (including your own) is the correct answer, vote by concluding your response with:
-```
-### Voting
-Agent [agent_id]
-```
-
-Guidelines:
+**Guidelines**:
 - Remember: You are Agent {self.agent_id}
 - Carefully review all solutions alongside the original task
-- Check each step, statement, assumption, and conclusion of all provided solutions
-- Look for accuracy, completeness, and quality when evaluating solutions
-- When voting, specify the agent ID (including your own ID {self.agent_id} if you believe your solution is best)
-"""
-        }
-        instructions["consensus"] = f"""
-You are Agent {self.agent_id} working with other agents to solve a task.
-
-You will be shown your own previous summary and other agents' working summaries below for reference.
-
-This is the consensus phase. You should make a final decision on which solution is the best.
-
-After reviewing all summaries, you have two options:
-
-**Option 1: Update Your Solution**
-If you want to provide a final improved solution, conclude with:
-```
-### Summary Report
-[Your final summary report]
-
-### Answer
-[Your final answer to this question]
-```
-
-**Option 2: Vote for Best Solution**  
-If you believe one of the existing solutions (including your own) is the correct answer, vote by concluding your response with:
-```
-### Voting
-Agent [agent_id]
-```
-
-Guidelines:
-- Remember: You are Agent {self.agent_id}
-- This is your final opportunity to contribute to the solution
-- Choose the most accurate and complete solution among all options
-- When voting, specify the agent ID (including your own ID {self.agent_id} if you believe your solution is best)
-"""
+- Check each step, statement, information sources, assumption, and conclusion of all provided solutions
+- If no satisfactory solution exists yet, you should include your updated solution in summary report, and put `None` in voting decision. 
+- If you find some agent (including yourself) has find the final solution, include why your believe that in summary report, and put its agent_id in voting decision
+""",
         
+            "debate": f"""
+You are Agent {self.agent_id} working with other agents as a team to solve a task.
+
+You will be shown the summary report of your own and other agents' solution.
+
+The team has different opinions on the correct solution.
+
+**Your Goal**:
+1. Review all peer solutions and your own solution
+2. Check each step, statement, information sources, assumption, and conclusion of all provided solutions
+3. Evaluate whether any agent (including yourself) has found the correct solution
+4. Decide: If you are sure that some agent's solution is correct, vote for that agent to be the representative. If not, continue working on finding the correct solution.
+
+**Response Format**:
+- Your response should be comprehensive, detailed and grounded.
+- To clarify your decision, your response must conclude with the following response format:
+```
+### Voting Decision
+{{"voting": agent_id or None}}
+```
+*Replace agent_id with the actual agent ID you're voting for, or use "None" if no satisfactory solution exists yet and you propose a new solution.*
+""",
+
+            "presentation": f"""
+You are Agent {self.agent_id} working with other agents as a team to solve a task.
+
+You will be shown the summary report of your own and other agents' solution.
+
+You have been voted by other agents to present the final answer.
+
+**Your Goal**:
+1. Incorporate all peer solutions and opinions to form a final solution
+2. Compose a final summary report in response to the original task question
+3. State the final answer at the end of your response
+
+**Response Format**:
+- Your response should be comprehensive, detailed and grounded on the original task question.
+- To clarify your final answer, your response must conclude with the following response format:
+```
+### Final answer
+[final answer to the question]
+```
+""",
+        }
         return instructions.get(phase, "")
     
     def process_task(self, task: TaskInput, phase: str = "initial") -> AgentResponse:
@@ -285,67 +293,81 @@ Guidelines:
         
         Args:
             task: The task to process
-            phase: The workflow phase ("initial", "collaboration", "consensus")
+            phase: The workflow phase ("initial", "collaboration", "debate", "presentation")
             
         Returns:
             AgentResponse containing the agent's response
         """
         # Phase-specific coordination handled by workflow system
         if phase == "collaboration":
-            # Get only new updates from other agents
-            updates = self.check_updates()
+            # Check for new updates to determine if we should process
+            new_updates = self.check_updates()
+            has_new_updates = new_updates and new_updates.get("has_new_updates", False)
+                        
+            # Build context with own summary and only NEW updates from other agents
+            context_parts = []
             
-            # Always include agent's own summary and ID context as required by README
-            own_summary_context = f"\n\nYour ID: Agent {self.agent_id}"
+            # Include agent's own latest summary
+            context_parts.append(f"Your ID: Agent {self.agent_id}")
             if self.state.working_summary:
-                own_summary_context += f"\n\nYour previous summary:\n{self.state.working_summary}"
+                context_parts.append(f"Your latest summary:\n{self.state.working_summary}")
             
-            if updates and updates.get("agents") and updates.get("has_new_updates"):
-                # Add only new peer updates to the context for agent consideration
-                peer_summaries = []
-                new_updates_count = 0
-                for agent_id, agent_info in updates["agents"].items():
-                    if agent_info.get("working_summary") and agent_info.get("is_new_update", False):
-                        peer_summaries.append(f"Agent {agent_id}: {agent_info['working_summary']}")
-                        new_updates_count += 1
+            # Include only NEW updates from other agents (if any)
+            print(f"   📥 Agent {self.agent_id} has_new_updates: {has_new_updates}")
+            # print(f"   📥 Agent {self.agent_id} new_updates: {new_updates}")
+            # _ = input("[DEBUG] Press Enter to continue...")
+            
+            if has_new_updates and new_updates.get("agents"):
+                new_agent_updates = []
+                for agent_id, agent_info in new_updates["agents"].items():
+                    if agent_info.get("is_new_update", False):
+                        summary = agent_info.get("working_summary", "")
+                        if summary:
+                            new_agent_updates.append(f"Agent {agent_id} (NEW): {summary}")
                 
-                if peer_summaries:
-                    peer_context = f"\n\nNew peer agent solutions to consider ({new_updates_count} new updates):\n" + "\n".join(peer_summaries)
-                    print(f"   📥 Agent {self.agent_id} received {new_updates_count} new updates from peers")
-                else:
-                    peer_context = ""
-                    print(f"   📥 Agent {self.agent_id} received no new updates")
+                if new_agent_updates:
+                    context_parts.append("New updates from other agents:")
+                    context_parts.extend(new_agent_updates)
+            
+            # Create context showing only own summary + new updates from others
+            full_peer_context = "\n\n" + "\n\n".join(context_parts)
+            # print(f"   📥 Agent {self.agent_id} full_peer_context: {full_peer_context}")
+            
+            # Log whether there are new updates
+            if has_new_updates:
+                new_count = sum(1 for agent_info in new_updates["agents"].values() if agent_info.get("is_new_update", False))
+                print(f"   📥 Agent {self.agent_id} processing with {new_count} new updates available")
             else:
-                peer_context = ""
-                print(f"   📥 Agent {self.agent_id} received no new updates")
+                print(f"   📥 Agent {self.agent_id} processing with no new updates")
             
-            # Combine own summary and peer context as required by README
-            full_peer_context = own_summary_context + peer_context
-            
-        elif phase == "consensus":
+        elif phase in ["debate", "presentation"]:
             # In consensus phase, check all updates to make final decision
             updates = self.check_all_updates()
             
-            # Include agent's own ID and summary for consensus phase too
+            # Include agent's own ID and latest summary for consensus phase
             own_summary_context = f"\n\nYour ID: Agent {self.agent_id}"
             if self.state.working_summary:
-                own_summary_context += f"\n\nYour previous summary:\n{self.state.working_summary}"
+                own_summary_context += f"\n\nYour latest summary:\n{self.state.working_summary}"
             
             if updates and updates.get("agents"):
+                # Get only the latest summary for each peer agent
                 peer_summaries = []
                 for agent_id, agent_info in updates["agents"].items():
-                    if agent_info.get("working_summary"):
-                        peer_summaries.append(f"Agent {agent_id}: {agent_info['working_summary']}")
+                    # Ensure we get the latest summary - working_summary should be the most recent
+                    latest_summary = agent_info.get("working_summary")
+                    if latest_summary:
+                        peer_summaries.append(f"Agent {agent_id}: {latest_summary}")
                 
                 if peer_summaries:
-                    peer_context = "\n\nAll peer agent solutions for final consideration:\n" + "\n".join(peer_summaries)
+                    peer_context = "\n\nLatest solutions from all peer agents:\n" + "\n".join(peer_summaries)
                 else:
                     peer_context = ""
             else:
                 peer_context = ""
             
-            # Combine own summary and peer context
+            # Combine own latest summary and peer latest summaries
             full_peer_context = own_summary_context + peer_context
+            
         else:
             # Initial phase - no peer context, but include agent ID
             full_peer_context = f"\n\nYour ID: Agent {self.agent_id}"
@@ -356,7 +378,7 @@ Guidelines:
         # Prepare messages for the LLM
         messages = [
             {"role": "system", "content": instructions},
-            {"role": "user", "content": task.question + full_peer_context}
+            {"role": "user", "content": "Task: " + task.question + "\n\n" + full_peer_context}
         ]
         
         # Get available tools (only live_search and code_execution)
@@ -375,5 +397,5 @@ Guidelines:
         exposed as tools to agents. They are called programmatically by the 
         workflow system at appropriate times.
         """
-        # Only live_search and code_execution are available as tools to agents
+        # Only live_search and code_execution are available as tools to agents for now
         return ["live_search", "code_execution"] 

@@ -21,24 +21,21 @@ def parse_completion(response, add_citations=True):
         for citation in response.citations:
             citations.append({
                 'url': citation,
-                'title': '',
-                'start_index': -1,
-                'end_index': -1
+                'title': '', # no title for grok
+                'start_index': -1, # no start index for grok
+                'end_index': -1 # no end index for grok
             })
         
         # Add citation links to text if available
         if citations:
-            # Sort citations by end_index in descending order to avoid shifting issues when inserting
-            sorted_citations = sorted(citations, key=lambda c: c['end_index'], reverse=True)
-            
-            for idx, citation in enumerate(sorted_citations):
-                end_index = citation['end_index']
-                citation_link = f"[{len(citations) - idx}]({citation['url']})"
-                text = text[:end_index] + citation_link + text[end_index:]
+            citation_content = []
+            for idx, citation in enumerate(citations):
+                citation_content.append(f"[{idx}]({citation['url']})")
+            text = text + "\n\n" + "\n".join(citation_content)
     
     return {"text": text, "code": code, "citations": citations}
 
-def process_message(messages, model="grok-4", tools=["live_search"], max_retries=10, max_tokens=32000, temperature=0.5, top_p=1.0, api_key=None):
+def process_message(messages, model="grok-4", tools=["live_search"], max_retries=10, max_tokens=32000, temperature=0.7, top_p=1.0, api_key=None):
     """
     Generate content using Grok API.
     
@@ -121,9 +118,10 @@ def process_message(messages, model="grok-4", tools=["live_search"], max_retries
 
 # Example usage (you can remove this if not needed)
 if __name__ == "__main__":
-    messages = [{"role": "user", "content": "Tell me the difference between the GDP of China and India in percentage for the past 10 years. Then use a suitable model to predict the GDP of China and India in 2035. Make sure to cite the sources of your information."}]
+    messages = [
+        {"role": "user", "content": "Which are the three longest rivers mentioned in the Aeneid?"}]
     
-    result = process_message(messages, tools=["live_search", "code_execution"])
+    result = process_message(messages, tools=["live_search"])
     print("##########Response#############")
     print(result["text"])
     print("##########Code#############")

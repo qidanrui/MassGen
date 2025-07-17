@@ -27,7 +27,7 @@ The implementation consists of several key components:
 
 ### 3. Workflow Management (`mass_workflow.py`)
 
-- **`MassWorkflowManager`**: Orchestrates the three-phase workflow
+- **`MassWorkflowManager`**: Orchestrates the four-phase workflow
 - Parallel and sequential execution modes
 - Progress tracking and error handling
 - Phase-specific callback support
@@ -112,7 +112,7 @@ The workflow orchestrates coordination by:
 3. Providing peer context to agents during collaboration phases
 4. Managing consensus detection and fallback mechanisms
 
-## Three-Phase Workflow
+## Four-Phase Workflow
 
 ### Phase 1: Initial Processing
 
@@ -133,15 +133,24 @@ Agents review each other's work with workflow coordination:
    - Indicate preference for another agent's solution (workflow calls `vote()`)
 3. Multiple rounds may occur until consensus or voting completes
 
-### Phase 3: Consensus & Finalization
+### Phase 3: Consensus Building & Debate
 
-Final consensus building with intelligent response analysis:
+Structured debate and consensus building:
 
-1. System checks if consensus is reached
-2. Remaining working agents review final peer solutions
+1. System checks if consensus is reached from Phase 2
+2. If no consensus, remaining working agents engage in structured debate
 3. Workflow analyzes responses for voting patterns (e.g., "Agent X has the best solution")
-4. Fallback to majority vote if maximum rounds reached
-5. System finalizes with winning solution
+4. Iterative review process continues until consensus emerges
+5. Fallback to majority vote if maximum rounds reached
+
+### Phase 4: Final Presentation
+
+Selected representative presents the final solution:
+
+1. The winning agent (determined by consensus or majority vote) becomes the representative
+2. Representative receives complete context of all peer solutions and voting opinions
+3. Representative synthesizes and presents the final answer with full reasoning
+4. System finalizes with comprehensive solution
 
 ## Configuration Options
 
@@ -165,7 +174,7 @@ agent_configs = [
     {
         "type": "openai",
         "kwargs": {
-            "model": "o4-mini",
+            "model": "o3",
             "temperature": 0.3
         }
     },

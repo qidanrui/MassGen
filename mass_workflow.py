@@ -1,12 +1,13 @@
 """
 MASS Workflow Manager
 
-This module handles the orchestration of the three-phase workflow:
+This module handles the orchestration of the four-phase workflow:
 1. Initial Processing - Agents work independently
 2. Collaboration & Refinement - Agents review each other's work
-3. Consensus & Finalization - Agents reach consensus on the best solution
+3. Consensus Building & Debate - Agents reach consensus through structured debate
+4. Final Presentation - Representative presents the final solution
 """
-
+import os
 import asyncio
 import threading
 import time
@@ -16,6 +17,7 @@ import logging
 
 from mass_agent import MassAgent, TaskInput, AgentResponse
 from mass_coordination import MassCoordinationSystem
+from mass_logging import get_log_manager
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -24,14 +26,15 @@ class MassWorkflowManager:
     """
     Orchestrates the complete MASS workflow across multiple agents.
     
-    This manager handles the execution of all three phases, ensures proper
+    This manager handles the execution of all four phases, ensures proper
     coordination between agents, and manages the overall workflow state.
     """
     
     def __init__(self, coordination_system: MassCoordinationSystem, 
                  max_phase_duration: int = 300,  # 5 minutes per phase
                  parallel_execution: bool = True,
-                 check_update_frequency: float = 3.0):  # 3 seconds default as per README
+                 check_update_frequency: float = 3.0,  # 3 seconds default as per README
+                 max_collaboration_rounds: int = 5):  # Maximum collaboration rounds
         """
         Initialize the workflow manager.
         
@@ -40,25 +43,29 @@ class MassWorkflowManager:
             max_phase_duration: Maximum time allowed per phase in seconds
             parallel_execution: Whether to run agents in parallel
             check_update_frequency: How often agents check for updates in seconds (default 3)
+            max_collaboration_rounds: Maximum number of collaboration rounds (default 5)
         """
         self.coordination_system = coordination_system
         self.max_phase_duration = max_phase_duration
         self.parallel_execution = parallel_execution
         self.check_update_frequency = check_update_frequency
+        self.max_collaboration_rounds = max_collaboration_rounds
         
         # Workflow state
         self.current_phase = "initial"
         self.phase_results: Dict[str, List[Dict[str, Any]]] = {
             "initial": [],
             "collaboration": [],
-            "consensus": []
+            "debate": [],
+            "presentation": []
         }
         
         # Callbacks for phase completion
         self.phase_callbacks: Dict[str, List[Callable]] = {
             "initial": [],
             "collaboration": [],
-            "consensus": []
+            "debate": [],
+            "presentation": []
         }
     
     def add_phase_callback(self, phase: str, callback: Callable):
@@ -66,106 +73,136 @@ class MassWorkflowManager:
         if phase in self.phase_callbacks:
             self.phase_callbacks[phase].append(callback)
     
+    def _update_coordination_system_phase(self, new_phase: str):
+        """Update the coordination system's phase to match the workflow manager's phase."""
+        old_phase = self.coordination_system.system_state.phase
+        self.coordination_system.system_state.phase = new_phase
+        logger.info(f"🔄 Phase transition: {old_phase} → {new_phase}")
+        print(f"   🔄 System phase updated: {old_phase} → {new_phase}")
+    
     def run_complete_workflow(self, task: TaskInput, 
                             progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
         """
-        Run the complete three-phase MASS workflow.
-        Guarantees returning a final solution regardless of agent failures or other issues.
+        Run the complete four-phase MASS workflow.
         
         Args:
             task: The task to process
             progress_callback: Optional callback for progress updates
             
         Returns:
-            Dictionary containing comprehensive workflow results with guaranteed final solution
+            Dictionary containing comprehensive workflow results
         """
         workflow_start_time = time.time()
         logger.info("=" * 80)
         logger.info("STARTING COMPLETE MASS WORKFLOW")
         logger.info("=" * 80)
         
-        try:
-            # Set expected answer if available in task context
-            if task.context and "answer" in task.context:
-                self.coordination_system.set_expected_answer(task.context["answer"])
-                logger.info(f"Expected answer set: {task.context['answer']}")
+        # Set expected answer if available in task context
+        if task.context and "answer" in task.context:
+            self.coordination_system.set_expected_answer(task.context["answer"])
+            logger.info(f"Expected answer set: {task.context['answer']}")
+        
+        # Phase 1: Initial Processing
+        print("\n" + "🔵"*20)
+        print("📝 PHASE 1: INITIAL PROCESSING")
+        print("🔵"*20)
+        print("🎯 Goal: Each agent works independently on the task")
+        print("🛠️  Tools: live_search, code_execution")
+        logger.info("Phase 1: Initial Processing")
+        
+        # Log phase transition
+        log_manager = get_log_manager()
+        if log_manager:
+            log_manager.log_phase_transition("workflow_start", "initial")
+        
+        self.coordination_system.start_phase_timing("initial")
+        self.current_phase = "initial"
+        self._update_coordination_system_phase("initial")
+        initial_results = self._run_phase_1_initial_processing(task, progress_callback)
+        self.coordination_system.end_phase_timing("initial")
+        self.phase_results["initial"] = initial_results
+        
+        # Execute phase callbacks
+        for callback in self.phase_callbacks["initial"]:
+            callback(initial_results)
+        
+        successful_initial = len([r for r in initial_results if r['success']])
+        print(f"\n✅ Phase 1 Complete: {successful_initial}/{len(initial_results)} agents successful")
+        
+        # Phase 2: Collaboration & Refinement
+        print("\n" + "🟡"*20)
+        print("🤝 PHASE 2: COLLABORATION & REFINEMENT")
+        print("🟡"*20)
+        print("🎯 Goal: Agents review peer solutions and collaborate")
+        print("🔄 Process: Multiple rounds until consensus or voting complete")
+        logger.info("Phase 2: Collaboration & Refinement")
+        
+        # Log phase transition
+        if log_manager:
+            log_manager.log_phase_transition("initial", "collaboration")
+        
+        self.coordination_system.start_phase_timing("collaboration")
+        self.current_phase = "collaboration"
+        self._update_coordination_system_phase("collaboration")
+        collaboration_results = self._run_phase_2_collaboration(task, progress_callback)
+        self.coordination_system.end_phase_timing("collaboration")
+        self.phase_results["collaboration"] = collaboration_results
+        
+        # Execute phase callbacks
+        for callback in self.phase_callbacks["collaboration"]:
+            callback(collaboration_results)
+        
+        # Phase 3: Consensus Building & Debate
+        print("\n" + "🟢"*20)
+        print("🔥 PHASE 3: CONSENSUS BUILDING & DEBATE")
+        print("🟢"*20)
+        print("🎯 Goal: Final consensus building and solution selection")
+        logger.info("Phase 3: Consensus Building & Debate")
+        
+        # Log phase transition
+        if log_manager:
+            log_manager.log_phase_transition("collaboration", "debate")
+        
+        self.coordination_system.start_phase_timing("debate")
+        self.current_phase = "debate"
+        self._update_coordination_system_phase("debate")
+        debate_results = self._run_phase_3_debate(task, progress_callback)
+        self.coordination_system.end_phase_timing("debate")
+        self.phase_results["debate"] = debate_results
+        
+        # Execute phase callbacks
+        for callback in self.phase_callbacks["debate"]:
+            callback(debate_results)
+        
+        # Phase 4: Final Presentation (only if consensus reached)
+        if self.coordination_system.system_state.consensus_reached:
+            print("\n" + "🔴"*20)
+            print("🎉 PHASE 4: FINAL PRESENTATION")
+            print("🔴"*20)
+            print("🎯 Goal: Representative presents final solution with full context")
+            logger.info("Phase 4: Final Presentation")
             
-            # Phase 1: Initial Processing
-            print("\n" + "🔵"*20)
-            print("📝 PHASE 1: INITIAL PROCESSING")
-            print("🔵"*20)
-            print("🎯 Goal: Each agent works independently on the task")
-            print("🛠️  Tools: live_search, code_execution")
-            logger.info("Phase 1: Initial Processing")
+            # Log phase transition
+            if log_manager:
+                log_manager.log_phase_transition("debate", "presentation")
             
-            self.coordination_system.start_phase_timing("initial")
-            self.current_phase = "initial"
-            initial_results = self._run_phase_1_initial_processing(task, progress_callback)
-            self.coordination_system.end_phase_timing("initial")
-            self.phase_results["initial"] = initial_results
+            self.coordination_system.start_phase_timing("presentation")
+            self.current_phase = "presentation"
+            self._update_coordination_system_phase("presentation")
+            presentation_results = self._run_phase_4_presentation(task, progress_callback)
+            self.coordination_system.end_phase_timing("presentation")
+            self.phase_results["presentation"] = presentation_results
             
             # Execute phase callbacks
-            for callback in self.phase_callbacks["initial"]:
-                callback(initial_results)
-            
-            successful_initial = len([r for r in initial_results if r['success']])
-            print(f"\n✅ Phase 1 Complete: {successful_initial}/{len(initial_results)} agents successful")
-            
-            # Check if we have any working solutions - if not, force completion
-            if successful_initial == 0:
-                logger.warning("No agents succeeded in initial phase - forcing basic completion")
-                print("⚠️  WARNING: No successful initial solutions - using emergency completion")
-                return self._emergency_workflow_completion(task, workflow_start_time)
-            
-            # Phase 2: Collaboration & Refinement
-            print("\n" + "🟡"*20)
-            print("🤝 PHASE 2: COLLABORATION & REFINEMENT")
-            print("🟡"*20)
-            print("🎯 Goal: Agents review peer solutions and collaborate")
-            print("🔄 Process: Multiple rounds until consensus or voting complete")
-            logger.info("Phase 2: Collaboration & Refinement")
-            
-            self.coordination_system.start_phase_timing("collaboration")
-            self.current_phase = "collaboration"
-            collaboration_results = self._run_phase_2_collaboration(task, progress_callback)
-            self.coordination_system.end_phase_timing("collaboration")
-            self.phase_results["collaboration"] = collaboration_results
-            
-            # Execute phase callbacks
-            for callback in self.phase_callbacks["collaboration"]:
-                callback(collaboration_results)
-            
-            # Phase 3: Consensus & Finalization
-            print("\n" + "🟢"*20)
-            print("🎉 PHASE 3: CONSENSUS & FINALIZATION")
-            print("🟢"*20)
-            print("🎯 Goal: Final consensus building and solution selection")
-            logger.info("Phase 3: Consensus & Finalization")
-            
-            self.coordination_system.start_phase_timing("consensus")
-            self.current_phase = "consensus"
-            consensus_results = self._run_phase_3_consensus(task, progress_callback)
-            self.coordination_system.end_phase_timing("consensus")
-            self.phase_results["consensus"] = consensus_results
-            
-            # Execute phase callbacks
-            for callback in self.phase_callbacks["consensus"]:
-                callback(consensus_results)
-            
-            # GUARANTEE: Get final solution (this will force consensus if needed)
-            final_solution = self.coordination_system.get_final_solution()
-            
-            if final_solution is None:
-                # This should never happen now, but extra safety
-                logger.error("CRITICAL: get_final_solution returned None - using emergency fallback")
-                return self._emergency_workflow_completion(task, workflow_start_time)
-            
-        except Exception as e:
-            logger.error(f"Workflow failed with exception: {str(e)}")
-            logger.error("Using emergency completion to ensure result is returned")
-            print(f"❌ WORKFLOW ERROR: {str(e)}")
-            print("🔧 Using emergency completion")
-            return self._emergency_workflow_completion(task, workflow_start_time)
+            for callback in self.phase_callbacks["presentation"]:
+                callback(presentation_results)
+        else:
+            logger.error("Debate phase completed but consensus not reached")
+            print("\n❌ WORKFLOW FAILED: Consensus not reached after debate phase")
+            raise RuntimeError("Consensus not reached after debate phase")
+        
+        # Get final solution - let it fail if consensus wasn't reached
+        final_solution = self.coordination_system.get_final_solution()
         
         # Calculate final metrics
         total_workflow_time = time.time() - workflow_start_time
@@ -189,46 +226,6 @@ class MassWorkflowManager:
         logger.info("=" * 80)
         
         return results
-    
-    def _emergency_workflow_completion(self, task: TaskInput, workflow_start_time: float) -> Dict[str, Any]:
-        """
-        Emergency completion when normal workflow fails.
-        Ensures we always return a result.
-        """
-        logger.warning("EMERGENCY WORKFLOW COMPLETION")
-        print("🚨 EMERGENCY COMPLETION: Ensuring a result is returned")
-        
-        # Try to force a solution from coordination system
-        try:
-            self.coordination_system._force_consensus()
-            final_solution = self.coordination_system.get_final_solution()
-        except Exception as e:
-            logger.error(f"Emergency consensus failed: {e}")
-            # Create a basic solution manually
-            final_solution = {
-                "agent_id": 0,
-                "solution": "Emergency fallback: Unable to complete normal workflow",
-                "extracted_answer": "No answer available",
-                "execution_time": 0,
-                "total_rounds": 0,
-                "vote_distribution": {},
-                "all_agent_summaries": {},
-                "is_correct": False,
-                "expected_answer": task.context.get("answer") if task.context else None,
-                "total_runtime": time.time() - workflow_start_time,
-                "consensus_method": "emergency"
-            }
-        
-        return {
-            "success": False,  # Mark as unsuccessful due to emergency completion
-            "total_workflow_time": time.time() - workflow_start_time,
-            "final_solution": final_solution,
-            "phase_results": self.phase_results,
-            "system_status": self.coordination_system.get_system_status(),
-            "session_log": self.coordination_system.export_detailed_session_log(),
-            "emergency_completion": True,
-            "error_message": "Workflow completed using emergency fallback"
-        }
     
     def _run_phase_1_initial_processing(self, task: TaskInput, 
                                       progress_callback: Optional[Callable] = None) -> List[Dict[str, Any]]:
@@ -256,35 +253,7 @@ class MassWorkflowManager:
                 completed_count = 0
                 for future in as_completed(future_to_agent, timeout=self.max_phase_duration):
                     agent = future_to_agent[future]
-                    try:
-                        result = future.result()
-                        results.append({
-                            "agent_id": agent.agent_id,
-                            "phase": "initial",
-                            "result": result,
-                            "success": True,
-                            "error": None
-                        })
-                        completed_count += 1
-                        print(f"✅ Agent {agent.agent_id} completed initial processing ({completed_count}/{len(agents)})")
-                        
-                        if progress_callback:
-                            progress_callback("initial", completed_count, len(agents))
-                            
-                    except Exception as e:
-                        logger.error(f"Agent {agent.agent_id} failed in initial phase: {str(e)}")
-                        results.append({
-                            "agent_id": agent.agent_id,
-                            "phase": "initial",
-                            "result": None,
-                            "success": False,
-                            "error": str(e)
-                        })
-        else:
-            # Run agents sequentially
-            for i, agent in enumerate(agents):
-                try:
-                    result = self._run_agent_phase(agent, task, "initial")
+                    result = future.result()  # Let exceptions propagate
                     results.append({
                         "agent_id": agent.agent_id,
                         "phase": "initial",
@@ -292,19 +261,25 @@ class MassWorkflowManager:
                         "success": True,
                         "error": None
                     })
+                    completed_count += 1
+                    print(f"✅ Agent {agent.agent_id} completed initial processing ({completed_count}/{len(agents)})")
                     
                     if progress_callback:
-                        progress_callback("initial", i + 1, len(agents))
-                        
-                except Exception as e:
-                    logger.error(f"Agent {agent.agent_id} failed in initial phase: {str(e)}")
-                    results.append({
-                        "agent_id": agent.agent_id,
-                        "phase": "initial",
-                        "result": None,
-                        "success": False,
-                        "error": str(e)
-                    })
+                        progress_callback("initial", completed_count, len(agents))
+        else:
+            # Run agents sequentially
+            for i, agent in enumerate(agents):
+                result = self._run_agent_phase(agent, task, "initial")  # Let exceptions propagate
+                results.append({
+                    "agent_id": agent.agent_id,
+                    "phase": "initial",
+                    "result": result,
+                    "success": True,
+                    "error": None
+                })
+                
+                if progress_callback:
+                    progress_callback("initial", i + 1, len(agents))
         
         return results
     
@@ -315,26 +290,59 @@ class MassWorkflowManager:
         
         This phase implements continuous update checking every check_update_frequency seconds
         and agent reactivation when new updates are available, as specified in README.
-        Includes safety mechanisms to ensure progress toward finalization.
+        
+        The collaboration phase continues until either:
+        1. All agents have voted (status == "voted"), OR
+        2. Maximum collaboration rounds have been reached, OR
+        3. Consensus is reached through voting
         """
         results = []
-        max_collaboration_rounds = 5
         phase_start_time = time.time()
         last_update_check = phase_start_time
         
         print(f"\n🔄 Collaboration Phase with continuous update checking (every {self.check_update_frequency}s)")
+        print("📋 Exit conditions: All agents voted OR max rounds reached OR consensus reached")
         print("-" * 70)
         logger.info(f"Collaboration phase with continuous update checking every {self.check_update_frequency} seconds")
         
-        for round_num in range(max_collaboration_rounds):
-            print(f"\n🔄 Collaboration Round {round_num + 1}/{max_collaboration_rounds}")
+        for round_num in range(self.max_collaboration_rounds):
+            print(f"\n🔄 Collaboration Round {round_num + 1}/{self.max_collaboration_rounds}")
             print("-" * 50)
             logger.info(f"Collaboration round {round_num + 1}")
+            
+            # Check agent status at start of round
+            all_agents = list(self.coordination_system.agents.values())
+            voted_agents = [
+                agent for agent in all_agents
+                if self.coordination_system.agent_states[agent.agent_id].status == "voted"
+            ]
+            working_agents = [
+                agent for agent in all_agents
+                if self.coordination_system.agent_states[agent.agent_id].status == "working"
+            ]
+            
+            print(f"   📊 Round {round_num + 1} Start Status:")
+            print(f"   👥 Working agents: {[a.agent_id for a in working_agents]} ({len(working_agents)} total)")
+            print(f"   🗳️  Voted agents: {[a.agent_id for a in voted_agents]} ({len(voted_agents)} total)")
+            
+            # Exit condition 1: All agents have voted
+            if len(voted_agents) == len(all_agents):
+                logger.info("All agents have voted - ending collaboration phase")
+                print(f"   ✅ EXIT CONDITION: All {len(all_agents)} agents have voted")
+                print(f"   ➡️  Moving to debate phase")
+                break
+            
+            # Exit condition 3: Consensus already reached
+            if self.coordination_system.system_state.consensus_reached:
+                logger.info("Consensus already reached at start of round - ending collaboration phase")
+                print(f"   ✅ EXIT CONDITION: Consensus already reached")
+                print(f"   ➡️  Moving to debate phase")
+                break
             
             # Continuous update checking mechanism as per README
             round_start_time = time.time()
             agents_processed_this_round = set()
-            round_timeout = 60  # Maximum time per round to prevent infinite loops
+            round_timeout = 120  # Maximum time per round to prevent infinite loops
             
             while True:
                 current_time = time.time()
@@ -362,57 +370,33 @@ class MassWorkflowManager:
                     last_update_check = current_time
                 
                 # Get agents that are still working and haven't been processed this round
-                working_agents = [
+                current_working_agents = [
                     agent for agent in self.coordination_system.agents.values()
                     if (self.coordination_system.agent_states[agent.agent_id].status == "working" 
                         and agent.agent_id not in agents_processed_this_round)
                 ]
                 
-                # If no working agents left, move to next round
-                if not working_agents:
+                # If no working agents left for this round, move to next round
+                if not current_working_agents:
+                    print(f"   ✅ No more working agents for round {round_num + 1}")
                     break
                 
                 # Process agents that need to work
                 round_results = []
                 
-                if self.parallel_execution and len(working_agents) > 1:
+                if self.parallel_execution and len(current_working_agents) > 1:
                     # Run working agents in parallel
-                    with ThreadPoolExecutor(max_workers=len(working_agents)) as executor:
+                    with ThreadPoolExecutor(max_workers=len(current_working_agents)) as executor:
                         future_to_agent = {
                             executor.submit(self._run_agent_phase, agent, task, "collaboration"): agent
-                            for agent in working_agents
+                            for agent in current_working_agents
                         }
                         
-                        for future in as_completed(future_to_agent):
+                        # Give agents enough time to complete - use the full phase duration
+                        timeout_per_agent = self.max_phase_duration
+                        for future in as_completed(future_to_agent, timeout=timeout_per_agent):
                             agent = future_to_agent[future]
-                            try:
-                                result = future.result()
-                                round_results.append({
-                                    "agent_id": agent.agent_id,
-                                    "phase": "collaboration",
-                                    "round": round_num + 1,
-                                    "result": result,
-                                    "success": True,
-                                    "error": None
-                                })
-                                agents_processed_this_round.add(agent.agent_id)
-                            except Exception as e:
-                                logger.error(f"Agent {agent.agent_id} failed in collaboration round {round_num + 1}: {str(e)}")
-                                round_results.append({
-                                    "agent_id": agent.agent_id,
-                                    "phase": "collaboration",
-                                    "round": round_num + 1,
-                                    "result": None,
-                                    "success": False,
-                                    "error": str(e)
-                                })
-                                agents_processed_this_round.add(agent.agent_id)
-                
-                else:
-                    # Run agents sequentially
-                    for agent in working_agents:
-                        try:
-                            result = self._run_agent_phase(agent, task, "collaboration")
+                            result = future.result()  # Let exceptions propagate
                             round_results.append({
                                 "agent_id": agent.agent_id,
                                 "phase": "collaboration",
@@ -422,77 +406,87 @@ class MassWorkflowManager:
                                 "error": None
                             })
                             agents_processed_this_round.add(agent.agent_id)
-                        except Exception as e:
-                            logger.error(f"Agent {agent.agent_id} failed in collaboration round {round_num + 1}: {str(e)}")
-                            round_results.append({
-                                "agent_id": agent.agent_id,
-                                "phase": "collaboration",
-                                "round": round_num + 1,
-                                "result": None,
-                                "success": False,
-                                "error": str(e)
-                            })
-                            agents_processed_this_round.add(agent.agent_id)
+                else:
+                    # Run agents sequentially
+                    for agent in current_working_agents:
+                        result = self._run_agent_phase(agent, task, "collaboration")  # Let exceptions propagate
+                        round_results.append({
+                            "agent_id": agent.agent_id,
+                            "phase": "collaboration",
+                            "round": round_num + 1,
+                            "result": result,
+                            "success": True,
+                            "error": None
+                        })
+                        agents_processed_this_round.add(agent.agent_id)
                 
                 results.extend(round_results)
                 
                 # Check if consensus is reached after processing agents
                 if self.coordination_system.system_state.consensus_reached:
                     logger.info("Consensus reached during collaboration phase")
-                    print(f"   ✅ Consensus reached! Ending collaboration phase.")
+                    print(f"   ✅ EXIT CONDITION: Consensus reached during round processing")
+                    print(f"   ➡️  Moving to debate phase")
                     return results
                 
                 # Brief pause before next update check
                 time.sleep(min(1, self.check_update_frequency / 2))
             
-            # Show status at end of round
-            voted_agents = [
+            # Check final agent status at end of round
+            final_voted_agents = [
                 agent for agent in self.coordination_system.agents.values()
                 if self.coordination_system.agent_states[agent.agent_id].status == "voted"
             ]
-            working_agents = [
+            final_working_agents = [
                 agent for agent in self.coordination_system.agents.values()
                 if self.coordination_system.agent_states[agent.agent_id].status == "working"
             ]
             
             print(f"\n📊 End of Round {round_num + 1}:")
-            print(f"   👥 Working agents: {[a.agent_id for a in working_agents]}")
-            print(f"   🗳️  Voted agents: {[a.agent_id for a in voted_agents]}")
+            print(f"   👥 Working agents: {[a.agent_id for a in final_working_agents]} ({len(final_working_agents)} total)")
+            print(f"   🗳️  Voted agents: {[a.agent_id for a in final_voted_agents]} ({len(final_voted_agents)} total)")
             
             if progress_callback:
-                progress_callback("collaboration", round_num + 1, max_collaboration_rounds)
+                progress_callback("collaboration", round_num + 1, self.max_collaboration_rounds)
             
-            # Check if consensus is reached
+            # Exit condition check at end of round
             if self.coordination_system.system_state.consensus_reached:
-                logger.info("Consensus reached during collaboration phase")
+                logger.info("Consensus reached at end of collaboration round")
+                print(f"   ✅ EXIT CONDITION: Consensus reached at end of round {round_num + 1}")
+                print(f"   ➡️  Moving to debate phase")
                 break
             
-            # If no working agents left, end collaboration
-            if not working_agents:
-                print(f"   ✅ All agents have voted. Ending collaboration phase.")
+            # Exit condition: All agents have voted
+            if len(final_voted_agents) == len(all_agents):
+                logger.info("All agents have voted at end of collaboration round")
+                print(f"   ✅ EXIT CONDITION: All {len(all_agents)} agents have voted")
+                print(f"   ➡️  Moving to debate phase")
                 break
-            
-            # Safety mechanism: If we're on the last round and still have working agents,
-            # encourage them to vote by updating round counter for consensus logic
-            if round_num == max_collaboration_rounds - 1 and working_agents:
-                logger.warning(f"Final collaboration round - updating system round counter to trigger consensus")
-                self.coordination_system.system_state.total_rounds = self.coordination_system.max_rounds
-                print(f"   ⚠️  Final round: System will force consensus on remaining agents")
         
-        # Final safety check: If we still don't have consensus, ensure we get one
-        if not self.coordination_system.system_state.consensus_reached:
-            logger.warning("Collaboration ended without consensus - will be handled in consensus phase")
-            print(f"   ⚠️  Collaboration ended without consensus - proceeding to consensus phase")
+        # Check if we exited due to max rounds reached
+        if round_num == self.max_collaboration_rounds - 1:
+            final_voted = [
+                agent for agent in self.coordination_system.agents.values()
+                if self.coordination_system.agent_states[agent.agent_id].status == "voted"
+            ]
+            final_working = [
+                agent for agent in self.coordination_system.agents.values()
+                if self.coordination_system.agent_states[agent.agent_id].status == "working"
+            ]
+            logger.info(f"Maximum collaboration rounds ({self.max_collaboration_rounds}) reached")
+            print(f"\n🔄 EXIT CONDITION: Maximum collaboration rounds ({self.max_collaboration_rounds}) reached")
+            print(f"   👥 Final working agents: {[a.agent_id for a in final_working]} ({len(final_working)} total)")
+            print(f"   🗳️  Final voted agents: {[a.agent_id for a in final_voted]} ({len(final_voted)} total)")
+            print(f"   ➡️  Moving to debate phase")
         
         return results
     
-    def _run_phase_3_consensus(self, task: TaskInput, 
+    def _run_phase_3_debate(self, task: TaskInput, 
                              progress_callback: Optional[Callable] = None) -> List[Dict[str, Any]]:
         """
-        Phase 3: Final consensus building if not already reached.
+        Phase 3: Consensus building & debate if not already reached.
         
-        This phase handles any remaining consensus building and finalization.
-        Includes safety mechanisms to guarantee a final decision is reached.
+        This phase handles consensus building through structured debate.
         """
         results = []
         
@@ -500,11 +494,11 @@ class MassWorkflowManager:
         if self.coordination_system.system_state.consensus_reached:
             logger.info("Consensus already reached. Finalizing.")
             if progress_callback:
-                progress_callback("consensus", 1, 1)
+                progress_callback("debate", 1, 1)
             return results
         
-        logger.info("Consensus not yet reached - running final consensus phase")
-        print("🎯 Consensus not reached - running final decision phase")
+        logger.info("Consensus not yet reached - running debate phase")
+        print("🎯 Consensus not reached - running debate phase")
         
         # Run any agents that might need to reconsider their votes
         working_agents = [
@@ -513,58 +507,74 @@ class MassWorkflowManager:
         ]
         
         if working_agents:
-            logger.info(f"Running final consensus phase with {len(working_agents)} remaining agents")
+            logger.info(f"Running debate phase with {len(working_agents)} remaining agents")
             print(f"   👥 Processing {len(working_agents)} remaining working agents")
             
-            # Force final round to trigger consensus mechanisms
-            self.coordination_system.system_state.total_rounds = self.coordination_system.max_rounds
-            
             for i, agent in enumerate(working_agents):
-                try:
-                    result = self._run_agent_phase(agent, task, "consensus")
-                    results.append({
-                        "agent_id": agent.agent_id,
-                        "phase": "consensus",
-                        "result": result,
-                        "success": True,
-                        "error": None
-                    })
-                except Exception as e:
-                    logger.error(f"Agent {agent.agent_id} failed in consensus phase: {str(e)}")
-                    results.append({
-                        "agent_id": agent.agent_id,
-                        "phase": "consensus",
-                        "result": None,
-                        "success": False,
-                        "error": str(e)
-                    })
+                result = self._run_agent_phase(agent, task, "debate")  # Let exceptions propagate
+                results.append({
+                    "agent_id": agent.agent_id,
+                    "phase": "debate",
+                    "result": result,
+                    "success": True,
+                    "error": None
+                })
                 
                 if progress_callback:
-                    progress_callback("consensus", i + 1, len(working_agents))
+                    progress_callback("debate", i + 1, len(working_agents))
                 
                 # Check if consensus reached after each agent
                 if self.coordination_system.system_state.consensus_reached:
-                    logger.info("Consensus reached during consensus phase")
+                    logger.info("Consensus reached during debate phase")
                     print(f"   ✅ Consensus reached after processing Agent {agent.agent_id}")
                     break
         
-        # GUARANTEE: Force consensus if still not reached
-        if not self.coordination_system.system_state.consensus_reached:
-            logger.warning("Still no consensus after consensus phase - forcing final decision")
-            print("   🔧 No consensus reached - forcing final decision")
-            
-            # Force consensus using existing coordination system logic
-            try:
-                self.coordination_system._force_consensus()
-                if self.coordination_system.system_state.consensus_reached:
-                    logger.info("Successfully forced consensus")
-                    print("   ✅ Successfully forced consensus")
-                else:
-                    logger.error("Failed to force consensus - critical system error")
-                    print("   ❌ Failed to force consensus - system error")
-            except Exception as e:
-                logger.error(f"Error forcing consensus: {e}")
-                print(f"   ❌ Error forcing consensus: {e}")
+        return results
+    
+    def _run_phase_4_presentation(self, task: TaskInput, 
+                             progress_callback: Optional[Callable] = None) -> List[Dict[str, Any]]:
+        """
+        Phase 4: Final presentation by the representative agent.
+        
+        The selected representative receives complete context and presents the final solution.
+        """
+        results = []
+        
+        # At this point, consensus is guaranteed to be reached (checked in main workflow)
+        
+        # Get the winning agent (representative) to present final solution
+        final_solution = self.coordination_system.get_final_solution()
+        if not final_solution:
+            logger.error("No final solution available despite consensus being reached")
+            print("❌ ERROR: No final solution available despite consensus")
+            raise RuntimeError("No final solution available despite consensus")
+        
+        representative_agent_id = final_solution['agent_id']
+        representative_agent = self.coordination_system.agents.get(representative_agent_id)
+        
+        if not representative_agent:
+            logger.error(f"Representative agent {representative_agent_id} not found")
+            print(f"❌ ERROR: Representative agent {representative_agent_id} not found")
+            raise RuntimeError(f"Representative agent {representative_agent_id} not found")
+        
+        logger.info(f"Running presentation phase with representative Agent {representative_agent_id}")
+        print(f"🎯 Running final presentation with representative Agent {representative_agent_id}")
+        
+        # Run the representative agent in presentation mode
+        result = self._run_agent_phase(representative_agent, task, "presentation")
+        results.append({
+            "agent_id": representative_agent_id,
+            "phase": "presentation",
+            "result": result,
+            "success": True,
+            "error": None
+        })
+        
+        if progress_callback:
+            progress_callback("presentation", 1, 1)
+        
+        logger.info(f"Presentation phase completed by Agent {representative_agent_id}")
+        print(f"✅ Final presentation completed by Agent {representative_agent_id}")
         
         return results
     
@@ -589,31 +599,25 @@ class MassWorkflowManager:
         
         agent_start_time = time.time()
         
-        try:
-            # Process the task using the agent's new method
-            response = agent.process_task(task, phase)
-            
-            # Record execution time
-            agent_execution_time = time.time() - agent_start_time
-            
-            # Update coordination system with execution metrics
-            if phase == "initial":
-                agent.state.execution_end_time = time.time()
-                total_agent_time = agent.state.execution_time or agent_execution_time
-                self.coordination_system.record_agent_execution_time(agent.agent_id, total_agent_time)
-            
-            # Handle post-phase coordination
-            self._handle_post_phase_coordination(agent, response, phase)
-            
-            print(f"   ✅ Agent {agent.agent_id} completed {phase} phase ({agent_execution_time:.2f}s)")
-            logger.debug(f"Agent {agent.agent_id} completed {phase} phase successfully in {agent_execution_time:.2f}s")
-            
-            return response
-            
-        except Exception as e:
-            print(f"   ❌ Agent {agent.agent_id} failed in {phase} phase: {str(e)}")
-            logger.error(f"Agent {agent.agent_id} failed in {phase} phase: {str(e)}")
-            raise
+        # Process the task using the agent's new method
+        response = agent.process_task(task, phase)
+        
+        # Record execution time
+        agent_execution_time = time.time() - agent_start_time
+        
+        # Update coordination system with execution metrics
+        if phase == "initial":
+            agent.state.execution_end_time = time.time()
+            total_agent_time = agent.state.execution_time or agent_execution_time
+            self.coordination_system.record_agent_execution_time(agent.agent_id, total_agent_time)
+        
+        # Handle post-phase coordination
+        self._handle_post_phase_coordination(agent, response, phase)
+        
+        print(f"   ✅ Agent {agent.agent_id} completed {phase} phase ({agent_execution_time:.2f}s)")
+        logger.debug(f"Agent {agent.agent_id} completed {phase} phase successfully in {agent_execution_time:.2f}s")
+        
+        return response
     
     def _handle_post_phase_coordination(self, agent: MassAgent, response: AgentResponse, phase: str):
         """
@@ -627,37 +631,74 @@ class MassWorkflowManager:
         print(f"\n🔧 Processing Agent {agent.agent_id} coordination ({phase} phase):")
         
         if phase == "initial":
-            # Extract and update summary and answer with agent's initial response
+            # Phase 1: Only extract summary, NO answer extraction
             summary_report = self._extract_summary_report(response.text)
-            final_answer = self._extract_answer(response.text)
-            agent.update_summary(summary_report, final_answer)
+            agent.update_summary(summary_report)  # No final_answer parameter
             print(f"   📝 Updated summary for Agent {agent.agent_id}")
             print(f"   📊 Summary length: {len(summary_report)} characters")
-            if final_answer:
-                print(f"   🎯 Extracted answer length: {len(final_answer)} characters")
             logger.debug(f"Updated summary for agent {agent.agent_id} after initial phase")
             
-        elif phase in ["collaboration", "consensus"]:
-            # Check if agent indicates preference for another agent's solution
+        elif phase == "collaboration":
+            # Phase 2: Check for voting, extract summary if continuing, NO answer extraction
             vote_target = self._extract_vote_intention(agent.agent_id, response.text)
-            
+            # Make sure vote_target is an integer and is within the range of agent IDs
+            if not isinstance(vote_target, int) or vote_target < 0 or vote_target >= len(self.coordination_system.agents):
+                print(f"   ⚠️  Invalid vote target: {vote_target} - must be an integer between 0 and {len(self.coordination_system.agents)-1}")
+                vote_target = None
+                    
             if vote_target is not None:
                 # Agent prefers another agent's solution
-                agent.vote(vote_target)
+                agent.vote(vote_target, response.text)
                 print(f"   🗳️  Agent {agent.agent_id} VOTED for Agent {vote_target}")
                 print(f"   💭 Voting reason detected in response")
                 logger.info(f"Agent {agent.agent_id} voted for agent {vote_target}")
             else:
-                # Agent updated their own solution - extract summary report and answer
+                # Agent updated their own solution - extract summary only, NO answer
                 summary_report = self._extract_summary_report(response.text)
-                final_answer = self._extract_answer(response.text)
+                agent.update_summary(summary_report)  # No final_answer parameter
+                print(f"   📝 Agent {agent.agent_id} updated their solution")
+                print(f"   📊 Updated summary length: {len(summary_report)} characters")
+                print(f"   🔄 Continuing to work (no vote cast)")
+                logger.debug(f"Updated summary for agent {agent.agent_id} after {phase} phase")
+                
+        elif phase == "debate":
+            # Phase 3: Check for voting, extract summary AND final answer if continuing
+            vote_target = self._extract_vote_intention(agent.agent_id, response.text)
+            # Make sure vote_target is an integer and is within the range of agent IDs
+            if not isinstance(vote_target, int) or vote_target < 0 or vote_target >= len(self.coordination_system.agents):
+                print(f"   ⚠️  Invalid vote target: {vote_target} - must be an integer between 0 and {len(self.coordination_system.agents)-1}")
+                vote_target = None
+                
+            if vote_target is not None:
+                # Agent prefers another agent's solution
+                agent.vote(vote_target, response.text)
+                print(f"   🗳️  Agent {agent.agent_id} VOTED for Agent {vote_target}")
+                print(f"   💭 Voting reason detected in response")
+                logger.info(f"Agent {agent.agent_id} voted for agent {vote_target}")
+            else:
+                # Agent updated their own solution - extract summary AND final answer
+                summary_report = self._extract_summary_report(response.text)
+                final_answer = self._extract_answer(response.text)  # Only in debate phase!
                 agent.update_summary(summary_report, final_answer)
                 print(f"   📝 Agent {agent.agent_id} updated their solution")
                 print(f"   📊 Updated summary length: {len(summary_report)} characters")
                 if final_answer:
-                    print(f"   🎯 Updated answer length: {len(final_answer)} characters")
+                    print(f"   🎯 Extracted final answer length: {len(final_answer)} characters")
                 print(f"   🔄 Continuing to work (no vote cast)")
                 logger.debug(f"Updated summary for agent {agent.agent_id} after {phase} phase")
+                
+        elif phase == "presentation":
+            # Phase 4: Extract final summary report and answer (no voting in presentation phase)
+            summary_report = self._extract_summary_report(response.text)
+            final_answer = self._extract_answer(response.text)
+            agent.update_summary(summary_report, final_answer)
+            print(f"   📝 Agent {agent.agent_id} provided final presentation")
+            print(f"   📊 Final summary length: {len(summary_report)} characters")
+            if final_answer:
+                print(f"   🎯 Final answer length: {len(final_answer)} characters")
+            else:
+                print(f"   ⚠️  No final answer extracted from presentation")
+            logger.info(f"Agent {agent.agent_id} completed final presentation with summary and answer")
     
     def _extract_vote_intention(self, agent_id: int, response_text: str) -> Optional[int]:
         """
@@ -671,20 +712,97 @@ class MassWorkflowManager:
             Agent ID to vote for, or None if agent is updating their own solution
         """
         import re
+        import json
         
-        # Look for the new structured voting format: "### Voting\nAgent [id]"
-        voting_pattern = r"###\s*Voting\s*\n\s*Agent\s+(\d+)"
+        print(f"   🔍 Analyzing vote intention for Agent {agent_id}")
+        print(f"   📝 Response text length: {len(response_text)} characters")
         
-        match = re.search(voting_pattern, response_text, re.IGNORECASE | re.MULTILINE)
+        def extract_agent_id_from_value(vote_value: str) -> Optional[int]:
+            """Extract numeric agent ID from various vote value formats."""
+            vote_value = vote_value.strip()
+            
+            # Check for null/none values first
+            if vote_value.lower() in ["none", "null", "nil", ""]:
+                return None
+            
+            # Try direct integer conversion first
+            try:
+                return int(vote_value)
+            except ValueError:
+                pass
+            
+            # Extract number from "Agent X", "agent X", etc.
+            agent_patterns = [
+                r"[Aa]gent\s+(\d+)",          # "Agent 1", "agent 1"
+                r"(\d+)",                     # Any number in the string
+                r"[Aa]gent[\s_-]*(\d+)",      # "Agent_1", "agent-1", etc.
+            ]
+            
+            for pattern in agent_patterns:
+                match = re.search(pattern, vote_value)
+                if match:
+                    try:
+                        return int(match.group(1))
+                    except (ValueError, IndexError):
+                        continue
+            
+            return None
+        
+        # Look for the voting format from mass_agent.py prompt: "### Decision\n{"voting": agent_id}"
+        # More robust patterns that handle various formatting variations including spaces and text
+        voting_patterns = [
+            # Primary format: ### Voting Decision\n{"voting": "value"}
+            r"###\s*Voting\s+Decision\s*[\n\r]+\s*\{\s*[\"']?voting[\"']?\s*:\s*[\"']?([^\"'}]+?)[\"']?\s*\}",
+            # Alternative: ### Decision\n{"voting": "value"}  
+            r"###\s*Decision\s*[\n\r]+\s*\{\s*[\"']?voting[\"']?\s*:\s*[\"']?([^\"'}]+?)[\"']?\s*\}",
+            # With extra whitespace/content before JSON
+            r"###\s*(?:Voting\s+)?Decision\s*[\n\r]+[^\{]*\{\s*[\"']?voting[\"']?\s*:\s*[\"']?([^\"'}]+?)[\"']?\s*\}",
+            # JSON-like but potentially malformed
+            r"###\s*(?:Voting\s+)?Decision\s*[\n\r]+.*?[\"']?voting[\"']?\s*:\s*[\"']?([^\"'}]+?)[\"']?",
+            # More flexible pattern for any JSON-like voting structure
+            r"\{\s*[\"']?voting[\"']?\s*:\s*[\"']?([^\"'}]+?)[\"']?\s*\}",
+        ]
+        
+        # Debug: Show if response contains voting-related text
+        has_voting_text = "voting" in response_text.lower() or "decision" in response_text.lower()
+        print(f"   🔍 Contains voting/decision keywords: {has_voting_text}")
+        
+        for i, pattern in enumerate(voting_patterns):
+            match = re.search(pattern, response_text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+            if match:
+                vote_value = match.group(1).strip()
+                print(f"   🔍 Found voting pattern: '{vote_value}' using pattern {i+1}")
+                print(f"   📋 Pattern used: {pattern[:100]}...")
+                
+                target_agent_id = extract_agent_id_from_value(vote_value)
+                
+                if target_agent_id is None:
+                    print(f"   ➡️  Agent {agent_id} chose not to vote ('{vote_value}')")
+                    return None
+                else:
+                    print(f"   ➡️  Agent {agent_id} voting for Agent {target_agent_id}")
+                    print(f"   🗳️  VOTE DETECTED: {agent_id} → {target_agent_id}")
+                    return target_agent_id
+        
+        # Debug: Show last part of response if no voting pattern found
+        if has_voting_text:
+            print(f"   ⚠️  Contains voting keywords but no pattern matched")
+            print(f"   📝 Last 500 chars: ...{response_text[-500:]}")
+        else:
+            print(f"   ℹ️  No voting keywords found - agent continuing to work")
+        
+        # Legacy format support: "### Voting\nAgent [id]"
+        legacy_voting_pattern = r"###\s*Voting\s*[\n\r]+\s*[Aa]gent\s+(\d+)"
+        match = re.search(legacy_voting_pattern, response_text, re.IGNORECASE | re.MULTILINE)
         if match:
             try:
                 target_agent_id = int(match.group(1))
-                # Allow voting for self or others
+                print(f"   🔍 Found legacy voting pattern: Agent {target_agent_id}")
                 return target_agent_id
             except ValueError:
                 pass
         
-        # Fallback to old heuristic patterns for backward compatibility
+        # Fallback to heuristic patterns for backward compatibility
         old_patterns = [
             r"[Aa]gent (\d+) (?:has|provides|offers) (?:the )?(?:best|better|superior|correct) (?:solution|answer|response)",
             r"[Ii] (?:prefer|choose|select|support) [Aa]gent (\d+)",
@@ -697,10 +815,12 @@ class MassWorkflowManager:
                 try:
                     target_agent_id = int(match)
                     if target_agent_id != agent_id:  # Don't vote for self with old patterns
+                        print(f"   🔍 Found heuristic voting pattern: Agent {target_agent_id}")
                         return target_agent_id
                 except ValueError:
                     continue
         
+        print(f"   ✅ No vote detected - Agent {agent_id} continues working")
         return None
     
     def _extract_summary_report(self, response_text: str) -> str:
@@ -715,16 +835,28 @@ class MassWorkflowManager:
         """
         import re
         
-        # Look for the new structured summary format: "### Summary Report\n[content]"
-        summary_pattern = r"###\s*Summary\s+Report\s*\n(.*?)(?=###|\Z)"
+        # Multiple patterns to handle various formatting variations
+        summary_patterns = [
+            # Primary README format: "### Summary report\n[content]" (stops at ## sections)
+            r"###\s*Summary\s+report\s*[\n\r]+(.*?)(?=##[^#]|\Z)",
+            # Legacy format: "### Summary Report\n[content]" (uppercase R)
+            r"###\s*Summary\s+Report\s*[\n\r]+(.*?)(?=##[^#]|\Z)",
+            # More permissive: any ## sections
+            r"###\s*Summary\s+[Rr]eport\s*[\n\r]+(.*?)(?=###|\Z)",
+            # Very permissive: just look for content after Summary
+            r"###\s*Summary\s*[\n\r]+(.*?)(?=###|\Z)",
+        ]
         
-        match = re.search(summary_pattern, response_text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
-        if match:
-            summary = match.group(1).strip()
-            if summary:
-                return summary
+        for i, pattern in enumerate(summary_patterns):
+            match = re.search(pattern, response_text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+            if match:
+                summary = match.group(1).strip()
+                if summary:
+                    print(f"   📝 Extracted summary using pattern {i+1}: {len(summary)} chars")
+                    return summary
         
         # Fallback: return the full response if no structured format found
+        print(f"   ⚠️  No summary pattern found, using full response: {len(response_text)} chars")
         return response_text 
     
     def _extract_answer(self, response_text: str) -> str:
@@ -739,14 +871,29 @@ class MassWorkflowManager:
         """
         import re
         
-        # Look for the structured answer format: "### Answer\n[content]"
-        answer_pattern = r"###\s*Answer\s*\n(.*?)(?=###|\Z)"
+        # Multiple patterns to handle various answer formatting variations
+        answer_patterns = [
+            # Primary format from mass_agent.py presentation phase: "### Final answer\n[content]"
+            r"###\s*Final\s+answer\s*[\n\r]+(.*?)(?=###|\Z)",
+            # Alternative with capital A: "### Final Answer\n[content]"
+            r"###\s*Final\s+Answer\s*[\n\r]+(.*?)(?=###|\Z)",
+            # Legacy format: "## Final Answer\n[content]"
+            r"##\s*Final\s+Answer\s*[\n\r]+(.*?)(?=##|\Z)",
+            # Generic: "### Answer\n[content]"
+            r"###\s*Answer\s*[\n\r]+(.*?)(?=###|\Z)",
+            # More permissive: any format with "Answer" (case-insensitive)
+            r"#+\s*[Ff]inal\s+[Aa]nswer\s*[\n\r]+(.*?)(?=#|\Z)",
+            r"#+\s*[Aa]nswer\s*[\n\r]+(.*?)(?=#|\Z)",
+        ]
         
-        match = re.search(answer_pattern, response_text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
-        if match:
-            answer = match.group(1).strip()
-            if answer:
-                return answer
+        for i, pattern in enumerate(answer_patterns):
+            match = re.search(pattern, response_text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+            if match:
+                answer = match.group(1).strip()
+                if answer:
+                    print(f"   🎯 Extracted final answer using pattern {i+1}: '{answer[:100]}{'...' if len(answer) > 100 else ''}'")
+                    return answer
         
         # Return empty string if no structured answer format found
+        print(f"   ⚠️  No final answer pattern found in response")
         return ""

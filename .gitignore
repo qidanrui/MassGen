@@ -3,7 +3,7 @@ __pycache__/
 __deprecated__/
 output/
 deprecated/
-logs/
+*logs/
 
 # files
 test*.py

@@ -60,7 +60,7 @@ def parse_completion(response, add_citations=True):
     
     return {"text": text, "code": code, "citations": citations, "function_calls": function_calls}
 
-def process_message(messages, model="o4-mini", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=0.5, top_p=1.0, api_key=None):
+def process_message(messages, model="o3", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=0.7, top_p=1.0, api_key=None):
     """
     Generate content using OpenAI API.
     
@@ -122,7 +122,7 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
     # print("--------------------------------")
     # print(f"[OAI] Instructions: {instructions}")
     # print(f"[OAI] Input: {input_text}")
-    # _ = input("Press Enter to continue...")
+    # _ = input("[OAI] Press Enter to continue...")
     
     # Make API request with retry logic
     completion = None
@@ -150,38 +150,40 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
         raise Exception(f"Failed to get completion after {max_retries} retries")
 
     # print(completion)
-    # output = completion.output
+    output = completion.output
     # for o in output:
     #     print(f"-------------- {o.type} ------------------")
     #     print(o)
-    #     _ = input("Press Enter to continue...")
+    #     _ = input("[OAI] Press Enter to continue...")
+
     
     # Parse the completion and return text and code
     result = parse_completion(completion, add_citations=True)
+    
+    # print("[OAI] Result: ", json.dumps(result, indent=4))
+    # _ = input("[OAI] Press Enter to continue...")
     return result
 
 # Example usage (you can remove this if not needed)
 if __name__ == "__main__":
     messages = [
-        {"role": "system", "content": """
-You are working with other agents to solve a task.
-You can use search and code tools to help you solve the task.
-During your task solving process, you should use the `update_summary` tool to progressively record your working process so that it can be shared with other agents.         
-You should also use the `check_updates` tool to check other agents' current progress on the same task to help you find missing information or errors.
-Remember: This is a collaborative effort. Work together, share insights and find missing information/errors, and build consensus toward the best solution.
-"""
-        },
+#         {"role": "system", "content": """
+# You are working with other agents to solve a task.
+# You can use search and code tools to help you solve the task.
+# During your task solving process, you should use the `update_summary` tool to progressively record your working process so that it can be shared with other agents.         
+# You should also use the `check_updates` tool to check other agents' current progress on the same task to help you find missing information or errors.
+# Remember: This is a collaborative effort. Work together, share insights and find missing information/errors, and build consensus toward the best solution.
+# """
+#         },
         
-        {"role": "user", "content": "Tell me the difference between the GDP of China and India in percentage for the past 20 years."
-                 "Then use a suitable machine learning model to predict the GDP of China and India in 2035. Make sure to cite the sources of your information. "
-                 "Record your final summary report by using the `update_summary` tool."}]
+        {"role": "user", "content": "Which are the three longest rivers mentioned in the Aeneid?"}]
     
-    from tools import update_summary, check_updates
+    # from tools import update_summary, check_updates
     from util import function_to_json
     
     tools=["live_search", "code_execution"]
-    tools.append(function_to_json(update_summary))
-    tools.append(function_to_json(check_updates))
+    # tools.append(function_to_json(update_summary))
+    # tools.append(function_to_json(check_updates))
     
     result = process_message(messages, tools=tools, temperature=0.1)
     print("--------------------------------")

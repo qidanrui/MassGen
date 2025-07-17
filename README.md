@@ -32,59 +32,49 @@ The system maintains real-time information for each agent:
 
 ## Agent Workflow
 
-Each agent follows a structured three-phase workflow:
+Each agent follows a structured four-phase workflow designed to maximize collaboration and solution quality:
 
 ### Phase 1: Initial Processing
 
-**Objective**: Generate initial solution independently
+**Objective**: Generate independent solution as starting point
 
 **Process**:
 1. Agent receives the task and processes it using `process_message()`
-2. Generates initial solution with summary report and answer
-3. System saves the summary and makes it available to peer agents
-
-**Response Format**:
-- Include agent ID in the response
-- Conclude with:
-```
-### Summary report
-[progress and solution summary with all necessary steps, evidence, and information sources]
-```
+2. Develops initial solution with comprehensive summary report and answer
+3. System automatically saves the summary and makes it visible to all peer agents
 
 ### Phase 2: Collaboration & Refinement
 
-**Objective**: Review peer solutions and refine or vote for the best answer
+**Objective**: Leverage peer insights to improve solutions or identify the best candidate
 
 **Process**:
-1. Agent checks for peer updates every `check_update_frequency` (default: 3 seconds)
-2. **When new peer summary reports are available**:
-   - Reviews own solution and all peer solutions against the original task
-   - Evaluates whether any agent (including self) has found the correct solution
-3. **Agent decides**:
-   - **Continue Working**: Update solution incorporating peer insights, maintain `working` status
-   - **Vote**: Select the agent with the best solution, change status to `voted`
+1. Agent continuously monitors peer updates every `check_update_frequency` (default: 3 seconds)
+2. **Upon discovering new peer summary reports**:
+   - Triggers new inference cycle to reassess the situation
+   - Analyzes own solution alongside all peer solutions against the original task
+   - Evaluates the relative quality and correctness of each solution
+3. **Agent chooses one of two actions**:
+   - **Continue Working**: Incorporates peer insights to refine own solution, maintains `working` status
+   - **Vote**: Identifies the agent with the superior solution and changes status to `voted`
 
-**Response Format**:
-- Include all agents' IDs with their summary reports
-- Conclude with:
-```
-### Summary report
-[updated solution or evaluation of peer solutions]
+### Phase 3: Consensus Building & Debate
 
-## Voting Decision
-{"voting: {agent_id} or None}
-```
-*Use "None" if no satisfactory solution exists yet; use "{agent_id}" if voting for the best solution*
-
-### Phase 3: Consensus & Presentation
-
-**Objective**: Determine final answer through consensus
+**Objective**: Reach agreement on the best solution through iterative review
 
 **Process**:
-1. Voted agents may reactivate if peers provide new updates
-2. Process continues until all agents vote or maximum rounds reached (default: 5)
-3. **Majority Voting**: Select agent with most votes (ties broken by earliest vote timestamp)
-4. **Final Presentation**: Selected agent presents final answer including all recent peer summaries
+1. **Consensus Check**: When all agents have voted, the system evaluates whether the results meet the majority voting threshold
+2. **Outcome Determination**:
+   - **Consensus Achieved**: The majority-selected agent becomes the representative
+   - **No Consensus**: System initiates structured debate, providing all solutions and voting rationales to each agent for reconsideration
+3. **Iterative Process**: Phases 2 and 3 alternate until either consensus is reached or maximum rounds are completed
+
+### Phase 4: Final Presentation
+
+**Objective**: Deliver the definitive solution with full context
+
+**Process**:
+The selected representative agent receives the complete collection of all peer solutions and voting opinions, then synthesizes and presents the final answer with full reasoning and context.
+
 
 ## Configuration
 

@@ -23,6 +23,8 @@ import json
 import logging
 import sys
 import os
+import signal
+import atexit
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
@@ -34,6 +36,7 @@ from mass_agent import TaskInput
 from mass_coordination import MassCoordinationSystem
 from mass_workflow import MassWorkflowManager
 from mass_agents import create_agent
+from mass_logging import initialize_logging, cleanup_logging
 
 def setup_enhanced_logging(verbose: bool = False):
     """
@@ -91,6 +94,29 @@ def setup_enhanced_logging(verbose: bool = False):
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Global reference for cleanup
+_global_mass_system = None
+
+def _cleanup_on_exit():
+    """Global cleanup function called on exit."""
+    global _global_mass_system
+    if _global_mass_system:
+        try:
+            _global_mass_system.cleanup_agents()
+        except Exception as e:
+            print(f"Warning: Failed to cleanup agents on exit: {e}")
+
+def _signal_handler(signum, frame):
+    """Handle termination signals to ensure cleanup."""
+    print(f"\nReceived signal {signum}, cleaning up...")
+    _cleanup_on_exit()
+    os._exit(1)
+
+# Register cleanup handlers
+atexit.register(_cleanup_on_exit)
+signal.signal(signal.SIGINT, _signal_handler)
+signal.signal(signal.SIGTERM, _signal_handler)
+
 class MassSystem:
     """
     Main MASS system orchestrator.
@@ -106,6 +132,9 @@ class MassSystem:
         Args:
             config: Optional configuration dictionary
         """
+        global _global_mass_system
+        _global_mass_system = self  # Set global reference for cleanup
+        
         self.config = config or {}
         
         # System components
@@ -136,6 +165,11 @@ class MassSystem:
         logger.info(f"  - Max phase duration: {self.max_phase_duration} seconds")
         logger.info(f"  - Parallel execution: {self.parallel_execution}")
         logger.info(f"  - Agent count: {len(agent_configs)}")
+        
+        # Initialize comprehensive logging system
+        logger.info("Initializing comprehensive logging system...")
+        self.log_manager = initialize_logging()
+        logger.info(f"✓ Logging system initialized with session ID: {self.log_manager.session_id}")
         
         # Create coordination system
         logger.info("Creating coordination system...")
@@ -258,6 +292,17 @@ class MassSystem:
                     logger.info(f"  - {phase}: {success_count}/{len(phase_results)} agents successful")
                     
         logger.info("=" * 80)
+        
+        # Cleanup agents and logging system
+        try:
+            # Clean up agent resources first
+            self.cleanup_agents()
+            
+            # Then cleanup logging system (if not using run_task_from_file)
+            if hasattr(self, 'log_manager') and self.log_manager:
+                cleanup_logging()
+        except Exception as e:
+            logger.warning(f"Warning: Failed to cleanup resources: {e}")
         
         return results
     
@@ -392,6 +437,20 @@ class MassSystem:
             print(f"🔧 Total Tokens: {system_metrics.get('total_tokens_used', 0):,}")
             print("🔍"*60)
         
+        # Cleanup agents and logging system
+        try:
+            # Clean up agent resources first
+            self.cleanup_agents()
+            
+            # Then cleanup logging system and export final report
+            if hasattr(self, 'log_manager') and self.log_manager:
+                print(f"📋 Exporting comprehensive session logs...")
+                report_file = self.log_manager.export_full_session_report()
+                print(f"📄 Full session report: {report_file}")
+            cleanup_logging()
+        except Exception as e:
+            logger.warning(f"Warning: Failed to cleanup resources: {e}")
+        
         return results
     
     def run_task_from_dict(self, task_dict: Dict[str, Any], agent_types: List[str]) -> Dict[str, Any]:
@@ -431,6 +490,19 @@ class MassSystem:
             logger.error(f"Failed to export results to {output_file}: {str(e)}")
             raise e
     
+    def cleanup_agents(self):
+        """Clean up all agent resources to prevent hanging processes."""
+        if hasattr(self, 'agents') and self.agents:
+            logger.info("Cleaning up agent resources...")
+            for agent in self.agents:
+                if hasattr(agent, 'cleanup'):
+                    try:
+                        agent.cleanup()
+                        logger.debug(f"✓ Cleaned up Agent {agent.agent_id}")
+                    except Exception as e:
+                        logger.warning(f"Warning: Failed to cleanup Agent {agent.agent_id}: {e}")
+            logger.info("✓ Agent cleanup completed")
+    
     def _load_task_from_file(self, file_path: str) -> TaskInput:
         """Load task from a JSON file."""
         try:
@@ -466,7 +538,8 @@ class MassSystem:
         phase_emojis = {
             'initial': '🔵',
             'collaboration': '🟡', 
-            'consensus': '🟢',
+            'debate': '🟢',
+            'presentation': '🔴',
             'processing': '⚙️',
             'voting': '🗳️',
             'finalization': '🎯'
@@ -661,11 +734,23 @@ def main():
         # Results are already saved by run_task_from_file if args.output was provided
         
         # Exit with appropriate code
-        sys.exit(0 if results["success"] else 1)
+        exit_code = 0 if results["success"] else 1
+        logger.info(f"Exiting with code {exit_code}")
+        
+        # Force exit to ensure process terminates even with lingering threads
+        try:
+            sys.exit(exit_code)
+        finally:
+            # Last resort: force process termination if sys.exit doesn't work
+            os._exit(exit_code)
         
     except Exception as e:
         logger.error(f"Fatal error: {str(e)}")
-        sys.exit(1)
+        try:
+            sys.exit(1)
+        finally:
+            # Last resort: force process termination
+            os._exit(1)
 
 if __name__ == "__main__":
     main() 

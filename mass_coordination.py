@@ -5,10 +5,12 @@ from datetime import datetime
 import threading
 import time
 import json
+import os
 import logging
 from collections import defaultdict, Counter
 
 from mass_agent import AgentState, TaskInput
+from mass_logging import get_log_manager, MassLogManager
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -23,9 +25,6 @@ class VoteRecord:
 @dataclass  
 class SystemMetrics:
     """Tracks system performance and cost metrics."""
-    total_tokens_used: int = 0
-    total_api_calls: int = 0
-    total_cost_usd: float = 0.0
     phase_durations: Dict[str, float] = field(default_factory=dict)
     agent_execution_times: Dict[int, float] = field(default_factory=dict)
     
@@ -33,7 +32,7 @@ class SystemMetrics:
 class SystemState:
     """Overall state of the MASS coordination system."""
     task: Optional[TaskInput] = None
-    phase: str = "initial"  # "initial", "collaboration", "consensus", "completed"
+    phase: str = "initial"  # "initial", "collaboration", "debate", "presentation", "completed"
     start_time: Optional[float] = None
     end_time: Optional[float] = None
     consensus_reached: bool = False
@@ -58,29 +57,14 @@ def extract_answer_from_summary(summary: str) -> Optional[str]:
         r"(?:### Answer|###\s*Answer)\s*\n(.*?)(?=###|\Z)",
         r"(?:## Answer|##\s*Answer)\s*\n(.*?)(?=##|\Z)",
         r"(?:# Answer|#\s*Answer)\s*\n(.*?)(?=#|\Z)",
+        r"(?:### Final Answer|###\s*Final Answer)\s*\n(.*?)(?=###|\Z)",
+        r"(?:## Final Answer|##\s*Final Answer)\s*\n(.*?)(?=##|\Z)",
+        r"(?:# Final Answer|#\s*Final Answer)\s*\n(.*?)(?=#|\Z)",
         
         # Direct answer statements
         r"(?:final answer|final answer is|answer|conclusion):\s*(.+?)(?:\n|$|\.|;)",
         r"(?:the answer is|answer is):\s*(.+?)(?:\n|$|\.|;)",
         r"(?:therefore|thus|so|hence),?\s+(?:the answer is)?\s*(.+?)(?:\n|$|\.|;)",
-        
-        # Maya Long Count Calendar specific (for the test case)
-        r"(\d+\.\d+\.\d+\.\d+\.\d+)",
-        
-        # Date patterns
-        r"((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+(?:st|nd|rd|th)?,?\s+\d+\s+(?:BCE?|CE?|BC|AD))",
-        r"(\d+\s+(?:BCE?|CE?|BC|AD))",
-        
-        # Quoted answers
-        r'"([^"]+)"',
-        r"'([^']+)'",
-        
-        # Answer with emphasis
-        r"\*\*(.+?)\*\*",
-        r"__(.+?)__",
-        
-        # Last sentence as potential answer (if it looks like an answer)
-        r"([^.!?]+[.!?])\s*$"
     ]
     
     extracted_answers = []
@@ -108,12 +92,6 @@ def extract_answer_from_summary(summary: str) -> Optional[str]:
     # Prioritize answers by pattern specificity (lower index = more specific)
     extracted_answers.sort(key=lambda x: (x['pattern_index'], len(x['answer'])))
     
-    # Prefer Maya Long Count dates for this specific test case
-    maya_dates = [ans for ans in extracted_answers if re.match(r'\d+\.\d+\.\d+\.\d+\.\d+', ans['answer'])]
-    if maya_dates:
-        return maya_dates[0]['answer']
-    
-    # Otherwise, prefer the most specific/shortest answer
     return extracted_answers[0]['answer']
 
 def evaluate_answer(extracted_answer: str, expected_answer: str, answer_type: str = "exactMatch") -> bool:
@@ -123,7 +101,7 @@ def evaluate_answer(extracted_answer: str, expected_answer: str, answer_type: st
     Args:
         extracted_answer: The answer extracted from the winning solution
         expected_answer: The expected correct answer
-        answer_type: Type of matching ("exactMatch", "contains", etc.)
+        answer_type: Type of matching ("exactMatch", etc.)
     
     Returns:
         True if the answer is considered correct
@@ -134,32 +112,14 @@ def evaluate_answer(extracted_answer: str, expected_answer: str, answer_type: st
     extracted_clean = extracted_answer.strip().lower()
     expected_clean = expected_answer.strip().lower()
     
-    if answer_type == "exactMatch":
+    if answer_type in ["exactMatch", "multipleChoice"]:
         # Check for exact match
         if extracted_clean == expected_clean:
             return True
         
-        # Check if extracted answer contains the expected answer
-        if expected_clean in extracted_clean:
-            return True
-        
-        # For Maya dates, check if both contain the same date pattern
-        maya_pattern = r'\d+\.\d+\.\d+\.\d+\.\d+'
-        extracted_maya = re.findall(maya_pattern, extracted_answer)
-        expected_maya = re.findall(maya_pattern, expected_answer)
-        
-        if extracted_maya and expected_maya:
-            return extracted_maya[0] == expected_maya[0]
-        
-        # Check for date equivalence
-        date_in_extracted = re.findall(r'(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d+(?:st|nd|rd|th)?,?\s+\d+\s+(?:bce?|ce?|bc|ad)', extracted_clean)
-        date_in_expected = re.findall(r'(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d+(?:st|nd|rd|th)?,?\s+\d+\s+(?:bce?|ce?|bc|ad)', expected_clean)
-        
-        if date_in_extracted and date_in_expected:
-            return date_in_extracted[0] == date_in_expected[0]
-    
-    elif answer_type == "contains":
-        return expected_clean in extracted_clean
+    else:
+        # TODO: add more answer types
+        pass
     
     return False
 
@@ -194,6 +154,9 @@ class MassCoordinationSystem:
         # Communication logs
         self.communication_log: List[Dict[str, Any]] = []
         
+        # Get reference to logging system
+        self.log_manager = get_log_manager()
+        
     def register_agent(self, agent):
         """
         Register an agent with the coordination system.
@@ -216,8 +179,7 @@ class MassCoordinationSystem:
         with self._lock:
             logger.info("🎯 COORDINATION SYSTEM: Starting new task")
             logger.info(f"   Task ID: {task.task_id}")
-            logger.info(f"   Question length: {len(task.question)} characters")
-            logger.info(f"   Question preview: {task.question[:150]}{'...' if len(task.question) > 150 else ''}")
+            logger.info(f"   Question preview: {task.question}")
             logger.info(f"   Registered agents: {list(self.agents.keys())}")
             logger.info(f"   Max rounds: {self.max_rounds}")
             logger.info(f"   Consensus threshold: {self.consensus_threshold}")
@@ -240,7 +202,7 @@ class MassCoordinationSystem:
             logger.debug(f"   Cleared {len(self.votes)} previous votes")
             logger.debug(f"   Cleared {len(self.communication_log)} previous communications")
             
-            self._log_event("task_started", {"task_id": task.task_id, "question": task.question[:100] + "..."})
+            self._log_event("task_started", {"task_id": task.task_id, "question": task.question})
             logger.info("✅ Task initialization completed successfully")
     
     def update_agent_summary(self, agent_id: int, summary: str, final_answer: str = ""):
@@ -257,18 +219,24 @@ class MassCoordinationSystem:
                 raise ValueError(f"Agent {agent_id} not registered")
             
             old_summary_length = len(self.agent_states[agent_id].working_summary)
-            old_answer_length = len(self.agent_states[agent_id].final_answer)
             self.agent_states[agent_id].add_update(summary, final_answer)
             
             print(f"      📝 Agent {agent_id} summary updated:")
             print(f"         📏 Summary Length: {old_summary_length} → {len(summary)} chars")
-            if final_answer:
-                print(f"         🎯 Answer Length: {old_answer_length} → {len(final_answer)} chars")
-            print(f"         🔍 Preview: {summary[:100]}{'...' if len(summary) > 100 else ''}")
+            print(f"         🔍 Preview: {summary}")
+            
+            # Log to the comprehensive logging system
+            if self.log_manager:
+                self.log_manager.log_agent_summary_update(
+                    agent_id=agent_id,
+                    summary=summary,
+                    final_answer=final_answer,
+                    phase=self.system_state.phase
+                )
             
             self._log_event("summary_updated", {
                 "agent_id": agent_id,
-                "summary_preview": summary[:200] + "..." if len(summary) > 200 else summary,
+                "summary": summary,
                 "timestamp": time.time()
             })
     
@@ -286,6 +254,11 @@ class MassCoordinationSystem:
             Dictionary containing all agent states and summaries (new updates only if check_new_only=True)
         """
         with self._lock:
+            # Calculate max updates by any agent (this represents the effective "round")
+            max_updates_by_any_agent = max(
+                len(state.update_history) for state in self.agent_states.values()
+            ) if self.agent_states else 0
+            
             updates = {
                 "agents": {},
                 "system_status": {
@@ -293,7 +266,7 @@ class MassCoordinationSystem:
                     "total_agents": len(self.agents),
                     "voted_agents": len([s for s in self.agent_states.values() if s.status == "voted"]),
                     "working_agents": len([s for s in self.agent_states.values() if s.status == "working"]),
-                    "current_round": self.system_state.total_rounds
+                    "current_round": max_updates_by_any_agent
                 },
                 "voting_status": self._get_voting_status(),
                 "has_new_updates": False
@@ -311,6 +284,7 @@ class MassCoordinationSystem:
                     # Check if this is a new update for the requesting agent
                     is_new_update = True
                     if check_new_only and requesting_agent_state:
+                        # The last seen timestamp for this agent's updates
                         last_seen = requesting_agent_state.seen_updates_timestamps.get(agent_id, 0.0)
                         is_new_update = latest_timestamp > last_seen
                     
@@ -400,17 +374,24 @@ class MassCoordinationSystem:
                     "reason": "new_updates_available"
                 })
     
-    def cast_vote(self, voter_id: int, target_id: int):
+    def cast_vote(self, voter_id: int, target_id: int, response_text: str = ""):
         """
         Record a vote from one agent for another agent's solution.
         
         Args:
             voter_id: ID of the agent casting the vote
             target_id: ID of the agent being voted for
+            response_text: The full response text that led to this vote (optional)
         """
         with self._lock:
             logger.info(f"🗳️ VOTING: Agent {voter_id} casting vote")
             logger.debug(f"   Vote details: {voter_id} → {target_id}")
+            
+            print(f"      🗳️  CAST_VOTE: Agent {voter_id} → Agent {target_id}")
+            print(f"      📊 Current phase: {self.system_state.phase}")
+            print(f"      🔧 Log manager exists: {self.log_manager is not None}")
+            if response_text:
+                print(f"      📝 Response text length: {len(response_text)} characters")
             
             if voter_id not in self.agent_states:
                 logger.error(f"   ❌ Invalid voter: Agent {voter_id} not registered")
@@ -432,9 +413,31 @@ class MassCoordinationSystem:
             self.votes.append(vote)
             
             # Update agent state
+            old_status = self.agent_states[voter_id].status
             self.agent_states[voter_id].status = "voted"
             self.agent_states[voter_id].vote_target = target_id
+            self.agent_states[voter_id].execution_end_time = time.time()
             logger.debug(f"   Agent {voter_id} status updated to 'voted'")
+            
+            # Log to the comprehensive logging system
+            if self.log_manager:
+                print(f"      📝 Logging voting event via log_manager")
+                self.log_manager.log_voting_event(
+                    voter_id=voter_id,
+                    target_id=target_id,
+                    phase=self.system_state.phase,
+                    response_text=response_text
+                )
+                print(f"      📝 Logging status change via log_manager")
+                self.log_manager.log_agent_status_change(
+                    agent_id=voter_id,
+                    old_status=old_status,
+                    new_status="voted",
+                    phase=self.system_state.phase
+                )
+                print(f"      ✅ Voting events logged successfully")
+            else:
+                print(f"      ⚠️  No log_manager available - voting events not logged")
             
             # Show current vote distribution
             vote_counts = Counter(vote.target_id for vote in self.votes)
@@ -448,14 +451,7 @@ class MassCoordinationSystem:
                 leading_agent, leading_votes = vote_counts.most_common(1)[0]
                 logger.info(f"   🏆 Leading: Agent {leading_agent} with {leading_votes} votes (need {votes_needed} for consensus)")
             
-            print(f"      🗳️  VOTE CAST: Agent {voter_id} → Agent {target_id}")
-            if previous_votes:
-                print(f"         🔄 (Changed vote from Agent {previous_votes[0].target_id})")
-            
             # Show current vote distribution
-            print(f"         📊 Current votes: {dict(vote_counts)}")
-            print(f"         📈 Total votes cast: {len(self.votes)}/{len(self.agent_states)}")
-            
             self._log_event("vote_cast", {
                 "voter_id": voter_id,
                 "target_id": target_id,
@@ -492,9 +488,15 @@ class MassCoordinationSystem:
         total_agents = len(self.agents)
         votes_needed = max(1, int(total_agents * self.consensus_threshold))
         
+        # Calculate max updates by any agent (this is the new "round" concept)
+        max_updates_by_any_agent = max(
+            len(state.update_history) for state in self.agent_states.values()
+        ) if self.agent_states else 0
+        
         print(f"         🔍 Checking consensus:")
         print(f"            🎯 Votes needed: {votes_needed}/{total_agents} (threshold: {self.consensus_threshold})")
         print(f"            📊 Vote counts: {dict(vote_counts)}")
+        print(f"            🔄 Max updates by any agent: {max_updates_by_any_agent}/{self.max_rounds}")
         
         # Check for unanimous consensus first
         if vote_counts and vote_counts.most_common(1)[0][1] >= votes_needed:
@@ -504,100 +506,86 @@ class MassCoordinationSystem:
             self._reach_consensus(winning_agent_id)
             return True
         
-        # Check if we should force a decision (max rounds reached OR all agents voted)
+        # Check if we should force a decision (max updates reached by any agent OR all agents voted)
         should_force_decision = (
-            self.system_state.total_rounds >= self.max_rounds or 
+            max_updates_by_any_agent >= self.max_rounds or 
             len(self.votes) == total_agents
         )
         
-        if should_force_decision:
-            if vote_counts:
-                # Handle ties in voting by random selection as per README
-                max_votes = vote_counts.most_common(1)[0][1]
-                tied_agents = [agent_id for agent_id, votes in vote_counts.items() if votes == max_votes]
+        if should_force_decision and vote_counts:
+            # Handle ties in voting by earliest vote timestamp as per README
+            max_votes = vote_counts.most_common(1)[0][1]
+            tied_agents = [agent_id for agent_id, votes in vote_counts.items() if votes == max_votes]
+            
+            if len(tied_agents) > 1:
+                # Tie-breaking by earliest vote timestamp as per README requirement
+                print(f"            🎲 TIE DETECTED: {len(tied_agents)} agents tied with {max_votes} votes each")
                 
-                if len(tied_agents) > 1:
-                    # Random selection for tie-breaking as per README requirement
-                    import random
-                    winning_agent_id = random.choice(tied_agents)
-                    print(f"            🎲 TIE DETECTED: {len(tied_agents)} agents tied with {max_votes} votes each")
-                    print(f"            🎯 Random selection: Agent {winning_agent_id}")
-                else:
-                    winning_agent_id = tied_agents[0]
+                earliest_vote_time = float('inf')
+                winning_agent_id = tied_agents[0]
                 
-                reason = "MAX ROUNDS REACHED" if self.system_state.total_rounds >= self.max_rounds else "ALL AGENTS VOTED"
-                print(f"            🔄 {reason}: Fallback to majority winner")
-                print(f"            🏆 Agent {winning_agent_id} wins with {vote_counts[winning_agent_id]} votes")
-                self._reach_consensus(winning_agent_id, fallback=True)
-                return True
+                for agent_id in tied_agents:
+                    # Find the earliest vote for this agent
+                    agent_votes = [v for v in self.votes if v.target_id == agent_id]
+                    if agent_votes:
+                        earliest_agent_vote = min(agent_votes, key=lambda v: v.timestamp)
+                        if earliest_agent_vote.timestamp < earliest_vote_time:
+                            earliest_vote_time = earliest_agent_vote.timestamp
+                            winning_agent_id = agent_id
+                
+                print(f"            ⏰ Tie-breaking by earliest vote: Agent {winning_agent_id} (vote at {earliest_vote_time})")
+                logger.info(f"Tie broken by earliest vote timestamp: Agent {winning_agent_id}")
             else:
-                # Edge case: No votes cast at all - force a decision based on initial solutions
-                print(f"            ⚠️  NO VOTES CAST: Selecting based on initial solutions")
-                fallback_agent_id = self._select_fallback_agent()
-                if fallback_agent_id is not None:
-                    print(f"            🔄 Fallback selection: Agent {fallback_agent_id}")
-                    self._reach_consensus(fallback_agent_id, fallback=True)
-                    return True
-                else:
-                    print(f"            ❌ CRITICAL: No valid solutions available")
-                    return False
+                winning_agent_id = tied_agents[0]
+            
+            reason = "MAX UPDATES REACHED" if max_updates_by_any_agent >= self.max_rounds else "ALL AGENTS VOTED"
+            print(f"            🔄 {reason}: Selecting winner based on votes")
+            print(f"            🏆 Agent {winning_agent_id} wins with {vote_counts[winning_agent_id]} votes")
+            self._reach_consensus(winning_agent_id)
+            return True
         
-        # Continue waiting for more votes or rounds
+        # Continue waiting for more votes
         if len(self.votes) < total_agents:
             remaining = total_agents - len(self.votes)
             print(f"            ⏳ Waiting for {remaining} more votes")
-        else:
-            print(f"            🔄 Starting new round ({self.system_state.total_rounds + 1}/{self.max_rounds})")
-            self._start_new_round()
+        elif not vote_counts:
+            print(f"            ⚠️  No votes cast yet - waiting for agents to vote")
         
         return False
     
-    def _select_fallback_agent(self) -> Optional[int]:
-        """
-        Select a fallback agent when no votes are cast.
-        Returns the first agent with a valid solution, or None if no solutions exist.
-        """
-        for agent_id, state in self.agent_states.items():
-            if state.working_summary and state.working_summary.strip():
-                logger.info(f"Fallback selection: Agent {agent_id} (has working summary)")
-                return agent_id
-        
-        # If no summaries, just return the first agent
-        if self.agent_states:
-            first_agent = min(self.agent_states.keys())
-            logger.info(f"Fallback selection: Agent {first_agent} (first available agent)")
-            return first_agent
-        
-        return None
-    
-    def _reach_consensus(self, winning_agent_id: int, fallback: bool = False):
+    def _reach_consensus(self, winning_agent_id: int):
         """Mark consensus as reached and finalize the system."""
+        old_phase = self.system_state.phase
         self.system_state.consensus_reached = True
         self.system_state.final_solution_agent_id = winning_agent_id
         self.system_state.phase = "completed"
         self.system_state.end_time = time.time()
         
+        # Log to the comprehensive logging system
+        if self.log_manager:
+            vote_distribution = dict(Counter(vote.target_id for vote in self.votes))
+            self.log_manager.log_consensus_reached(
+                winning_agent_id=winning_agent_id,
+                vote_distribution=vote_distribution,
+                total_rounds=self.system_state.total_rounds,
+                is_fallback=False,
+                phase=self.system_state.phase
+            )
+            self.log_manager.log_phase_transition(
+                old_phase=old_phase,
+                new_phase="completed",
+                additional_data={
+                    "consensus_reached": True,
+                    "winning_agent_id": winning_agent_id,
+                    "is_fallback": False
+                }
+            )
+        
         self._log_event("consensus_reached", {
             "winning_agent_id": winning_agent_id,
-            "fallback_to_majority": fallback,
+            "fallback_to_majority": False,
             "total_rounds": self.system_state.total_rounds,
             "final_vote_distribution": dict(Counter(vote.target_id for vote in self.votes))
-        })
-    
-    def _start_new_round(self):
-        """Start a new collaboration round."""
-        self.system_state.total_rounds += 1
-        self.system_state.phase = "collaboration"
-        
-        # Reset all agents to working status to allow re-evaluation
-        for agent_state in self.agent_states.values():
-            agent_state.status = "working"
-        
-        # Clear votes for the new round
-        self.votes.clear()
-        
-        self._log_event("new_round_started", {
-            "round_number": self.system_state.total_rounds
         })
     
     def _log_event(self, event_type: str, data: Dict[str, Any]):
@@ -611,23 +599,15 @@ class MassCoordinationSystem:
     def get_final_solution(self) -> Optional[Dict[str, Any]]:
         """
         Get the final solution from the consensus winner with extracted answer and evaluation.
-        Always returns a solution, forcing consensus if necessary.
+        Returns None if no consensus has been reached.
         
         Returns:
-            Dictionary containing the final solution details
+            Dictionary containing the final solution details, or None if no consensus
         """
-        # If consensus not reached, force one using available data
+        # Return None if consensus not reached - no forcing
         if not self.system_state.consensus_reached:
-            logger.warning("No consensus reached - forcing final decision")
-            print("⚠️  WARNING: Forcing final decision due to no consensus")
-            self._force_consensus()
-        
-        # At this point, we should have a consensus
-        if not self.system_state.consensus_reached:
-            # Emergency fallback - this should never happen, but ensures we return something
-            logger.error("CRITICAL: Unable to establish any consensus - using emergency fallback")
-            print("❌ CRITICAL: Using emergency fallback")
-            return self._emergency_fallback_solution()
+            logger.warning("No consensus reached - returning None")
+            return None
 
         winning_agent_id = self.system_state.final_solution_agent_id
         winning_agent_state = self.agent_states[winning_agent_id]
@@ -680,7 +660,7 @@ class MassCoordinationSystem:
                 "vote_target": state.vote_target
             }
 
-        return {
+        final_solution = {
             "agent_id": winning_agent_id,
             "solution": winning_agent_state.working_summary,
             "extracted_answer": extracted_answer,
@@ -691,93 +671,18 @@ class MassCoordinationSystem:
             "is_correct": is_correct,
             "expected_answer": self.system_state.expected_answer,
             "total_runtime": total_runtime,
-            "consensus_method": "forced" if hasattr(self.system_state, 'forced_consensus') else "natural"
+            "consensus_method": "natural"
         }
-    
-    def _force_consensus(self):
-        """
-        Force a consensus decision when normal consensus process fails.
-        This ensures we always have a final answer.
-        """
-        with self._lock:
-            logger.info("🔧 FORCING CONSENSUS")
-            
-            # Try to use existing votes first
-            if self.votes:
-                vote_counts = Counter(vote.target_id for vote in self.votes)
-                max_votes = vote_counts.most_common(1)[0][1]
-                tied_agents = [agent_id for agent_id, votes in vote_counts.items() if votes == max_votes]
-                
-                if len(tied_agents) > 1:
-                    import random
-                    winning_agent_id = random.choice(tied_agents)
-                    print(f"            🎲 Forced tie-breaking: Agent {winning_agent_id}")
-                else:
-                    winning_agent_id = tied_agents[0]
-                    
-                print(f"            🔧 Forced consensus based on existing votes: Agent {winning_agent_id}")
-            else:
-                # No votes at all - select based on available solutions
-                winning_agent_id = self._select_fallback_agent()
-                if winning_agent_id is None:
-                    # Ultimate fallback - just pick the first agent
-                    winning_agent_id = min(self.agent_states.keys()) if self.agent_states else 0
-                print(f"            🔧 Forced consensus with no votes: Agent {winning_agent_id}")
-            
-            # Mark consensus as reached
-            self.system_state.consensus_reached = True
-            self.system_state.final_solution_agent_id = winning_agent_id
-            self.system_state.phase = "completed"
-            self.system_state.end_time = time.time()
-            self.system_state.forced_consensus = True
-            
-            logger.info(f"🔧 Forced consensus established: Agent {winning_agent_id}")
-    
-    def _emergency_fallback_solution(self) -> Dict[str, Any]:
-        """
-        Emergency fallback when all else fails.
-        Returns a basic solution structure.
-        """
-        logger.error("Using emergency fallback solution")
         
-        # Try to find any agent with content
-        fallback_agent_id = 0
-        fallback_content = "No solution available"
+        # Log task completion to the comprehensive logging system
+        if self.log_manager:
+            self.log_manager.log_task_completion(final_solution)
         
-        if self.agent_states:
-            for agent_id, state in self.agent_states.items():
-                if state.working_summary and state.working_summary.strip():
-                    fallback_agent_id = agent_id
-                    fallback_content = state.working_summary
-                    break
-            else:
-                # No summaries found, use first agent
-                fallback_agent_id = min(self.agent_states.keys())
-        
-        return {
-            "agent_id": fallback_agent_id,
-            "solution": fallback_content,
-            "extracted_answer": "Unable to extract answer",
-            "execution_time": 0,
-            "total_rounds": self.system_state.total_rounds,
-            "vote_distribution": {},
-            "all_agent_summaries": {},
-            "is_correct": False,
-            "expected_answer": self.system_state.expected_answer,
-            "total_runtime": 0,
-            "consensus_method": "emergency_fallback"
-        }
+        return final_solution
     
     def set_expected_answer(self, expected_answer: str):
         """Set the expected answer for evaluation purposes."""
         self.system_state.expected_answer = expected_answer
-    
-    def update_metrics(self, tokens_used: int = 0, api_calls: int = 0, cost_usd: float = 0.0):
-        """Update system metrics with usage information."""
-        with self._lock:
-            self.system_state.metrics.total_tokens_used += tokens_used
-            self.system_state.metrics.total_api_calls += api_calls
-            self.system_state.metrics.total_cost_usd += cost_usd
     
     def start_phase_timing(self, phase: str):
         """Start timing for a specific phase."""
@@ -814,47 +719,10 @@ class MassCoordinationSystem:
             "runtime": (time.time() - self.system_state.start_time) if self.system_state.start_time else 0
         }
     
-    def export_session_log(self) -> Dict[str, Any]:
-        """Export complete session information for analysis."""
-        return {
-            "task": {
-                "question": self.system_state.task.question if self.system_state.task else None,
-                "task_id": self.system_state.task.task_id if self.system_state.task else None
-            },
-            "system_state": {
-                "phase": self.system_state.phase,
-                "consensus_reached": self.system_state.consensus_reached,
-                "final_solution_agent_id": self.system_state.final_solution_agent_id,
-                "total_rounds": self.system_state.total_rounds,
-                "start_time": self.system_state.start_time,
-                "end_time": self.system_state.end_time
-            },
-            "agents": {
-                agent_id: {
-                    "working_summary": state.working_summary,
-                    "status": state.status,
-                    "vote_target": state.vote_target,
-                    "execution_time": state.execution_time,
-                    "update_history": state.update_history
-                }
-                for agent_id, state in self.agent_states.items()
-            },
-            "votes": [
-                {
-                    "voter_id": vote.voter_id,
-                    "target_id": vote.target_id,
-                    "timestamp": vote.timestamp
-                }
-                for vote in self.votes
-            ],
-            "communication_log": self.communication_log,
-            "final_solution": self.get_final_solution()
-        } 
-
     def export_detailed_session_log(self) -> Dict[str, Any]:
         """
         Export complete detailed session information for comprehensive analysis.
-        Includes all outputs, metrics, costs, and evaluation results.
+        Includes all outputs, metrics, and evaluation results.
         """
         session_log = {
             "session_metadata": {
@@ -887,16 +755,11 @@ class MassCoordinationSystem:
             },
             "system_metrics": {
                 "performance": {
-                    "total_tokens_used": self.system_state.metrics.total_tokens_used,
-                    "total_api_calls": self.system_state.metrics.total_api_calls,
-                    "total_cost_usd": self.system_state.metrics.total_cost_usd,
                     "phase_durations": self.system_state.metrics.phase_durations,
                     "agent_execution_times": self.system_state.metrics.agent_execution_times
                 },
                 "efficiency": {
-                    "avg_time_per_agent": sum(self.system_state.metrics.agent_execution_times.values()) / len(self.system_state.metrics.agent_execution_times) if self.system_state.metrics.agent_execution_times else 0,
-                    "cost_per_agent": self.system_state.metrics.total_cost_usd / len(self.agents) if self.agents else 0,
-                    "tokens_per_agent": self.system_state.metrics.total_tokens_used / len(self.agents) if self.agents else 0
+                    "avg_time_per_agent": sum(self.system_state.metrics.agent_execution_times.values()) / len(self.system_state.metrics.agent_execution_times) if self.system_state.metrics.agent_execution_times else 0
                 }
             },
             "agent_details": {
@@ -921,174 +784,10 @@ class MassCoordinationSystem:
                     }
                     for vote in self.votes
                 ],
-                "final_vote_distribution": dict(Counter(vote.target_id for vote in self.votes)),
-                "voting_rounds": self._analyze_voting_patterns()
+                "final_vote_distribution": dict(Counter(vote.target_id for vote in self.votes))
             },
             "communication_log": self.communication_log,
-            "phase_outputs": self._extract_phase_outputs(),
             "final_solution": self.get_final_solution() if self.system_state.consensus_reached else None
         }
         
-        return session_log
-    
-    def _analyze_voting_patterns(self) -> List[Dict[str, Any]]:
-        """Analyze voting patterns across rounds."""
-        voting_rounds = []
-        votes_by_timestamp = sorted(self.votes, key=lambda v: v.timestamp)
-        
-        if not votes_by_timestamp:
-            return voting_rounds
-        
-        current_round = []
-        last_timestamp = votes_by_timestamp[0].timestamp
-        
-        for vote in votes_by_timestamp:
-            # Group votes within 60 seconds as same round
-            if vote.timestamp - last_timestamp > 60:
-                if current_round:
-                    voting_rounds.append({
-                        "round_number": len(voting_rounds) + 1,
-                        "votes": current_round,
-                        "vote_distribution": dict(Counter(v["target_id"] for v in current_round))
-                    })
-                current_round = []
-            
-            current_round.append({
-                "voter_id": vote.voter_id,
-                "target_id": vote.target_id,
-                "timestamp": vote.timestamp
-            })
-            last_timestamp = vote.timestamp
-        
-        # Add final round
-        if current_round:
-            voting_rounds.append({
-                "round_number": len(voting_rounds) + 1,
-                "votes": current_round,
-                "vote_distribution": dict(Counter(v["target_id"] for v in current_round))
-            })
-        
-        return voting_rounds
-    
-    def _extract_phase_outputs(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Extract outputs from each phase based on update history."""
-        phase_outputs = {
-            "initial": [],
-            "collaboration": [],
-            "consensus": []
-        }
-        
-        for agent_id, state in self.agent_states.items():
-            for i, update in enumerate(state.update_history):
-                # Determine phase based on timing and round information
-                phase = "initial"
-                if i > 0:  # After first update
-                    phase = "collaboration"
-                if self.system_state.total_rounds >= self.max_rounds - 1:
-                    phase = "consensus"
-                
-                phase_outputs[phase].append({
-                    "agent_id": agent_id,
-                    "timestamp": update["timestamp"],
-                    "content": update["summary"],
-                    "status": update["status"],
-                    "update_number": i + 1
-                })
-        
-        # Sort by timestamp within each phase
-        for phase in phase_outputs:
-            phase_outputs[phase].sort(key=lambda x: x["timestamp"])
-        
-        return phase_outputs
-    
-    def save_session_log(self, output_dir: str = "logs") -> str:
-        """
-        Save comprehensive session log to a JSON file.
-        
-        Args:
-            output_dir: Directory to save the log file
-            
-        Returns:
-            Path to the saved log file
-        """
-        import os
-        
-        # Create logs directory if it doesn't exist
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        task_id = self.system_state.task.task_id if self.system_state.task and self.system_state.task.task_id else "unknown"
-        filename = f"mass_session_{task_id}_{timestamp}.json"
-        filepath = os.path.join(output_dir, filename)
-        
-        # Get detailed log
-        session_log = self.export_detailed_session_log()
-        
-        # Save to file
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(session_log, f, indent=2, ensure_ascii=False, default=str)
-        
-        # Also save a summary file
-        summary_filename = f"mass_summary_{task_id}_{timestamp}.txt"
-        summary_filepath = os.path.join(output_dir, summary_filename)
-        
-        with open(summary_filepath, 'w', encoding='utf-8') as f:
-            f.write(self._generate_summary_report(session_log))
-        
-        logger.info(f"Session log saved to: {filepath}")
-        logger.info(f"Summary report saved to: {summary_filepath}")
-        
-        return filepath
-    
-    def _generate_summary_report(self, session_log: Dict[str, Any]) -> str:
-        """Generate a human-readable summary report."""
-        lines = [
-            "=" * 80,
-            "MASS SYSTEM EXECUTION SUMMARY",
-            "=" * 80,
-            "",
-            f"Session ID: {session_log['session_metadata']['session_id']}",
-            f"Execution Time: {session_log['session_metadata']['timestamp']}",
-            f"Total Duration: {session_log['session_metadata']['total_duration']:.2f} seconds" if session_log['session_metadata']['total_duration'] else "Duration: N/A",
-            "",
-            "TASK INFORMATION:",
-            f"  Question: {session_log['task_information']['question']}",
-            f"  Expected Answer: {session_log['task_information']['expected_answer']}",
-            f"  Task ID: {session_log['task_information']['task_id']}",
-            "",
-            "EXECUTION RESULTS:",
-            f"  Consensus Reached: {session_log['execution_results']['consensus_reached']}",
-            f"  Winning Agent: {session_log['execution_results']['final_solution_agent_id']}",
-            f"  Extracted Answer: {session_log['execution_results']['extracted_answer']}",
-            f"  Answer Correct: {session_log['execution_results']['is_answer_correct']}",
-            f"  Rounds Completed: {session_log['execution_results']['total_rounds_completed']}",
-            "",
-            "SYSTEM METRICS:",
-            f"  Total Tokens Used: {session_log['system_metrics']['performance']['total_tokens_used']:,}",
-            f"  Total API Calls: {session_log['system_metrics']['performance']['total_api_calls']:,}",
-            f"  Total Cost: ${session_log['system_metrics']['performance']['total_cost_usd']:.4f}",
-            f"  Average Time per Agent: {session_log['system_metrics']['efficiency']['avg_time_per_agent']:.2f}s",
-            "",
-            "AGENT PERFORMANCE:",
-        ]
-        
-        for agent_id, details in session_log['agent_details'].items():
-            lines.extend([
-                f"  Agent {agent_id}:",
-                f"    Status: {details['final_status']}",
-                f"    Execution Time: {details['execution_time']:.2f}s" if details['execution_time'] else "    Execution Time: N/A",
-                f"    Updates Made: {details['total_updates']}",
-                f"    Vote Target: {details['vote_target']}",
-                ""
-            ])
-        
-        lines.extend([
-            "VOTING ANALYSIS:",
-            f"  Final Vote Distribution: {session_log['voting_analysis']['final_vote_distribution']}",
-            f"  Total Voting Rounds: {len(session_log['voting_analysis']['voting_rounds'])}",
-            "",
-            "=" * 80
-        ])
-        
-        return "\n".join(lines) 
+        return session_log 

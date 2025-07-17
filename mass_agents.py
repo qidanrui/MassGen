@@ -36,10 +36,11 @@ except ImportError:
 class OpenAIMassAgent(MassAgent):
     """MassAgent wrapper for OpenAI agent implementation."""
     
-    def __init__(self, agent_id: int, coordination_system=None, model: str = "o4-mini", **kwargs):
+    def __init__(self, agent_id: int, coordination_system=None, model: str = "o3", **kwargs):
         super().__init__(agent_id, coordination_system)
         self.model = model
         self.kwargs = kwargs
+        self._client = None  # Store client for cleanup
         
         # Import the OpenAI process_message function
         try:
@@ -48,8 +49,17 @@ class OpenAIMassAgent(MassAgent):
         except ImportError:
             self._process_message_impl = None
     
+    def cleanup(self):
+        """Clean up HTTP client resources."""
+        if self._client:
+            try:
+                self._client.close()
+            except Exception:
+                pass  # Ignore cleanup errors
+            self._client = None
+    
     def process_message(self, messages: List[Dict[str, str]], tools: List[str] = None, 
-                       temperature: float = 0.5, **kwargs) -> AgentResponse:
+                       temperature: float = 0.7, **kwargs) -> AgentResponse:
         """Process message using OpenAI backend."""
         if tools is None:
             tools = self._get_available_tools()
@@ -96,6 +106,7 @@ class GeminiMassAgent(MassAgent):
         super().__init__(agent_id, coordination_system)
         self.model = model
         self.kwargs = kwargs
+        self._session = None  # Store session for cleanup
         
         # Import the Gemini process_message function
         try:
@@ -108,8 +119,17 @@ class GeminiMassAgent(MassAgent):
             traceback.print_exc()
             exit()
     
+    def cleanup(self):
+        """Clean up HTTP session resources."""
+        if self._session:
+            try:
+                self._session.close()
+            except Exception:
+                pass  # Ignore cleanup errors
+            self._session = None
+    
     def process_message(self, messages: List[Dict[str, str]], tools: List[str] = None, 
-                       temperature: float = 0.5, **kwargs) -> AgentResponse:
+                       temperature: float = 0.7, **kwargs) -> AgentResponse:
         """Process message using Gemini backend."""
         if tools is None:
             tools = self._get_available_tools()
@@ -156,6 +176,7 @@ class GrokMassAgent(MassAgent):
         super().__init__(agent_id, coordination_system)
         self.model = model
         self.kwargs = kwargs
+        self._client = None  # Store client for cleanup
         
         # Import the Grok process_message function
         try:
@@ -167,10 +188,18 @@ class GrokMassAgent(MassAgent):
             print("Grok agent implementation not available (missing dependencies)")
             traceback.print_exc()
             exit()
-            
+    
+    def cleanup(self):
+        """Clean up HTTP client resources."""
+        if self._client:
+            try:
+                self._client.close()
+            except Exception:
+                pass  # Ignore cleanup errors
+            self._client = None
     
     def process_message(self, messages: List[Dict[str, str]], tools: List[str] = None, 
-                       temperature: float = 0.5, **kwargs) -> AgentResponse:
+                       temperature: float = 0.7, **kwargs) -> AgentResponse:
         """Process message using Grok backend."""
         if tools is None:
             tools = self._get_available_tools()

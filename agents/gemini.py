@@ -74,7 +74,7 @@ def parse_completion(completion, add_citations=True):
 
     return {"text": text, "code": code, "citations": citations}
 
-def process_message(messages, model="gemini-2.5-pro", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=0.5, top_p=1.0, api_key=None):
+def process_message(messages, model="gemini-2.5-pro", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=0.7, top_p=1.0, api_key=None):
     """
     Generate content using Gemini API.
     
@@ -184,11 +184,14 @@ def process_message(messages, model="gemini-2.5-pro", tools=["live_search", "cod
     if gemini_tools:
         payload["tools"] = gemini_tools
     
-    # GDM url
     headers = {"Content-Type": "application/json"}
     beta = "v1alpha" if "thinking" in model else "v1beta"
     url = f"https://generativelanguage.googleapis.com/{beta}/models/{model}:generateContent?key={api_key}"
-        
+    
+    # Debug
+    # print(f"[GEMINI] Payload: {json.dumps(payload, indent=4)}")
+    # _ = input("[GEMINI] Press Enter to continue...")
+    
     # Make API request
     # Retry up to max_retries times if there is an error
     completion = None
@@ -210,12 +213,15 @@ def process_message(messages, model="gemini-2.5-pro", tools=["live_search", "cod
 
     # Parse the completion and return text, code, and citations
     result = parse_completion(completion, add_citations=True)
+    
+    # print(json.dumps(result, indent=4))
+    # _ = input("[GEMINI] Press Enter to continue...")
     return result
 
 # Example usage (you can remove this if not needed)
 if __name__ == "__main__":
-    messages = [{"role": "user", "content": "Tell me the difference between the GDP of China and India in percentage for the past 10 years."
-                 "Then use a suitable model to predict the GDP of China and India in 2035. Make sure to cite the sources of your information."}]
+    messages = [
+        {"role": "user", "content": "Which are the three longest rivers mentioned in the Aeneid?"}]
     
     result = process_message(messages, tools=["live_search", "code_execution"])
     print("text (with citations): ", result["text"])
