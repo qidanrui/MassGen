@@ -93,7 +93,7 @@ class MassAgent(ABC):
     
     @abstractmethod
     def process_message(self, messages: List[Dict[str, str]], tools: List[str] = None, 
-                       temperature: float = 0.7, **kwargs) -> AgentResponse:
+                       temperature: float = None, **kwargs) -> AgentResponse:
         """
         Core LLM inference function for task processing.
         

@@ -60,7 +60,7 @@ def parse_completion(response, add_citations=True):
     
     return {"text": text, "code": code, "citations": citations, "function_calls": function_calls}
 
-def process_message(messages, model="o3", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=0.7, top_p=1.0, api_key=None):
+def process_message(messages, model="o3", tools=["live_search", "code_execution"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None):
     """
     Generate content using OpenAI API.
     
@@ -122,6 +122,7 @@ def process_message(messages, model="o3", tools=["live_search", "code_execution"
     # print("--------------------------------")
     # print(f"[OAI] Instructions: {instructions}")
     # print(f"[OAI] Input: {input_text}")
+    # print(f"[OAI] Formatted tools: {formatted_tools}")
     # _ = input("[OAI] Press Enter to continue...")
     
     # Make API request with retry logic
@@ -136,8 +137,8 @@ def process_message(messages, model="o3", tools=["live_search", "code_execution"
                 input=input_text,
                 reasoning={"effort": "low"} if reasoning_model else None,
                 temperature=temperature if not reasoning_model else None,
-                max_output_tokens=max_tokens,
-                top_p=top_p
+                max_output_tokens=max_tokens if max_tokens else None,
+                top_p=top_p if top_p else None
             )
             completion = response
             break
@@ -150,7 +151,7 @@ def process_message(messages, model="o3", tools=["live_search", "code_execution"
         raise Exception(f"Failed to get completion after {max_retries} retries")
 
     # print(completion)
-    output = completion.output
+    # output = completion.output
     # for o in output:
     #     print(f"-------------- {o.type} ------------------")
     #     print(o)
@@ -176,7 +177,7 @@ if __name__ == "__main__":
 # """
 #         },
         
-        {"role": "user", "content": "Which are the three longest rivers mentioned in the Aeneid?"}]
+        {"role": "user", "content": "Which is the first book in the Bible, in canonical order, to be mentioned by name in a Shakespeare play, and which play is it mentioned in?"}]
     
     # from tools import update_summary, check_updates
     from util import function_to_json

@@ -35,7 +35,7 @@ def parse_completion(response, add_citations=True):
     
     return {"text": text, "code": code, "citations": citations}
 
-def process_message(messages, model="grok-4", tools=["live_search"], max_retries=10, max_tokens=32000, temperature=0.7, top_p=1.0, api_key=None):
+def process_message(messages, model="grok-4", tools=["live_search"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None):
     """
     Generate content using Grok API.
     
@@ -82,9 +82,9 @@ def process_message(messages, model="grok-4", tools=["live_search"], max_retries
             chat = client.chat.create(
                 model=model,
                 search_parameters=search_parameters,
-                temperature=temperature,
-                top_p=top_p,
-                max_tokens=max_tokens,
+                temperature=temperature if temperature else None,
+                top_p=top_p if top_p else None,
+                max_tokens=max_tokens if max_tokens else None,
             )
             
             # Convert messages from OpenAI format to Grok format
@@ -119,7 +119,8 @@ def process_message(messages, model="grok-4", tools=["live_search"], max_retries
 # Example usage (you can remove this if not needed)
 if __name__ == "__main__":
     messages = [
-        {"role": "user", "content": "Which are the three longest rivers mentioned in the Aeneid?"}]
+        {"role": "user", "content": "Which is the first book in the Bible, in canonical order, to be mentioned by name in a Shakespeare play, and which play is it mentioned in?"}
+        ]
     
     result = process_message(messages, tools=["live_search"])
     print("##########Response#############")

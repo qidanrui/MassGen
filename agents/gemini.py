@@ -74,7 +74,7 @@ def parse_completion(completion, add_citations=True):
 
     return {"text": text, "code": code, "citations": citations}
 
-def process_message(messages, model="gemini-2.5-pro", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=0.7, top_p=1.0, api_key=None):
+def process_message(messages, model="gemini-2.5-pro", tools=["live_search", "code_execution"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None):
     """
     Generate content using Gemini API.
     
@@ -108,11 +108,14 @@ def process_message(messages, model="gemini-2.5-pro", tools=["live_search", "cod
 
     # Generation config
     gemini_generation_config = {
-            "maxOutputTokens": max_tokens,
-            "temperature": temperature,
-            "topP": top_p,
             "candidateCount": 1,
         }
+    if max_tokens:
+        gemini_generation_config["maxOutputTokens"] = max_tokens
+    if temperature:
+        gemini_generation_config["temperature"] = temperature
+    if top_p:
+        gemini_generation_config["topP"] = top_p
 
     # Convert messages from OpenAI format to Gemini format
     gemini_messages = []
