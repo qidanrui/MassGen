@@ -77,7 +77,7 @@ def parse_completion(completion, add_citations=True):
     
     return {"text": text, "code": code, "citations": citations}
 
-def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, processing_timeout=180, stream=False, stream_callback=None):
+def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, processing_timeout=150, stream=False, stream_callback=None):
     """
     Generate content using Gemini API.
     
@@ -90,7 +90,7 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
         temperature: Temperature for generation
         top_p: Top-p value for generation
         api_key: Gemini API key (if None, will get from environment)
-        processing_timeout: Total timeout for entire processing including retries (default: 180)
+        processing_timeout: Total timeout for entire processing including retries (default: 150)
         stream: Whether to stream the response (default: False)
         stream_callback: Function to call with each chunk when streaming (default: None)
     

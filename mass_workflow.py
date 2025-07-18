@@ -36,7 +36,8 @@ class MassWorkflowManager:
                  check_update_frequency: float = 3.0,  # 3 seconds default as per README
                  max_collaboration_rounds: int = 5,  # Maximum collaboration rounds
                  streaming_display: bool = True,  # Enable streaming display
-                 stream_callback: Optional[Callable] = None):  # Custom stream callback
+                 stream_callback: Optional[Callable] = None,  # Custom stream callback
+                 max_display_lines: int = 80):  # Maximum lines to display per agent
         """
         Initialize the workflow manager.
         
@@ -47,6 +48,7 @@ class MassWorkflowManager:
             max_collaboration_rounds: Maximum number of collaboration rounds (default 5)
             streaming_display: Whether to enable streaming display (default True)
             stream_callback: Optional custom callback for streaming integration
+            max_display_lines: Maximum lines to display per agent (default 80)
         """
         self.orchestration_system = orchestration_system
         self.parallel_execution = parallel_execution
@@ -57,7 +59,8 @@ class MassWorkflowManager:
         self.streaming_orchestrator = create_streaming_display(
             display_type="terminal",
             display_enabled=streaming_display,
-            stream_callback=stream_callback
+            stream_callback=stream_callback,
+            max_lines=max_display_lines
         )
         
         # Workflow state
@@ -382,7 +385,7 @@ class MassWorkflowManager:
             # Continuous update checking mechanism as per README
             round_start_time = time.time()
             agents_processed_this_round = set()
-            round_timeout = 180  # Maximum time per round to prevent infinite loops
+            round_timeout = 150  # Maximum time per round to prevent infinite loops
             
             while True:
                 current_time = time.time()
@@ -674,12 +677,12 @@ class MassWorkflowManager:
         # Process the task using the agent's new method with timeout
         # Set phase-specific timeouts
         phase_timeouts = {
-            "initial": 180,      # 2 minutes for initial processing
-            "collaboration": 180, # 2 minutes for collaboration
-            "debate": 180,        # 2 minutes for debate
-            "presentation": 180   # 2 minutes for presentation
+            "initial": 150,      # 2 minutes for initial processing
+            "collaboration": 150, # 2 minutes for collaboration
+            "debate": 150,        # 2 minutes for debate
+            "presentation": 150   # 2 minutes for presentation
         }
-        timeout = phase_timeouts.get(phase, 180)
+        timeout = phase_timeouts.get(phase, 150)
         
         print(f"⏰ Agent {agent.agent_id} timeout: {timeout}s for {phase} phase")
         logger.debug(f"Agent {agent.agent_id} processing with {timeout}s timeout")
@@ -761,12 +764,42 @@ class MassWorkflowManager:
             stream_callback=llm_stream_callback if self.streaming_orchestrator else None
         )
         
-        # Finalize the LLM response streaming
-        if self.streaming_orchestrator:
-            self.streaming_orchestrator.finalize_agent_message(agent.agent_id)
-        
         # Record execution time
         agent_execution_time = time.time() - agent_start_time
+        
+        # Check for timeout: empty response AND execution time close to timeout limit
+        is_timeout = (
+            (not response.text or len(response.text.strip()) == 0) and 
+            agent_execution_time >= (timeout - 5)  # Within 5 seconds of timeout
+        )
+        
+        if is_timeout:
+            # Handle timeout case - show timeout message in streaming display
+            if self.streaming_orchestrator:
+                asyncio.run(self.streaming_orchestrator.stream_agent_output(
+                    agent.agent_id, f"\n{'─' * 40}\n⏰ TIMEOUT after {timeout}s\n💥 Agent terminated due to timeout\n{'─' * 40}\n"
+                ))
+                self.streaming_orchestrator.finalize_agent_message(agent.agent_id)
+                self.streaming_orchestrator.update_agent_status(agent.agent_id, "timeout")
+                # Add system message for timeout
+                self.streaming_orchestrator.add_system_message(f"⏰ Agent {agent.agent_id} TIMED OUT after {timeout}s")
+            
+            # Mark agent as failed due to timeout
+            agent.mark_failed(f"Timeout after {timeout}s")
+            print(f"⏰ SYSTEM: Agent {agent.agent_id} TIMED OUT after {timeout}s")
+            logger.warning(f"Agent {agent.agent_id} timed out after {agent_execution_time:.2f}s")
+            
+            # Update orchestration system with execution metrics
+            if phase == "initial":
+                agent.state.execution_end_time = time.time()
+                total_agent_time = agent.state.execution_time or agent_execution_time
+                self.orchestration_system.record_agent_execution_time(agent.agent_id, total_agent_time)
+            
+            return response  # Return early for timeout case
+        
+        # Normal case - finalize streaming and handle orchestration
+        if self.streaming_orchestrator:
+            self.streaming_orchestrator.finalize_agent_message(agent.agent_id)
         
         # Update orchestration system with execution metrics
         if phase == "initial":
@@ -805,6 +838,11 @@ class MassWorkflowManager:
         
         # Don't stream the full response content again - it was already streamed live
         # The streaming already happened during the agent execution
+        
+        # Check if agent is already marked as failed (e.g., due to timeout)
+        if self.orchestration_system.agent_states[agent.agent_id].status == "failed":
+            print(f"⚠️  SYSTEM: Agent {agent.agent_id} already marked as failed - skipping orchestration")
+            return  # Exit early for already failed agents
         
         # Extract summary report first
         summary_report = self._extract_summary_report(response.text)
@@ -865,7 +903,7 @@ class MassWorkflowManager:
                 # Update streaming display for summary update
                 if self.streaming_orchestrator:
                     asyncio.run(self.streaming_orchestrator.stream_agent_output(
-                        agent.agent_id, f"Updated solution ({len(summary_report)} chars)"
+                        agent.agent_id, f"Updated solution ({len(summary_report)} chars)\n"
                     ))
                 
         elif phase == "debate":
@@ -907,7 +945,7 @@ class MassWorkflowManager:
                 if self.streaming_orchestrator:
                     answer_info = f" + answer ({len(final_answer)} chars)" if final_answer else ""
                     asyncio.run(self.streaming_orchestrator.stream_agent_output(
-                        agent.agent_id, f"Updated solution ({len(summary_report)} chars{answer_info})"
+                        agent.agent_id, f"Updated solution ({len(summary_report)} chars{answer_info})\n"
                     ))
                 
         elif phase == "presentation":

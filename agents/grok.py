@@ -33,7 +33,7 @@ def parse_completion(response, add_citations=True):
     
     return {"text": text, "code": code, "citations": citations, "function_calls": []}
 
-def process_message(messages, model="grok-4", tools=["live_search"], max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, processing_timeout=180, stream=False, stream_callback=None):
+def process_message(messages, model="grok-4", tools=["live_search"], max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, processing_timeout=150, stream=False, stream_callback=None):
     """
     Generate content using Grok API with optional streaming support.
     """

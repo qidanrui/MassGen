@@ -9,8 +9,9 @@ import unicodedata
 from typing import Dict, List, Optional, Callable
 
 class MultiRegionDisplay:
-    def __init__(self, display_enabled: bool = True):
+    def __init__(self, display_enabled: bool = True, max_lines: int = 80):
         self.display_enabled = display_enabled
+        self.max_lines = max_lines  # Maximum lines to display per agent
         self.agent_outputs: Dict[int, str] = {}
         self.system_messages: List[str] = []
         self.start_time = time.time()
@@ -78,11 +79,14 @@ class MultiRegionDisplay:
         # Recalculate actual terminal width needed
         actual_width = (col_width * num_agents) + separators_total_width + padding_width
         
-        # Split content into lines for each agent
+        # Split content into lines for each agent and limit to max_lines
         agent_lines = {}
         max_lines = 0
         for agent_id in agent_ids:
             lines = self.agent_outputs[agent_id].split('\n')
+            # Keep only the last max_lines lines (tail behavior)
+            if len(lines) > self.max_lines:
+                lines = lines[-self.max_lines:]
             agent_lines[agent_id] = lines
             max_lines = max(max_lines, len(lines))
         
@@ -187,8 +191,8 @@ class MultiRegionDisplay:
         print(header_sep)
 
 class StreamingOrchestrator:
-    def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None):
-        self.display = MultiRegionDisplay(display_enabled)
+    def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 80):
+        self.display = MultiRegionDisplay(display_enabled, max_lines)
         self.stream_callback = stream_callback
         self.active_agents: Dict[int, str] = {}
         
@@ -226,8 +230,9 @@ class StreamingOrchestrator:
 
 def create_streaming_display(display_type: str = "terminal", 
                            display_enabled: bool = True,
-                           stream_callback: Optional[Callable] = None):
-    return StreamingOrchestrator(display_enabled, stream_callback)
+                           stream_callback: Optional[Callable] = None,
+                           max_lines: int = 80):
+    return StreamingOrchestrator(display_enabled, stream_callback, max_lines)
 
 def integrate_with_workflow_manager(workflow_manager, streaming_orchestrator):
     workflow_manager.streaming_orchestrator = streaming_orchestrator

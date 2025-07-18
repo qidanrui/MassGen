@@ -39,8 +39,6 @@ class SystemState:
     final_solution_agent_id: Optional[int] = None
     total_rounds: int = 0
     extracted_answer: Optional[str] = None
-    is_answer_correct: Optional[bool] = None
-    expected_answer: Optional[str] = None
     metrics: SystemMetrics = field(default_factory=SystemMetrics)
 
 def extract_answer_from_summary(summary: str) -> Optional[str]:
@@ -93,35 +91,6 @@ def extract_answer_from_summary(summary: str) -> Optional[str]:
     extracted_answers.sort(key=lambda x: (x['pattern_index'], len(x['answer'])))
     
     return extracted_answers[0]['answer']
-
-def evaluate_answer(extracted_answer: str, expected_answer: str, answer_type: str = "exactMatch") -> bool:
-    """
-    Evaluate if the extracted answer matches the expected answer.
-    
-    Args:
-        extracted_answer: The answer extracted from the winning solution
-        expected_answer: The expected correct answer
-        answer_type: Type of matching ("exactMatch", etc.)
-    
-    Returns:
-        True if the answer is considered correct
-    """
-    if not extracted_answer or not expected_answer:
-        return False
-    
-    extracted_clean = extracted_answer.strip().lower()
-    expected_clean = expected_answer.strip().lower()
-    
-    if answer_type in ["exactMatch", "multipleChoice"]:
-        # Check for exact match
-        if extracted_clean == expected_clean:
-            return True
-        
-    else:
-        # TODO: add more answer types
-        pass
-    
-    return False
 
 class MassOrchestrationSystem:
     """
@@ -689,7 +658,7 @@ class MassOrchestrationSystem:
     
     def get_final_solution(self) -> Optional[Dict[str, Any]]:
         """
-        Get the final solution from the consensus winner with extracted answer and evaluation.
+        Get the final solution from the consensus winner with extracted answer.
         Returns None if no consensus has been reached.
         
         Returns:
@@ -712,27 +681,6 @@ class MassOrchestrationSystem:
         # Also use any pre-parsed final answer from the winning solution
         if not extracted_answer and winning_agent_state.final_answer:
             extracted_answer = winning_agent_state.final_answer
-        
-        # Evaluate answer if expected answer is available
-        is_correct = None
-        if self.system_state.expected_answer:
-            # Get answer_type from task context if available
-            answer_type = "exactMatch"
-            if (self.system_state.task and 
-                self.system_state.task.context and 
-                "answer_type" in self.system_state.task.context):
-                answer_type = self.system_state.task.context["answer_type"]
-            
-            if extracted_answer:
-                is_correct = evaluate_answer(
-                    extracted_answer, 
-                    self.system_state.expected_answer, 
-                    answer_type
-                )
-            else:
-                is_correct = False
-                
-            self.system_state.is_answer_correct = is_correct
 
         # Calculate final metrics
         total_runtime = (self.system_state.end_time - self.system_state.start_time) if (self.system_state.end_time and self.system_state.start_time) else 0
@@ -759,8 +707,6 @@ class MassOrchestrationSystem:
             "total_rounds": self.system_state.total_rounds,
             "vote_distribution": dict(vote_counts),
             "all_agent_summaries": all_summaries,
-            "is_correct": is_correct,
-            "expected_answer": self.system_state.expected_answer,
             "total_runtime": total_runtime,
             "consensus_method": "natural"
         }
@@ -770,10 +716,6 @@ class MassOrchestrationSystem:
             self.log_manager.log_task_completion(final_solution)
         
         return final_solution
-    
-    def set_expected_answer(self, expected_answer: str):
-        """Set the expected answer for evaluation purposes."""
-        self.system_state.expected_answer = expected_answer
     
     def start_phase_timing(self, phase: str):
         """Start timing for a specific phase."""
@@ -828,8 +770,6 @@ class MassOrchestrationSystem:
                 "question": self.system_state.task.question if self.system_state.task else None,
                 "task_id": self.system_state.task.task_id if self.system_state.task else None,
                 "context": self.system_state.task.context if self.system_state.task else None,
-                "expected_answer": self.system_state.expected_answer,
-                "answer_type": self.system_state.task.context.get("answer_type", "exactMatch") if self.system_state.task and self.system_state.task.context else "exactMatch"
             },
             "system_configuration": {
                 "max_rounds": self.max_rounds,
@@ -841,8 +781,7 @@ class MassOrchestrationSystem:
                 "consensus_reached": self.system_state.consensus_reached,
                 "final_solution_agent_id": self.system_state.final_solution_agent_id,
                 "total_rounds_completed": self.system_state.total_rounds,
-                "extracted_answer": self.system_state.extracted_answer,
-                "is_answer_correct": self.system_state.is_answer_correct
+                "extracted_answer": self.system_state.extracted_answer
             },
             "system_metrics": {
                 "performance": {
