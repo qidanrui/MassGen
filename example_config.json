@@ -1,0 +1,13 @@
+{
+    "max_rounds": 5,
+    "consensus_threshold": 1.0,
+    "parallel_execution": true,
+    "check_update_frequency": 3.0,
+    "description": "Example configuration for MASS system",
+    "_comments": {
+        "max_rounds": "Maximum number of collaboration rounds before fallback to majority vote",
+        "consensus_threshold": "Fraction of agents that must agree for consensus (1.0 = unanimous, 0.5 = majority)",
+        "parallel_execution": "Whether agents should work in parallel (true) or sequentially (false)",
+        "check_update_frequency": "How often agents check for updates in seconds (default: 3.0)"
+    }
+}

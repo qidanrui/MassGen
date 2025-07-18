@@ -7,15 +7,15 @@ It handles system initialization, agent setup, and workflow execution.
 
 Usage examples:
     # Run with a JSON task file
-    python mass_main.py --task-file hle/test_case.json --agents openai,gemini,grok
+    python mass_main.py --task-file hle/test_case.json --agents gpt-4o,gemini-2.5-flash,grok-4
 
     # Run with custom configuration
-    python mass_main.py --task-file task.json --agents openai,openai,gemini --config config.json
+    python mass_main.py --task-file task.json --agents o3-mini,gpt-4o-mini,gemini-2.5-pro --config config.json
 
     # Run programmatically
     from mass_main import MassSystem
     system = MassSystem()
-    result = system.run_task_from_file("hle/test_case.json", ["openai", "gemini", "grok"])
+    result = system.run_task_from_file("hle/test_case.json", ["gpt-4o", "gemini-2.5-flash", "grok-4"])
 """
 
 import argparse
@@ -37,6 +37,33 @@ from mass_coordination import MassCoordinationSystem
 from mass_workflow import MassWorkflowManager
 from mass_agents import create_agent
 from mass_logging import initialize_logging, cleanup_logging
+from agents.constants import get_agent_type_from_model, get_available_models
+
+def create_agent_configs_from_models(model_names: List[str]) -> List[Dict[str, Any]]:
+    """
+    Convert a list of model names to agent configurations.
+    
+    Args:
+        model_names: List of model names (e.g., ["gpt-4o", "gemini-2.5-flash", "grok-4"])
+        
+    Returns:
+        List of agent configuration dictionaries with type and model specified
+        
+    Raises:
+        ValueError: If any model name is invalid
+    """
+    agent_configs = []
+    for model_name in model_names:
+        try:
+            agent_type = get_agent_type_from_model(model_name)
+            agent_configs.append({
+                "type": agent_type,
+                "kwargs": {"model": model_name}
+            })
+        except ValueError as e:
+            raise ValueError(f"Invalid model name '{model_name}': {str(e)}")
+    
+    return agent_configs
 
 def setup_enhanced_logging(verbose: bool = False):
     """
@@ -201,7 +228,8 @@ class MassSystem:
                 )
                 self.coordination_system.register_agent(agent)
                 self.agents.append(agent)
-                logger.info(f"✓ Registered agent {i}: {agent_type}")
+                model_name = agent_kwargs.get("model", "default")
+                logger.info(f"✓ Registered agent {i}: {agent_type} ({model_name})")
                 
             except Exception as e:
                 logger.error(f"✗ Failed to create agent {i} of type {agent_type}: {str(e)}")
@@ -244,7 +272,7 @@ class MassSystem:
         logger.info(f"  - Context keys: {list(task.context.keys()) if hasattr(task.context, 'keys') else 'N/A'}")
         logger.info(f"Execution Configuration:")
         logger.info(f"  - Number of agents: {len(self.agents)}")
-        logger.info(f"  - Agent types: {[type(agent).__name__ for agent in self.agents]}")
+        logger.info(f"  - Agent models: {[getattr(agent, 'model', 'unknown') for agent in self.agents]}")
         logger.info(f"  - Parallel execution: {self.parallel_execution}")
         logger.info("=" * 80)
         
@@ -308,7 +336,7 @@ class MassSystem:
         
         return results
     
-    def run_task_from_file(self, task_file_path: str, agent_types: List[str], 
+    def run_task_from_file(self, task_file_path: str, model_names: List[str], 
                           output_file_path: Optional[str] = None) -> Dict[str, Any]:
         """
         Run the MASS system on a task loaded from a JSON file.
@@ -316,7 +344,7 @@ class MassSystem:
         
         Args:
             task_file_path: Path to the JSON file containing the task
-            agent_types: List of agent types to use (e.g., ["openai", "gemini", "grok"])
+            model_names: List of model names to use (e.g., ["gpt-4o", "gemini-2.5-flash", "grok-4"])
             output_file_path: Optional path to save the results
             
         Returns:
@@ -370,8 +398,8 @@ class MassSystem:
         
         # Initialize system with agents
         try:
-            # Convert agent types to proper configurations
-            agent_configs = [{"type": agent_type} for agent_type in agent_types]
+            # Convert model names to proper configurations
+            agent_configs = create_agent_configs_from_models(model_names)
             self.initialize_system(agent_configs)
         except Exception as e:
             logger.error(f"Failed to initialize system: {str(e)}")
@@ -483,13 +511,13 @@ class MassSystem:
         
         return results
     
-    def run_task_from_dict(self, task_dict: Dict[str, Any], agent_types: List[str]) -> Dict[str, Any]:
+    def run_task_from_dict(self, task_dict: Dict[str, Any], model_names: List[str]) -> Dict[str, Any]:
         """
         Run MASS workflow from a task dictionary.
         
         Args:
             task_dict: Dictionary containing task information
-            agent_types: List of agent types to use
+            model_names: List of model names to use
             
         Returns:
             Dictionary containing the complete workflow results
@@ -502,7 +530,7 @@ class MassSystem:
         )
         
         # Create agent configurations
-        agent_configs = [{"type": agent_type} for agent_type in agent_types]
+        agent_configs = create_agent_configs_from_models(model_names)
         
         # Initialize system
         self.initialize_system(agent_configs)
@@ -604,7 +632,7 @@ def parse_arguments():
         "--agents", "-a",
         type=str,
         required=True,
-        help="Comma-separated list of agent types (e.g., 'openai,gemini,grok')"
+        help="Comma-separated list of model names (e.g., 'gpt-4o,gemini-2.5-flash,grok-4')"
     )
     
     parser.add_argument(
@@ -687,8 +715,20 @@ def main():
             "check_update_frequency": args.check_update_frequency
         })
         
-        # Parse agent types
-        agent_types = [agent.strip() for agent in args.agents.split(",")]
+        # Parse model names
+        model_names = [model.strip() for model in args.agents.split(",")]
+        
+        # Validate model names
+        try:
+            available_models = get_available_models()
+            for model_name in model_names:
+                if model_name not in available_models:
+                    logger.error(f"Invalid model name: {model_name}")
+                    logger.error(f"Available models: {', '.join(available_models)}")
+                    sys.exit(1)
+        except Exception as e:
+            logger.error(f"Error validating model names: {str(e)}")
+            sys.exit(1)
         
         # Validate task file exists
         if not os.path.exists(args.task_file):
@@ -697,7 +737,7 @@ def main():
         
         # Create and run MASS system
         mass_system = MassSystem(config=config)
-        results = mass_system.run_task_from_file(args.task_file, agent_types, args.output)
+        results = mass_system.run_task_from_file(args.task_file, model_names, args.output)
         
         # The detailed results are already printed by run_task_from_file
         # Print final summary
