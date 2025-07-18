@@ -241,9 +241,15 @@ class MassSystem:
         self.workflow_manager = MassWorkflowManager(
             orchestration_system=self.orchestration_system,
             parallel_execution=self.parallel_execution,
-            check_update_frequency=self.check_update_frequency
+            check_update_frequency=self.check_update_frequency,
+            streaming_display=True,  # Enable streaming display
+            stream_callback=None  # Use default terminal display
         )
         logger.debug(f"Workflow manager created with parallel={self.parallel_execution}, check_update_frequency={self.check_update_frequency}")
+        
+        # Connect streaming orchestrator to orchestration system
+        if self.workflow_manager.streaming_orchestrator:
+            self.orchestration_system.streaming_orchestrator = self.workflow_manager.streaming_orchestrator
         
         logger.info("✓ MASS system initialization completed successfully")
         logger.info(f"✓ Total agents registered: {len(self.agents)}")
@@ -303,7 +309,6 @@ class MassSystem:
                 final_sol = results["final_solution"]
                 logger.info(f"🏆 Final solution details:")
                 logger.info(f"  - Winning agent: {final_sol['agent_id']}")
-                logger.info(f"  - Total rounds: {final_sol.get('total_rounds', 'N/A')}")
                 logger.info(f"  - Vote distribution: {final_sol.get('vote_distribution', 'N/A')}")
                 logger.info(f"  - Solution length: {len(final_sol.get('solution', '')) if final_sol.get('solution') else 0} characters")
                 logger.debug(f"  - Solution preview: {final_sol.get('solution', '')[:500]}{'...' if len(final_sol.get('solution', '')) > 500 else ''}")
@@ -429,14 +434,14 @@ class MassSystem:
         # Print evaluation summary
         if results["success"] and results.get("final_solution"):
             final_solution = results["final_solution"]
-            print("\n" + "🔍"*60)
+            print("\n" + "=" * 60)
             print("📊 EVALUATION SUMMARY")
-            print("🔍"*60)
+            print("=" * 60)
             
             # 🚨 MOST IMPORTANT: FINAL ANSWER AND EVALUATION 🚨
-            print("\n" + "🎯" * 40)
+            print("\n" + "=" * 40)
             print("🔥 FINAL ANSWER & EVALUATION - KEY RESULT!")
-            print("🎯" * 40)
+            print("=" * 40)
             
             extracted_answer = final_solution.get('extracted_answer', 'None')
             expected_answer = final_solution.get('expected_answer', 'None')
@@ -455,17 +460,16 @@ class MassSystem:
             else:
                 print("⚠️  EVALUATION: Not Available")
             
-            print("🎯" * 40)
+            print("=" * 40)
             print("🔥 END KEY RESULT")
-            print("🎯" * 40)
+            print("=" * 40)
             
             # Additional performance metrics
-            session_log = results.get("session_log", {})
-            system_metrics = session_log.get("system_metrics", {}).get("performance", {})
-            print(f"\n💰 Total Cost: ${system_metrics.get('total_cost_usd', 0.0):.4f}")
-            print(f"⏱️  Total Time: {final_solution.get('total_runtime', 0.0):.2f} seconds")
-            print(f"🔧 Total Tokens: {system_metrics.get('total_tokens_used', 0):,}")
-            print("🔍"*60)
+            total_time = final_solution.get('total_runtime', 0.0)
+            print(f"\n⏱️  Total Time: {total_time:.2f} seconds")
+            if total_time == 0.0:
+                print("   ⚠️  Warning: Total time is 0 - timing may not be calculated correctly")
+            print("=" * 60)
         
         # Cleanup agents and logging system
         try:
@@ -751,7 +755,6 @@ def main():
             final_solution = results["final_solution"]
             if final_solution:
                 print(f"🏆 Final solution from Agent {final_solution['agent_id']}")
-                print(f"🔄 Total rounds: {final_solution['total_rounds']}")
                 print(f"📊 Vote distribution: {final_solution['vote_distribution']}")
                 
                 # 🚨 MOST IMPORTANT: FINAL ANSWER EVALUATION 🚨
