@@ -434,14 +434,14 @@ class MassSystem:
         # Print evaluation summary
         if results["success"] and results.get("final_solution"):
             final_solution = results["final_solution"]
-            print("\n" + "=" * 60)
+            print("\n" + "─" * 60)
             print("📊 EVALUATION SUMMARY")
-            print("=" * 60)
+            print("─" * 60)
             
-            # 🚨 MOST IMPORTANT: FINAL ANSWER AND EVALUATION 🚨
-            print("\n" + "=" * 40)
-            print("🔥 FINAL ANSWER & EVALUATION - KEY RESULT!")
-            print("=" * 40)
+            # Final Answer and Evaluation
+            print("\n" + "─" * 40)
+            print("🔥 FINAL ANSWER & EVALUATION")
+            print("─" * 40)
             
             extracted_answer = final_solution.get('extracted_answer', 'None')
             expected_answer = final_solution.get('expected_answer', 'None')
@@ -452,16 +452,15 @@ class MassSystem:
             
             if is_correct is not None:
                 if is_correct:
-                    print(f"🎉 EVALUATION: ✅ CORRECT!")
-                    print(f"🏆 SUCCESS: The system found the correct answer!")
+                    print(f"🎉 EVALUATION: ✅ CORRECT")
+                    print(f"🏆 SUCCESS: System found the correct answer")
                 else:
-                    print(f"💥 EVALUATION: ❌ INCORRECT!")
-                    print(f"🚨 FAILURE: The system did not find the correct answer!")
+                    print(f"💥 EVALUATION: ❌ INCORRECT")
+                    print(f"🚨 FAILURE: System did not find the correct answer")
             else:
                 print("⚠️  EVALUATION: Not Available")
             
-            print("=" * 40)
-            print("🔥 END KEY RESULT")
+            print("─" * 40)
             print("=" * 40)
             
             # Additional performance metrics
@@ -745,9 +744,9 @@ def main():
         
         # The detailed results are already printed by run_task_from_file
         # Print final summary
-        print("\n" + "="*80)
+        print("\n" + "─"*60)
         print("MASS EXECUTION COMPLETED")
-        print("="*80)
+        print("─"*60)
         
         if results["success"]:
             print(f"✅ Workflow completed successfully in {results['total_workflow_time']:.2f} seconds")
@@ -757,10 +756,10 @@ def main():
                 print(f"🏆 Final solution from Agent {final_solution['agent_id']}")
                 print(f"📊 Vote distribution: {final_solution['vote_distribution']}")
                 
-                # 🚨 MOST IMPORTANT: FINAL ANSWER EVALUATION 🚨
-                print("\n" + "🎯" * 50)
-                print("🔥 FINAL ANSWER EVALUATION - CRITICAL RESULT!")
-                print("🎯" * 50)
+                # Final Answer Evaluation
+                print("\n" + "─" * 50)
+                print("🔥 FINAL ANSWER EVALUATION")
+                print("─" * 50)
                 
                 extracted_answer = final_solution.get('extracted_answer')
                 expected_answer = final_solution.get('expected_answer')
@@ -776,15 +775,13 @@ def main():
                     
                 if is_correct is not None:
                     if is_correct:
-                        print(f"🎉 RESULT: ✅ CORRECT! System succeeded!")
+                        print(f"🎉 RESULT: ✅ CORRECT")
                     else:
-                        print(f"💥 RESULT: ❌ INCORRECT! System failed!")
+                        print(f"💥 RESULT: ❌ INCORRECT")
                 else:
                     print(f"⚠️  RESULT: Cannot evaluate (no expected answer)")
                     
-                print("🎯" * 50)
-                print("🔥 END CRITICAL RESULT")
-                print("🎯" * 50)
+                print("─" * 50)
         else:
             print(f"❌ Workflow failed: {results.get('error', 'Unknown error')}")
             

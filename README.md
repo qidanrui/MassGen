@@ -3,14 +3,9 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-
 > 🧠 **Advanced multi-agent orchestration system that emulates Grok Heavy through intelligent collaboration**
 
-MASS is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. Multiple agents work together through:
-- 🧠 **Think independently** with their own tools (search, code execution)
-- 👥 **Learn from each other** in real-time by sharing and receiving updates
-- 🗳️ **Vote on best solutions** through democratic consensus
-- 🏆 **Deliver superior results** that combines all insights
+MASS is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and vote on the best solution to deliver a comprehensive and high-quality result.
 
 ---
 
@@ -18,10 +13,8 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 
 - [✨ Key Features](#-key-features)
 - [🏗️ How It Works](#️-how-it-works)
-- [🔄 Agent Workflow](#-agent-workflow)
 - [🚀 Quick Start](#-quick-start)
 - [⚙️ Configuration](#️-configuration)
-- [📚 Documentation](#-documentation)
 - [🤝 Contributing](#-contributing)
 
 ---
@@ -39,55 +32,9 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 
 ## 🏗️ How It Works
 
-## 🏗️ How It Works
+MASS operates on a simple yet powerful principle: multiple agents are assigned the same task and work independently while having access to a shared memory space. This allows them to observe and learn from each other's approaches in real-time. Once the agents have completed their work, they enter a voting phase to democratically select the most effective solution, which is then presented as the final answer.
 
-```mermaid
-graph TB
-    %% User Input directly to Multiple Agents
-    U[👤 User Task] --> A1[🤖 Agent 1<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
-    U --> A2[🤖 Agent 2<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
-    U --> A3[🤖 Agent 3<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
-    U --> AN[🤖 Agent N<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
-    
-    %% Shared Memory Hub
-    SM[🧠 Shared Memory<br/>💾 Save Updates<br/>📖 Load Updates]
-    
-    %% Agents interact with shared memory during task solving
-    A1 <--> SM
-    A2 <--> SM
-    A3 <--> SM
-    AN <--> SM
-    
-    %% Voting Process at bottom
-    A1 --> V[🗳️ Voting Process<br/>Each agent votes for the representative agent]
-    A2 --> V
-    A3 --> V
-    AN --> V
-    
-    %% Consensus Check
-    V --> F[🏆 Representative Agent<br/>✨Present Final Answer]
-    
-    %% Styling
-    classDef userNode fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
-    classDef agentNode fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef memoryNode fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    classDef voteNode fill:#fce4ec,stroke:#c2185b,stroke-width:2px
-    classDef finalNode fill:#e0f2f1,stroke:#00695c,stroke-width:3px
-    
-    class U userNode
-    class A1,A2,A3,AN agentNode
-    class SM memoryNode
-    class V voteNode
-    class F finalNode
-```
-
-
-MASS assigns the same task to multiple agents who work independently while observing and learning from each other's progress. This collaborative approach ensures high-quality solutions through:
-
-- 🎯 **Independent Analysis**: Each agent develops unique perspectives
-- 🔍 **Continuous Monitoring**: Real-time observation of peer progress  
-- 🧩 **Knowledge Integration**: Agents incorporate insights from peers
-- 🏆 **Democratic Selection**: Best solution chosen through consensus
+This collaborative approach ensures that the final output is not just the work of a single agent but a product of collective intelligence, leading to more robust and well-rounded results.
 
 ---
 
@@ -106,37 +53,7 @@ cp agents/.env.example agents/.env
 # Edit agents/.env with your OpenAI/XAI/Gemini API key
 ```
 
-### 3. 🎉 Launch Your First Multi-Agent Team
-```bash
-# Try this example:
-python main.py --task "Explain quantum computing to a 10-year-old" --agents 3
-```
-
----
-
-## ⚙️ Configuration
-
-### 🎛️ Key Parameters
-
-| Parameter | Description | Default | Example |
-|-----------|-------------|---------|---------|
-| `--agents` | Number of agents | 3 | `--agents 5` |
-| `--model` | AI model to use | gpt-4 | `--model gpt-4o` |
-| `--max-rounds` | Max consensus rounds | 5 | `--max-rounds 10` |
-| `--check-frequency` | Peer check interval (sec) | 3 | `--check-frequency 5` |
-
-### 📝 Example Commands
-
-```bash
-# 🔬 Scientific analysis with 5 agents
-python main.py --task "Analyze climate change impacts" --agents 5 --model gpt-4o
-
-# 💼 Business strategy with custom settings
-python main.py --task "Create marketing strategy" --agents 4 --max-rounds 8
-
-# 🎨 Creative writing collaboration
-python main.py --task "Write a short story" --agents 3 --check-frequency 2
-```
+TODO
 
 ---
 

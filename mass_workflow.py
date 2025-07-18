@@ -143,7 +143,7 @@ class MassWorkflowManager:
             callback(initial_results)
         
         successful_initial = len([r for r in initial_results if r['success']])
-        print(f"\n✅ Phase 1 Complete: {successful_initial}/{len(initial_results)} agents successful")
+        print(f"✅ SYSTEM: Phase 1 Complete - {successful_initial}/{len(initial_results)} agents successful")
         
         # Phase 2: Collaboration & Refinement
         print("\n" + "🟡"*20)
@@ -169,9 +169,9 @@ class MassWorkflowManager:
             callback(collaboration_results)
         
         # Phase 3: Consensus Building & Debate
-        print("\n" + "🟢"*20)
+        print("─" * 60)
         print("🔥 PHASE 3: CONSENSUS BUILDING & DEBATE")
-        print("🟢"*20)
+        print("─" * 60)
         print("🎯 Goal: Final consensus building and solution selection")
         logger.info("Phase 3: Consensus Building & Debate")
         
@@ -192,9 +192,9 @@ class MassWorkflowManager:
         
         # Phase 4: Final Presentation (only if consensus reached)
         if self.orchestration_system.system_state.consensus_reached:
-            print("\n" + "🔴"*20)
+            print("─" * 60)
             print("🎉 PHASE 4: FINAL PRESENTATION")
-            print("🔴"*20)
+            print("─" * 60)
             print("🎯 Goal: Representative presents final solution with full context")
             logger.info("Phase 4: Final Presentation")
             
@@ -278,7 +278,7 @@ class MassWorkflowManager:
                         "error": None
                     })
                     completed_count += 1
-                    print(f"✅ Agent {agent.agent_id} completed initial processing ({completed_count}/{len(agents)})")
+                    print(f"✅ SYSTEM: Agent {agent.agent_id} completed initial processing ({completed_count}/{len(agents)})")
                     
                     if progress_callback:
                         progress_callback("initial", completed_count, len(agents))
@@ -345,16 +345,16 @@ class MassWorkflowManager:
                 if self.orchestration_system.agent_states[agent.agent_id].status == "failed"
             ]
             
-            print(f"   📊 Round {round_num + 1} Start Status:")
-            print(f"   👥 Working agents: {[a.agent_id for a in working_agents]} ({len(working_agents)} total)")
-            print(f"   🗳️  Voted agents: {[a.agent_id for a in voted_agents]} ({len(voted_agents)} total)")
-            print(f"   💥 Failed agents: {[a.agent_id for a in failed_agents]} ({len(failed_agents)} total)")
+            print(f"📊 SYSTEM: Round {round_num + 1} Status:")
+            print(f"   👥 Working: {[a.agent_id for a in working_agents]} ({len(working_agents)} total)")
+            print(f"   🗳️  Voted: {[a.agent_id for a in voted_agents]} ({len(voted_agents)} total)")
+            print(f"   💥 Failed: {[a.agent_id for a in failed_agents]} ({len(failed_agents)} total)")
             
             # Exit condition 1: All agents have voted
             if len(voted_agents) == len(all_agents):
                 logger.info("All agents have voted - ending collaboration phase")
-                print(f"   ✅ EXIT CONDITION: All {len(all_agents)} agents have voted")
-                print(f"   ➡️  Moving to debate phase")
+                print(f"✅ SYSTEM: All {len(all_agents)} agents have voted")
+                print(f"➡️  Moving to debate phase")
                 break
             
             # Exit condition 2: All agents either voted, or failed
@@ -661,9 +661,8 @@ class MassWorkflowManager:
         # Update streaming display - agent starting
         if self.streaming_orchestrator:
             asyncio.run(self.streaming_orchestrator.stream_agent_output(
-                agent.agent_id, f"Starting {phase} phase..."
+                agent.agent_id, f"{'─' * 40}\n🚀 Starting {phase} phase...\n{'─' * 40}\n"
             ))
-            self.streaming_orchestrator.finalize_agent_message(agent.agent_id)
             self.streaming_orchestrator.update_agent_status(agent.agent_id, f"working_{phase}")
         
         # Set execution start time if this is the initial phase
@@ -682,15 +681,14 @@ class MassWorkflowManager:
         }
         timeout = phase_timeouts.get(phase, 180)
         
-        print(f"   ⏰ Agent {agent.agent_id} timeout set to {timeout}s for {phase} phase")
+        print(f"⏰ Agent {agent.agent_id} timeout: {timeout}s for {phase} phase")
         logger.debug(f"Agent {agent.agent_id} processing with {timeout}s timeout")
         
         # Update streaming display - agent processing
         if self.streaming_orchestrator:
             asyncio.run(self.streaming_orchestrator.stream_agent_output(
-                agent.agent_id, f"Processing task (timeout: {timeout}s)..."
+                agent.agent_id, f"🔄 Processing task (timeout: {timeout}s)...\n"
             ))
-            self.streaming_orchestrator.finalize_agent_message(agent.agent_id)
         
         # Create stream callback for real-time LLM response streaming
         # Track what we've already streamed to avoid duplicates
@@ -718,9 +716,9 @@ class MassWorkflowManager:
                                 agent.agent_id, formatted_chunk
                             ))
                         elif "[COMPLETE]" in chunk or "[DONE]" in chunk:
-                            # Clean up completion messages and add to agent output
+                            # Clean up completion messages and add to agent output with line break
                             clean_chunk = chunk.replace("[COMPLETE]", "").replace("[DONE]", "").strip()
-                            formatted_chunk = f"✅ {clean_chunk}\n"
+                            formatted_chunk = f"\n✅ {clean_chunk}"
                             asyncio.run(self.streaming_orchestrator.stream_agent_output(
                                 agent.agent_id, formatted_chunk
                             ))
@@ -766,11 +764,10 @@ class MassWorkflowManager:
         # Update streaming display - agent completed
         if self.streaming_orchestrator:
             asyncio.run(self.streaming_orchestrator.stream_agent_output(
-                agent.agent_id, f"✅ Completed {phase} phase ({agent_execution_time:.2f}s)"
+                agent.agent_id, f"{'─' * 40}\n✅ Completed {phase} phase ({agent_execution_time:.2f}s)\n{'─' * 40}\n"
             ))
-            self.streaming_orchestrator.finalize_agent_message(agent.agent_id)
         
-        print(f"   ✅ Agent {agent.agent_id} completed {phase} phase ({agent_execution_time:.2f}s)")
+        print(f"✅ SYSTEM: Agent {agent.agent_id} completed {phase} phase ({agent_execution_time:.2f}s)")
         logger.debug(f"Agent {agent.agent_id} completed {phase} phase successfully in {agent_execution_time:.2f}s")
         
         return response
@@ -784,7 +781,7 @@ class MassWorkflowManager:
             response: The agent's response
             phase: The phase that was completed
         """
-        print(f"\n🔧 Processing Agent {agent.agent_id} orchestration ({phase} phase):")
+        print(f"🔧 SYSTEM: Processing Agent {agent.agent_id} orchestration ({phase} phase):")
         
         # Show the actual response content for better visibility
         response_preview = response.text[:200] + "..." if len(response.text) > 200 else response.text
@@ -799,7 +796,7 @@ class MassWorkflowManager:
         # Check if the summary is effectively empty and mark agent as failed if so
         if not summary_report or len(summary_report.strip()) == 0:
             agent.mark_failed("Empty summary report")
-            print(f"   💥 Agent {agent.agent_id} FAILED: Empty summary report")
+            print(f"⚠️  SYSTEM: Agent {agent.agent_id} FAILED - Empty summary report")
             logger.warning(f"Agent {agent.agent_id} failed due to empty summary report")
             return  # Exit early for failed agents
         
@@ -807,15 +804,14 @@ class MassWorkflowManager:
         # Allow short responses for simple questions, but catch obvious failures
         if len(summary_report.strip()) < 5:  # Less than 5 characters (very likely a failure)
             agent.mark_failed("Summary too short (likely model error)")
-            print(f"   💥 Agent {agent.agent_id} FAILED: Summary too short ({len(summary_report.strip())} chars)")
+            print(f"⚠️  SYSTEM: Agent {agent.agent_id} FAILED - Summary too short ({len(summary_report.strip())} chars)")
             logger.warning(f"Agent {agent.agent_id} failed due to very short summary ({len(summary_report.strip())} chars)")
             return  # Exit early for failed agents
         
         if phase == "initial":
             # Phase 1: Only extract summary, NO answer extraction
             agent.update_summary(summary_report)  # No final_answer parameter
-            print(f"   📝 Updated summary for Agent {agent.agent_id}")
-            print(f"   📊 Summary length: {len(summary_report)} characters")
+            print(f"ℹ️  SYSTEM: Updated summary for Agent {agent.agent_id} ({len(summary_report)} chars)")
             logger.debug(f"Updated summary for agent {agent.agent_id} after initial phase")
             
         elif phase == "collaboration":
@@ -829,14 +825,14 @@ class MassWorkflowManager:
             if vote_target is not None:
                 # Agent prefers another agent's solution
                 agent.vote(vote_target, response.text)
-                print(f"   🗳️  Agent {agent.agent_id} VOTED for Agent {vote_target}")
-                print(f"   💭 Voting reason detected in response")
+                print(f"🗳️  Agent {agent.agent_id} VOTED for Agent {vote_target}")
+                print(f"💭 Voting reason detected in response")
                 logger.info(f"Agent {agent.agent_id} voted for agent {vote_target}")
                 
                 # Update streaming display for voting
                 if self.streaming_orchestrator:
                     asyncio.run(self.streaming_orchestrator.stream_agent_output(
-                        agent.agent_id, f"\n🗳️  VOTED for Agent {vote_target}\n"
+                        agent.agent_id, f"{'─' * 30}\n🗳️  VOTED for Agent {vote_target}\n{'─' * 30}\n"
                     ))
                     self.streaming_orchestrator.update_voting_status(agent.agent_id, vote_target)
                     self.streaming_orchestrator.update_agent_status(agent.agent_id, "voted")
@@ -845,9 +841,9 @@ class MassWorkflowManager:
             else:
                 # Agent updated their own solution - extract summary only, NO answer
                 agent.update_summary(summary_report)  # No final_answer parameter
-                print(f"   📝 Agent {agent.agent_id} updated their solution")
-                print(f"   📊 Updated summary length: {len(summary_report)} characters")
-                print(f"   🔄 Continuing to work (no vote cast)")
+                print(f"📝 Agent {agent.agent_id} updated their solution")
+                print(f"📊 Updated summary length: {len(summary_report)} characters")
+                print(f"🔄 Continuing to work (no vote cast)")
                 logger.debug(f"Updated summary for agent {agent.agent_id} after {phase} phase")
                 
                 # Update streaming display for summary update
@@ -867,14 +863,14 @@ class MassWorkflowManager:
             if vote_target is not None:
                 # Agent prefers another agent's solution
                 agent.vote(vote_target, response.text)
-                print(f"   🗳️  Agent {agent.agent_id} VOTED for Agent {vote_target}")
-                print(f"   💭 Voting reason detected in response")
+                print(f"🗳️  Agent {agent.agent_id} VOTED for Agent {vote_target}")
+                print(f"💭 Voting reason detected in response")
                 logger.info(f"Agent {agent.agent_id} voted for agent {vote_target}")
                 
                 # Update streaming display for voting
                 if self.streaming_orchestrator:
                     asyncio.run(self.streaming_orchestrator.stream_agent_output(
-                        agent.agent_id, f"\n🗳️  VOTED for Agent {vote_target}\n"
+                        agent.agent_id, f"{'─' * 30}\n🗳️  VOTED for Agent {vote_target}\n{'─' * 30}\n"
                     ))
                     self.streaming_orchestrator.update_voting_status(agent.agent_id, vote_target)
                     self.streaming_orchestrator.update_agent_status(agent.agent_id, "voted")
@@ -914,7 +910,7 @@ class MassWorkflowManager:
             if self.streaming_orchestrator:
                 answer_info = f" + answer ({len(final_answer)} chars)" if final_answer else ""
                 asyncio.run(self.streaming_orchestrator.stream_agent_output(
-                    agent.agent_id, f"Final presentation ({len(summary_report)} chars{answer_info})"
+                    agent.agent_id, f"🎉 SYSTEM: Final presentation ({len(summary_report)} chars{answer_info})\n"
                 ))
                 self.streaming_orchestrator.update_agent_status(agent.agent_id, "completed_presentation")
     

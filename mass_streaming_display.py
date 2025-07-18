@@ -32,7 +32,7 @@ class MultiRegionDisplay:
             
         with self._lock:
             if agent_id in self.agent_outputs:
-                self.agent_outputs[agent_id] += "\n\n"
+                self.agent_outputs[agent_id] += "\n"
                 self._update_display()
     
     def add_system_message(self, message: str):
@@ -57,13 +57,18 @@ class MultiRegionDisplay:
         except:
             terminal_width = 120
             
+        # Ensure minimum width and maximum practical width
+        terminal_width = max(60, min(terminal_width, 200))
+            
         agent_ids = sorted(self.agent_outputs.keys())
         if not agent_ids:
             return
         
-        # Multi-column layout for any number of agents
+        # Multi-column layout with better spacing
         num_agents = len(agent_ids)
-        col_width = terminal_width // num_agents - 3
+        # Reserve space for separators and padding
+        available_width = terminal_width - (num_agents - 1) * 3 - 4
+        col_width = max(30, available_width // num_agents)
         
         # Split content into lines for each agent
         agent_lines = {}
@@ -73,39 +78,55 @@ class MultiRegionDisplay:
             agent_lines[agent_id] = lines
             max_lines = max(max_lines, len(lines))
         
-        # Print header
-        print("=" * terminal_width)
+        # Print header with better formatting
+        header_sep = "─" * terminal_width
+        print(f"\n{header_sep}")
         header = ""
         for i, agent_id in enumerate(agent_ids):
-            agent_name = f"Agent {agent_id}"
+            agent_name = f"🤖 Agent {agent_id}"
             header += f"{agent_name:^{col_width}}"
             if i < num_agents - 1:
-                header += " | "
-        print(header)
-        print("=" * terminal_width)
+                header += " │ "
+        print(f" {header} ")
+        print(header_sep)
         
-        # Print content rows
+        # Print content rows with better line handling
         for line_idx in range(max_lines):
             row = ""
             for i, agent_id in enumerate(agent_ids):
                 lines = agent_lines[agent_id]
                 content = lines[line_idx] if line_idx < len(lines) else ""
                 
+                # Better content truncation
                 if len(content) > col_width:
-                    content = content[:col_width-3] + "..."
+                    content = content[:col_width-1] + "…"
                 
                 row += f"{content:<{col_width}}"
                 if i < num_agents - 1:
-                    row += " | "
-            print(row)
+                    row += " │ "
+            print(f" {row} ")
         
-        # Print system messages at the bottom
+        # Print system messages with better formatting
         if self.system_messages:
-            print("\n" + "=" * terminal_width)
-            print("SYSTEM MESSAGES:")
-            print("=" * terminal_width)
+            print(f"\n{header_sep}")
+            print(f" 📋 SYSTEM MESSAGES{' ' * (terminal_width - 19)} ")
+            print(header_sep)
             for message in self.system_messages:
-                print(message)
+                # Wrap long system messages
+                if len(message) > terminal_width - 4:
+                    words = message.split()
+                    current_line = ""
+                    for word in words:
+                        if len(current_line + word) > terminal_width - 4:
+                            print(f" {current_line.strip()} ")
+                            current_line = word + " "
+                        else:
+                            current_line += word + " "
+                    if current_line.strip():
+                        print(f" {current_line.strip()} ")
+                else:
+                    print(f" {message} ")
+        print(header_sep)
 
 class StreamingOrchestrator:
     def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None):
