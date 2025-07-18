@@ -5,6 +5,7 @@ MASS Streaming Display System - Simple Working Version
 import os
 import time
 import threading
+import unicodedata
 from typing import Dict, List, Optional, Callable
 
 class MultiRegionDisplay:
@@ -64,11 +65,18 @@ class MultiRegionDisplay:
         if not agent_ids:
             return
         
-        # Multi-column layout with better spacing
+        # Calculate exact column widths with precise separator spacing
         num_agents = len(agent_ids)
-        # Reserve space for separators and padding
-        available_width = terminal_width - (num_agents - 1) * 3 - 4
+        separator_width = 3  # " │ " is exactly 3 characters
+        separators_total_width = (num_agents - 1) * separator_width
+        padding_width = 2  # 1 space on each side
+        
+        # Calculate available width for content
+        available_width = terminal_width - separators_total_width - padding_width
         col_width = max(30, available_width // num_agents)
+        
+        # Recalculate actual terminal width needed
+        actual_width = (col_width * num_agents) + separators_total_width + padding_width
         
         # Split content into lines for each agent
         agent_lines = {}
@@ -78,46 +86,95 @@ class MultiRegionDisplay:
             agent_lines[agent_id] = lines
             max_lines = max(max_lines, len(lines))
         
-        # Print header with better formatting
-        header_sep = "─" * terminal_width
+        # Function to calculate actual display width of text
+        def get_display_width(text):
+            """Calculate the actual display width of text accounting for emojis and unicode."""
+            if not text:
+                return 0
+            width = 0
+            for char in text:
+                # Check if it's an emoji or wide character
+                if ord(char) >= 0x1F600:  # Emoji range
+                    width += 2
+                elif unicodedata.east_asian_width(char) in ('F', 'W'):  # Full-width or wide
+                    width += 2
+                else:
+                    width += 1
+            return width
+        
+        # Function to pad text to exact display width
+        def pad_to_width(text, target_width, align='left'):
+            """Pad text to exact display width, handling unicode properly."""
+            current_width = get_display_width(text)
+            if current_width >= target_width:
+                # Truncate if too long
+                result = ""
+                width = 0
+                for char in text:
+                    char_width = 2 if (ord(char) >= 0x1F600 or 
+                                     unicodedata.east_asian_width(char) in ('F', 'W')) else 1
+                    if width + char_width <= target_width - 1:  # Leave room for ellipsis
+                        result += char
+                        width += char_width
+                    else:
+                        result += "…"
+                        break
+                return result
+            
+            # Add padding
+            padding_needed = target_width - current_width
+            if align == 'center':
+                left_pad = padding_needed // 2
+                right_pad = padding_needed - left_pad
+                return " " * left_pad + text + " " * right_pad
+            elif align == 'right':
+                return " " * padding_needed + text
+            else:  # left align
+                return text + " " * padding_needed
+        
+        # Print header with exact formatting
+        header_sep = "─" * actual_width
         print(f"\n{header_sep}")
-        header = ""
-        for i, agent_id in enumerate(agent_ids):
+        
+        header_parts = []
+        for agent_id in agent_ids:
             agent_name = f"🤖 Agent {agent_id}"
-            header += f"{agent_name:^{col_width}}"
-            if i < num_agents - 1:
-                header += " │ "
-        print(f" {header} ")
+            # Center the agent name in the column with proper display width
+            header_content = pad_to_width(agent_name, col_width, 'center')
+            header_parts.append(header_content)
+        
+        header_line = " " + " │ ".join(header_parts) + " "
+        print(header_line)
         print(header_sep)
         
-        # Print content rows with better line handling
+        # Print content rows with exact column alignment
         for line_idx in range(max_lines):
-            row = ""
-            for i, agent_id in enumerate(agent_ids):
+            content_parts = []
+            for agent_id in agent_ids:
                 lines = agent_lines[agent_id]
                 content = lines[line_idx] if line_idx < len(lines) else ""
                 
-                # Better content truncation
-                if len(content) > col_width:
-                    content = content[:col_width-1] + "…"
-                
-                row += f"{content:<{col_width}}"
-                if i < num_agents - 1:
-                    row += " │ "
-            print(f" {row} ")
+                # Pad content to exact column width with proper display width
+                padded_content = pad_to_width(content, col_width, 'left')
+                content_parts.append(padded_content)
+            
+            content_line = " " + " │ ".join(content_parts) + " "
+            print(content_line)
         
-        # Print system messages with better formatting
+        # Print system messages with consistent formatting
         if self.system_messages:
             print(f"\n{header_sep}")
-            print(f" 📋 SYSTEM MESSAGES{' ' * (terminal_width - 19)} ")
+            system_header = f" 📋 SYSTEM MESSAGES{' ' * (actual_width - 19)} "
+            print(system_header)
             print(header_sep)
             for message in self.system_messages:
-                # Wrap long system messages
-                if len(message) > terminal_width - 4:
+                # Wrap long system messages to fit width
+                max_message_width = actual_width - 4
+                if len(message) > max_message_width:
                     words = message.split()
                     current_line = ""
                     for word in words:
-                        if len(current_line + word) > terminal_width - 4:
+                        if len(current_line + word) > max_message_width:
                             print(f" {current_line.strip()} ")
                             current_line = word + " "
                         else:
@@ -125,7 +182,8 @@ class MultiRegionDisplay:
                     if current_line.strip():
                         print(f" {current_line.strip()} ")
                 else:
-                    print(f" {message} ")
+                    padded_message = f" {message}{' ' * (actual_width - len(message) - 2)} "
+                    print(padded_message)
         print(header_sep)
 
 class StreamingOrchestrator:
