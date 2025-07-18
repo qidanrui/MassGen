@@ -10,6 +10,8 @@ import os
 import json
 import time
 import logging
+import signal
+import threading
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from pathlib import Path
@@ -42,26 +44,41 @@ class MassLogManager:
     - System metrics and performance data
     """
     
-    def __init__(self, log_dir: str = "logs", session_id: Optional[str] = None):
+    def __init__(self, log_dir: str = "logs", session_id: Optional[str] = None, non_blocking: bool = False):
         """
         Initialize the logging system.
         
         Args:
             log_dir: Directory to save log files
             session_id: Unique identifier for this session
+            non_blocking: If True, disable file logging to prevent any hanging issues
         """
         self.log_dir = Path(log_dir)
         self.session_id = session_id or self._generate_session_id()
+        self.non_blocking = non_blocking
         
-        # Create log directory if it doesn't exist
-        self.log_dir.mkdir(exist_ok=True)
+        if self.non_blocking:
+            print(f"⚠️  LOGGING: Non-blocking mode enabled - file logging disabled")
+        
+        # Create log directory if it doesn't exist (unless non-blocking)
+        if not self.non_blocking:
+            try:
+                self.log_dir.mkdir(exist_ok=True)
+            except Exception as e:
+                print(f"Warning: Failed to create log directory, enabling non-blocking mode: {e}")
+                self.non_blocking = True
         
         # Session-specific log file
         self.session_log_file = self.log_dir / f"session_{self.session_id}.jsonl"
         
         # Agent-specific log files
         self.agent_log_dir = self.log_dir / f"session_{self.session_id}_agents"
-        self.agent_log_dir.mkdir(exist_ok=True)
+        if not self.non_blocking:
+            try:
+                self.agent_log_dir.mkdir(exist_ok=True)
+            except Exception as e:
+                print(f"Warning: Failed to create agent log directory, enabling non-blocking mode: {e}")
+                self.non_blocking = True
         
         # In-memory log storage for real-time access
         self.log_entries: List[LogEntry] = []
@@ -77,7 +94,8 @@ class MassLogManager:
         self.log_event("session_started", data={
             "session_id": self.session_id,
             "timestamp": time.time(),
-            "log_dir": str(self.log_dir)
+            "log_dir": str(self.log_dir),
+            "non_blocking_mode": self.non_blocking
         })
     
     def _generate_session_id(self) -> str:
@@ -510,29 +528,119 @@ class MassLogManager:
         self.log_event("task_completed", phase="completed", data=data)
     
     def _write_log_entry(self, entry: LogEntry):
-        """Write a single log entry to the session JSONL file."""
-        try:
-            with open(self.session_log_file, 'a') as f:
-                f.write(json.dumps(entry.to_dict()) + '\n')
-        except Exception as e:
-            print(f"Warning: Failed to write log entry: {e}")
+        """Write a single log entry to the session JSONL file with timeout protection."""
+        # Skip file operations in non-blocking mode
+        if self.non_blocking:
+            return
+        
+        def write_with_timeout():
+            try:
+                # Create directory if it doesn't exist
+                self.session_log_file.parent.mkdir(parents=True, exist_ok=True)
+                
+                with open(self.session_log_file, 'a', buffering=1) as f:  # Line buffering
+                    json_line = json.dumps(entry.to_dict(), default=str, ensure_ascii=False)
+                    f.write(json_line + '\n')
+                    f.flush()
+                    os.fsync(f.fileno())
+                return True
+            except Exception as e:
+                print(f"Warning: Failed to write log entry: {e}")
+                return False
+        
+        # Use daemon thread with timeout to prevent hanging
+        result_container = {"completed": False, "success": False}
+        
+        def worker():
+            try:
+                result_container["success"] = write_with_timeout()
+            except Exception as e:
+                print(f"Session log write thread error: {e}")
+                result_container["success"] = False
+            finally:
+                result_container["completed"] = True
+        
+        # Create daemon thread
+        worker_thread = threading.Thread(target=worker, daemon=True)
+        worker_thread.start()
+        
+        # Wait for completion with timeout
+        worker_thread.join(timeout=3.0)
+        
+        if not result_container["completed"]:
+            print(f"Warning: Session log write timed out after 3 seconds")
     
     def _write_agent_log(self, agent_id: int, data: Dict[str, Any]):
-        """Write agent-specific log entry."""
-        try:
-            agent_log_file = self.agent_log_dir / f"agent_{agent_id}.jsonl"
-            print(f"          📝 Writing to file: {agent_log_file}")
-            print(f"          📋 Data: {data}")
-            
-            with open(agent_log_file, 'a') as f:
-                json_line = json.dumps(data)
-                f.write(json_line + '\n')
-                f.flush()  # Force write to disk
-            
-            print(f"          ✅ Successfully wrote {len(json.dumps(data))} characters to {agent_log_file}")
-        except Exception as e:
-            print(f"          ❌ Failed to write agent log: {e}")
-            print(f"Warning: Failed to write agent log: {e}")
+        """Write agent-specific log entry with timeout protection."""
+        # Skip file operations in non-blocking mode
+        if self.non_blocking:
+            return
+        
+        def write_with_timeout():
+            try:
+                agent_log_file = self.agent_log_dir / f"agent_{agent_id}.jsonl"
+                print(f"          📝 Writing to file: {agent_log_file}")
+                
+                # Truncate data if it's too large to prevent JSON serialization issues
+                truncated_data = self._truncate_data_if_needed(data)
+                print(f"          📋 Data size: {len(str(data))} chars")
+                
+                # Create directory if it doesn't exist
+                agent_log_file.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Write with explicit timeout and buffering
+                with open(agent_log_file, 'a', buffering=1) as f:  # Line buffering
+                    json_line = json.dumps(truncated_data, default=str, ensure_ascii=False)
+                    f.write(json_line + '\n')
+                    f.flush()  # Force write to disk
+                    os.fsync(f.fileno())  # Ensure data is written to disk
+                
+                print(f"          ✅ Successfully wrote {len(json_line)} characters to {agent_log_file}")
+                return True
+            except Exception as e:
+                print(f"          ❌ Failed to write agent log: {e}")
+                print(f"Warning: Failed to write agent log: {e}")
+                return False
+        
+        # Use daemon thread with timeout to prevent hanging
+        result_container = {"completed": False, "success": False}
+        
+        def worker():
+            try:
+                result_container["success"] = write_with_timeout()
+            except Exception as e:
+                print(f"          ❌ Logging thread error: {e}")
+                result_container["success"] = False
+            finally:
+                result_container["completed"] = True
+        
+        # Create daemon thread that will be killed when main thread exits
+        worker_thread = threading.Thread(target=worker, daemon=True)
+        worker_thread.start()
+        
+        # Wait for completion with timeout (5 seconds should be enough for file I/O)
+        worker_thread.join(timeout=5.0)
+        
+        if not result_container["completed"]:
+            print(f"          ⏰ Logging operation timed out for Agent {agent_id} - continuing without logging")
+            print(f"Warning: Agent {agent_id} log write timed out after 5 seconds")
+        elif not result_container["success"]:
+            print(f"          ⚠️  Logging operation failed for Agent {agent_id} - continuing without logging")
+    
+    def _truncate_data_if_needed(self, data: Dict[str, Any], max_size: int = 50000) -> Dict[str, Any]:
+        """Truncate data fields if they're too large to prevent hanging."""
+        truncated_data = data.copy()
+        
+        # Fields that might be very large
+        large_fields = ['summary', 'response_text', 'final_answer']
+        
+        for field in large_fields:
+            if field in truncated_data and isinstance(truncated_data[field], str):
+                if len(truncated_data[field]) > max_size:
+                    print(f"          ✂️  Truncating {field} from {len(truncated_data[field])} to {max_size} chars")
+                    truncated_data[field] = truncated_data[field][:max_size] + "... [TRUNCATED]"
+        
+        return truncated_data
     
     def get_agent_history(self, agent_id: int) -> List[LogEntry]:
         """Get complete history for a specific agent."""
@@ -584,35 +692,89 @@ class MassLogManager:
         return end_time - start_time
     
     def export_full_session_report(self) -> str:
-        """Export a comprehensive session report to a file."""
+        """Export a comprehensive session report to a file with timeout protection."""
         report_file = self.log_dir / f"session_{self.session_id}_report.json"
         
-        with self._lock:
-            # Gather all data
-            full_report = {
-                "session_metadata": {
-                    "session_id": self.session_id,
-                    "start_time": min(entry.timestamp for entry in self.log_entries) if self.log_entries else None,
-                    "end_time": max(entry.timestamp for entry in self.log_entries) if self.log_entries else None,
-                    "duration": self._calculate_session_duration(),
-                    "total_events": len(self.log_entries)
-                },
-                "all_events": [entry.to_dict() for entry in self.log_entries],
-                "agent_summaries": {
-                    agent_id: [entry.to_dict() for entry in entries]
-                    for agent_id, entries in self.agent_logs.items()
-                },
-                "session_summary": self.get_session_summary()
-            }
+        def export_with_timeout():
+            try:
+                with self._lock:
+                    # Gather all data with size limits to prevent hanging
+                    print(f"📊 Gathering session data for report...")
+                    
+                    # Truncate large datasets to prevent hanging
+                    max_events = 1000  # Limit total events
+                    truncated_events = self.log_entries[-max_events:] if len(self.log_entries) > max_events else self.log_entries
+                    
+                    if len(self.log_entries) > max_events:
+                        print(f"⚠️  Truncating events from {len(self.log_entries)} to {max_events} for report")
+                    
+                    full_report = {
+                        "session_metadata": {
+                            "session_id": self.session_id,
+                            "start_time": min(entry.timestamp for entry in self.log_entries) if self.log_entries else None,
+                            "end_time": max(entry.timestamp for entry in self.log_entries) if self.log_entries else None,
+                            "duration": self._calculate_session_duration(),
+                            "total_events": len(self.log_entries),
+                            "truncated": len(self.log_entries) > max_events
+                        },
+                        "all_events": [entry.to_dict() for entry in truncated_events],
+                        "agent_summaries": {
+                            agent_id: [self._truncate_data_if_needed(entry.to_dict(), max_size=10000) for entry in entries[-50:]]  # Last 50 entries per agent
+                            for agent_id, entries in self.agent_logs.items()
+                        },
+                        "session_summary": self.get_session_summary()
+                    }
+                
+                print(f"📝 Writing report to {report_file}...")
+                
+                # Write to file with size check
+                report_str = json.dumps(full_report, indent=2, default=str)
+                if len(report_str) > 50_000_000:  # 50MB limit
+                    print(f"⚠️  Report too large ({len(report_str):,} chars), creating summary only")
+                    # Create minimal report
+                    full_report = {
+                        "session_metadata": full_report["session_metadata"],
+                        "session_summary": full_report["session_summary"],
+                        "note": "Full report was too large, created summary only"
+                    }
+                    report_str = json.dumps(full_report, indent=2, default=str)
+                
+                with open(report_file, 'w') as f:
+                    f.write(report_str)
+                    f.flush()
+                    os.fsync(f.fileno())
+                
+                print(f"✅ Report written successfully ({len(report_str):,} characters)")
+                return str(report_file)
+                
+            except Exception as e:
+                print(f"❌ Error exporting session report: {e}")
+                return ""
         
-        # Write to file
-        try:
-            with open(report_file, 'w') as f:
-                json.dump(full_report, f, indent=2)
-            return str(report_file)
-        except Exception as e:
-            print(f"Error exporting session report: {e}")
+        # Use daemon thread with timeout to prevent hanging
+        result_container = {"completed": False, "result": ""}
+        
+        def worker():
+            try:
+                result_container["result"] = export_with_timeout()
+            except Exception as e:
+                print(f"❌ Report export thread error: {e}")
+                result_container["result"] = ""
+            finally:
+                result_container["completed"] = True
+        
+        # Create daemon thread that will be killed when main thread exits
+        worker_thread = threading.Thread(target=worker, daemon=True)
+        worker_thread.start()
+        
+        # Wait for completion with timeout (30 seconds should be enough for report generation)
+        worker_thread.join(timeout=30.0)
+        
+        if not result_container["completed"]:
+            print(f"⏰ Report export timed out after 30 seconds - skipping report")
             return ""
+        else:
+            return result_container["result"]
     
     def cleanup(self):
         """Clean up and finalize the logging session."""
@@ -630,10 +792,18 @@ class MassLogManager:
 # Global log manager instance
 _log_manager: Optional[MassLogManager] = None
 
-def initialize_logging(log_dir: str = "logs", session_id: Optional[str] = None) -> MassLogManager:
+def initialize_logging(log_dir: str = "logs", session_id: Optional[str] = None, 
+                      non_blocking: bool = False) -> MassLogManager:
     """Initialize the global logging system."""
     global _log_manager
-    _log_manager = MassLogManager(log_dir, session_id)
+    
+    # Check environment variable for non-blocking mode
+    env_non_blocking = os.getenv("MASS_NON_BLOCKING_LOGGING", "").lower() in ("true", "1", "yes")
+    if env_non_blocking:
+        print("🔧 MASS_NON_BLOCKING_LOGGING environment variable detected - enabling non-blocking mode")
+        non_blocking = True
+    
+    _log_manager = MassLogManager(log_dir, session_id, non_blocking)
     return _log_manager
 
 def get_log_manager() -> Optional[MassLogManager]:

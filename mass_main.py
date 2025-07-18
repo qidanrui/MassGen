@@ -166,7 +166,13 @@ class MassSystem:
         
         # Initialize comprehensive logging system
         logger.info("Initializing comprehensive logging system...")
-        self.log_manager = initialize_logging()
+        
+        # Check for non-blocking mode (useful if logging system is causing hangs)
+        non_blocking_mode = os.environ.get('MASS_NON_BLOCKING_LOGGING', 'false').lower() in ('true', '1', 'yes')
+        if non_blocking_mode:
+            logger.info("⚠️  Non-blocking logging mode enabled via MASS_NON_BLOCKING_LOGGING")
+        
+        self.log_manager = initialize_logging(non_blocking=non_blocking_mode)
         logger.info(f"✓ Logging system initialized with session ID: {self.log_manager.session_id}")
         
         # Create coordination system
@@ -438,14 +444,42 @@ class MassSystem:
             # Clean up agent resources first
             self.cleanup_agents()
             
-            # Then cleanup logging system and export final report
+            # Then cleanup logging system and export final report with timeout protection
             if hasattr(self, 'log_manager') and self.log_manager:
                 print(f"📋 Exporting comprehensive session logs...")
-                report_file = self.log_manager.export_full_session_report()
-                print(f"📄 Full session report: {report_file}")
-            cleanup_logging()
+                
+                # Use timeout for the entire logging cleanup process
+                import threading
+                import time
+                cleanup_result = {"completed": False, "report_file": ""}
+                
+                def logging_cleanup_worker():
+                    try:
+                        cleanup_result["report_file"] = self.log_manager.export_full_session_report()
+                        cleanup_logging()
+                        cleanup_result["completed"] = True
+                    except Exception as e:
+                        print(f"Warning: Logging cleanup error: {e}")
+                        cleanup_result["completed"] = True  # Mark as completed even if failed
+                
+                # Run cleanup in daemon thread with timeout
+                cleanup_thread = threading.Thread(target=logging_cleanup_worker, daemon=True)
+                cleanup_thread.start()
+                cleanup_thread.join(timeout=45.0)  # 45 second total timeout for logging cleanup
+                
+                if cleanup_result["completed"]:
+                    if cleanup_result["report_file"]:
+                        print(f"📄 Full session report: {cleanup_result['report_file']}")
+                    else:
+                        print(f"⚠️  Session report export was skipped or failed")
+                else:
+                    print(f"⏰ Logging cleanup timed out after 45 seconds - forcing exit")
+            else:
+                print(f"ℹ️  No log manager found, skipping logging cleanup")
+                
         except Exception as e:
             logger.warning(f"Warning: Failed to cleanup resources: {e}")
+            print(f"Warning: Cleanup error: {e}")
         
         return results
     
