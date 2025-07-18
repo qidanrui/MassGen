@@ -60,7 +60,7 @@ def parse_completion(response, add_citations=True):
     
     return {"text": text, "code": code, "citations": citations, "function_calls": function_calls}
 
-def process_message(messages, model="o4-mini", tools=["live_search", "code_execution"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None):
+def process_message(messages, model="o4-mini", tools=["live_search", "code_execution"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None, timeout=None):
     """
     Generate content using OpenAI API.
     
@@ -73,9 +73,10 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
         temperature: Temperature for generation
         top_p: Top-p value for generation
         api_key: OpenAI API key (if None, will get from environment)
+        timeout: Request timeout in seconds (if None, no timeout)
     
     Returns:
-        tuple: (text, code) where text is the generated text and code is list of executable code
+        dict: {"text": text, "code": code, "citations": citations, "function_calls": function_calls}
     """
     # Get the API key
     if api_key is None:
@@ -84,8 +85,11 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
     if not api_key:
         raise ValueError("OPENAI_API_KEY not found in environment variables")
 
-    # Create OpenAI client
-    client = OpenAI(api_key=api_key)
+    # Create OpenAI client with optional timeout
+    if timeout is not None:
+        client = OpenAI(api_key=api_key, timeout=timeout)
+    else:
+        client = OpenAI(api_key=api_key)
     
     # Prepare tools
     formatted_tools = []
@@ -143,12 +147,22 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
             completion = response
             break
         except Exception as e:
+            # Check if this is a timeout-related exception
+            if timeout is not None and ("timeout" in str(e).lower() or "timed out" in str(e).lower() or "read timeout" in str(e).lower()):
+                print(f"Request timed out after {timeout} seconds, returning empty response")
+                return {"text": "", "code": [], "citations": [], "function_calls": []}
+            
             print(f"Error on attempt {retry + 1}: {e}")
             retry += 1
             time.sleep(1.5)
 
     if completion is None:
-        raise Exception(f"Failed to get completion after {max_retries} retries")
+        # If we failed all retries, return empty response instead of raising exception
+        if timeout is not None:
+            print(f"Failed to get completion after {max_retries} retries, returning empty response")
+            return {"text": "", "code": [], "citations": [], "function_calls": []}
+        else:
+            raise Exception(f"Failed to get completion after {max_retries} retries")
 
     # print(completion)
     # output = completion.output

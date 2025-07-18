@@ -93,7 +93,7 @@ class MassAgent(ABC):
     
     @abstractmethod
     def process_message(self, messages: List[Dict[str, str]], tools: List[str] = None, 
-                       temperature: float = None, **kwargs) -> AgentResponse:
+                       temperature: float = None, timeout: float = None, **kwargs) -> AgentResponse:
         """
         Core LLM inference function for task processing.
         
@@ -206,8 +206,12 @@ class MassAgent(ABC):
         """
         instructions = {
             "initial": """
-Provide a comprehensive yet concise report in response to the user's question.
-It should include the key information and reasoning steps to solve the question.
+Write a clear, concise, and comprehensive report that answers the user's question. 
+Your report should:
+- Directly address the question with a well-supported answer.
+- Summarize the key facts, evidence, and reasoning steps that lead to your conclusion.
+- Avoid unnecessary details, excessive length, or unrelated information.
+Focus on clarity, accuracy, and logical explanation.
 """,
             
             "collaboration": f"""

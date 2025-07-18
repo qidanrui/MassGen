@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from xai_sdk import Client
 from xai_sdk.chat import user, assistant, system
 from xai_sdk.search import SearchParameters
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 load_dotenv()
 
@@ -33,9 +34,9 @@ def parse_completion(response, add_citations=True):
                 citation_content.append(f"[{idx}]({citation['url']})")
             text = text + "\n\n" + "\n".join(citation_content)
     
-    return {"text": text, "code": code, "citations": citations}
+    return {"text": text, "code": code, "citations": citations, "function_calls": []}
 
-def process_message(messages, model="grok-4", tools=["live_search"], max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None):
+def process_message(messages, model="grok-4", tools=["live_search"], max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, timeout=None):
     """
     Generate content using Grok API.
     
@@ -48,9 +49,10 @@ def process_message(messages, model="grok-4", tools=["live_search"], max_retries
         temperature: Temperature for generation
         top_p: Top-p value for generation
         api_key: Grok API key (if None, will get from environment)
+        timeout: Request timeout in seconds (if None, no timeout)
     
     Returns:
-        dict: {"text": text, "code": code, "citations": citations}
+        dict: {"text": text, "code": code, "citations": citations, "function_calls": function_calls}
     """
     # Get the API key
     if api_key is None:
@@ -73,36 +75,51 @@ def process_message(messages, model="grok-4", tools=["live_search"], max_retries
         pass # Grok does not have code execution built-in
     # TODO: add other tools
     
+    # Helper function to make the API call
+    def make_grok_request():
+        # Create chat instance
+        chat = client.chat.create(
+            model=model,
+            search_parameters=search_parameters,
+            temperature=temperature if temperature else None,
+            top_p=top_p if top_p else None,
+            max_tokens=max_tokens if max_tokens else None,
+        )
+        
+        # Convert messages from OpenAI format to Grok format
+        for message in messages:
+            role = message["role"]
+            content = message["content"]
+            
+            if role == "system":
+                chat.append(system(content))
+            elif role == "user":
+                chat.append(user(content))
+            elif role == "assistant":
+                chat.append(assistant(content))
+        
+        # Get response
+        return chat.sample()
+
     # Make API request with retry logic
     completion = None
     retry = 0
     while retry < max_retries:
         try:
-            # Create chat instance
-            chat = client.chat.create(
-                model=model,
-                search_parameters=search_parameters,
-                temperature=temperature if temperature else None,
-                top_p=top_p if top_p else None,
-                max_tokens=max_tokens if max_tokens else None,
-            )
-            
-            # Convert messages from OpenAI format to Grok format
-            for message in messages:
-                role = message["role"]
-                content = message["content"]
-                
-                if role == "system":
-                    chat.append(system(content))
-                elif role == "user":
-                    chat.append(user(content))
-                elif role == "assistant":
-                    chat.append(assistant(content))
-            
-            # Get response
-            response = chat.sample()
-            completion = response
-            break
+            if timeout is not None:
+                # Use ThreadPoolExecutor to enforce timeout
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(make_grok_request)
+                    try:
+                        completion = future.result(timeout=timeout)
+                        break
+                    except FutureTimeoutError:
+                        print(f"Request timed out after {timeout} seconds, returning empty response")
+                        return {"text": "", "code": [], "citations": [], "function_calls": []}
+            else:
+                # No timeout, make request directly
+                completion = make_grok_request()
+                break
             
         except Exception as e:
             print(f"Error on attempt {retry + 1}: {e}")
@@ -110,7 +127,12 @@ def process_message(messages, model="grok-4", tools=["live_search"], max_retries
             time.sleep(1.5)
 
     if completion is None:
-        raise Exception(f"Failed to get completion after {max_retries} retries")
+        # If we failed all retries, return empty response instead of raising exception when timeout is set
+        if timeout is not None:
+            print(f"Failed to get completion after {max_retries} retries, returning empty response")
+            return {"text": "", "code": [], "citations": [], "function_calls": []}
+        else:
+            raise Exception(f"Failed to get completion after {max_retries} retries")
 
     # Parse the completion and return text, code, and citations
     result = parse_completion(completion, add_citations=True)
