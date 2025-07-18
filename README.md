@@ -72,10 +72,10 @@ graph TB
     C -->|❌ No| SM
     
     %% Consensus Reached
-    C -->|✅ Yes| R[🏆 Representative Agent<br/>Incorporates all team updates]
+    C -->|✅ Yes| R[🤝 Converged]
     
     %% Final Answer
-    R --> F[✨ Final Answer<br/>Presented to User]
+    R --> F[🏆 Representative Agent<br/>✨Present Final Answer]
     
     %% Styling
     classDef userNode fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
