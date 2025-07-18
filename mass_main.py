@@ -33,7 +33,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(__file__))
 
 from mass_agent import TaskInput
-from mass_coordination import MassCoordinationSystem
+from mass_orchestration import MassOrchestrationSystem
 from mass_workflow import MassWorkflowManager
 from mass_agents import create_agent
 from mass_logging import initialize_logging, cleanup_logging
@@ -165,7 +165,7 @@ class MassSystem:
         self.config = config or {}
         
         # System components
-        self.coordination_system: Optional[MassCoordinationSystem] = None
+        self.orchestration_system: Optional[MassOrchestrationSystem] = None
         self.workflow_manager: Optional[MassWorkflowManager] = None
         self.agents: List[Any] = []
         
@@ -177,7 +177,7 @@ class MassSystem:
         
     def initialize_system(self, agent_configs: List[Dict[str, Any]]):
         """
-        Initialize the coordination system and agents.
+        Initialize the orchestration system and agents.
         
         Args:
             agent_configs: List of agent configuration dictionaries
@@ -202,13 +202,13 @@ class MassSystem:
         self.log_manager = initialize_logging(non_blocking=non_blocking_mode)
         logger.info(f"✓ Logging system initialized with session ID: {self.log_manager.session_id}")
         
-        # Create coordination system
-        logger.info("Creating coordination system...")
-        self.coordination_system = MassCoordinationSystem(
+        # Create orchestration system
+        logger.info("Creating orchestration system...")
+        self.orchestration_system = MassOrchestrationSystem(
             max_rounds=self.max_rounds,
             consensus_threshold=self.consensus_threshold
         )
-        logger.debug(f"Coordination system created with consensus threshold {self.consensus_threshold}")
+        logger.debug(f"Orchestration system created with consensus threshold {self.consensus_threshold}")
         
         # Create and register agents
         logger.info("Creating and registering agents...")
@@ -223,10 +223,10 @@ class MassSystem:
                 agent = create_agent(
                     agent_type=agent_type,
                     agent_id=i,
-                    coordination_system=self.coordination_system,
+                    orchestration_system=self.orchestration_system,
                     **agent_kwargs
                 )
-                self.coordination_system.register_agent(agent)
+                self.orchestration_system.register_agent(agent)
                 self.agents.append(agent)
                 model_name = agent_kwargs.get("model", "default")
                 logger.info(f"✓ Registered agent {i}: {agent_type} ({model_name})")
@@ -239,7 +239,7 @@ class MassSystem:
         # Create workflow manager
         logger.info("Creating workflow manager...")
         self.workflow_manager = MassWorkflowManager(
-            coordination_system=self.coordination_system,
+            orchestration_system=self.orchestration_system,
             parallel_execution=self.parallel_execution,
             check_update_frequency=self.check_update_frequency
         )

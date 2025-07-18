@@ -79,16 +79,16 @@ class MassAgent(ABC):
     the required methods while following the standardized workflow.
     """
     
-    def __init__(self, agent_id: int, coordination_system=None):
+    def __init__(self, agent_id: int, orchestration_system=None):
         """
-        Initialize the agent with an ID and reference to the coordination system.
+        Initialize the agent with an ID and reference to the orchestration system.
         
         Args:
             agent_id: Unique identifier for this agent
-            coordination_system: Reference to the MassCoordinationSystem
+            orchestration_system: Reference to the MassOrchestrationSystem
         """
         self.agent_id = agent_id
-        self.coordination_system = coordination_system
+        self.orchestration_system = orchestration_system
         self.state = AgentState(agent_id=agent_id)
     
     @abstractmethod
@@ -129,10 +129,10 @@ class MassAgent(ABC):
             summary_report: Comprehensive progress report including reasoning and findings
             final_answer: The final answer to the question (optional)
         """
-        if self.coordination_system:
-            self.coordination_system.update_agent_summary(self.agent_id, summary_report, final_answer)
+        if self.orchestration_system:
+            self.orchestration_system.update_agent_summary(self.agent_id, summary_report, final_answer)
         else:
-            # Fallback: Update local state only if no coordination system
+            # Fallback: Update local state only if no orchestration system
             self.state.add_update(summary_report, final_answer)
     
     def check_updates(self) -> Dict[str, Any]:
@@ -143,9 +143,9 @@ class MassAgent(ABC):
         Returns:
             Dictionary containing updates from all agents, including their summaries and states
         """
-        if self.coordination_system:
+        if self.orchestration_system:
             # Get updates (only new ones by default)
-            updates = self.coordination_system.get_all_updates(
+            updates = self.orchestration_system.get_all_updates(
                 exclude_agent_id=self.agent_id, 
                 check_new_only=True
             )
@@ -158,7 +158,7 @@ class MassAgent(ABC):
                         seen_updates[int(agent_id)] = agent_info["latest_timestamp"]
                 
                 if seen_updates:
-                    self.coordination_system.mark_updates_seen_by_agent(self.agent_id, seen_updates)
+                    self.orchestration_system.mark_updates_seen_by_agent(self.agent_id, seen_updates)
             
             return updates
         return {}
@@ -170,9 +170,9 @@ class MassAgent(ABC):
         Returns:
             Dictionary containing all updates from all agents
         """
-        if self.coordination_system:
+        if self.orchestration_system:
             # Get all updates (including previously seen ones)
-            return self.coordination_system.get_all_updates(
+            return self.orchestration_system.get_all_updates(
                 exclude_agent_id=self.agent_id, 
                 check_new_only=False
             )
@@ -186,8 +186,8 @@ class MassAgent(ABC):
             target_agent_id: ID of the voted representative agent
             response_text: The full response text that led to this vote (optional)
         """
-        if self.coordination_system:
-            self.coordination_system.cast_vote(self.agent_id, target_agent_id, response_text)
+        if self.orchestration_system:
+            self.orchestration_system.cast_vote(self.agent_id, target_agent_id, response_text)
         else:
             # Update local state
             self.state.status = "voted"
@@ -201,8 +201,8 @@ class MassAgent(ABC):
         Args:
             reason: Optional reason for the failure
         """
-        if self.coordination_system:
-            self.coordination_system.mark_agent_failed(self.agent_id, reason)
+        if self.orchestration_system:
+            self.orchestration_system.mark_agent_failed(self.agent_id, reason)
         else:
             # Update local state
             self.state.status = "failed"
@@ -317,7 +317,7 @@ You have been voted by other agents to present the final answer.
         Returns:
             AgentResponse containing the agent's response
         """
-        # Phase-specific coordination handled by workflow system
+        # Phase-specific orchestration handled by workflow system
         if phase == "collaboration":
             # Check for new updates to determine if we should process
             new_updates = self.check_updates()
@@ -412,7 +412,7 @@ You have been voted by other agents to present the final answer.
         """
         Get list of tools available to this agent.
         
-        Note: Coordination tools (update_summary, check_updates, vote) are NOT 
+        Note: Orchestration tools (update_summary, check_updates, vote) are NOT 
         exposed as tools to agents. They are called programmatically by the 
         workflow system at appropriate times.
         """

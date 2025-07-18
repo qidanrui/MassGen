@@ -1,6 +1,6 @@
 # MASS (Multi-Agent Scaling System)
 
-MASS is an advanced multi-agent coordination system that leverages multiple AI agents to collaboratively solve complex tasks through intelligent parallel processing, peer verification, and consensus-building.
+MASS is an advanced multi-agent orchestration system that leverages multiple AI agents to collaboratively solve complex tasks through intelligent parallel processing, peer verification, and consensus-building.
 
 ## Overview
 
@@ -18,7 +18,7 @@ The system assigns the same task to multiple AI agents who work independently wh
 All agents implement the **`MassAgent`** interface, providing:
 
 - **Core Function**: `process_message()` - Primary LLM inference function with built-in search and code execution tools to solve any task
-- **Coordination Tools**: Built-in functions for summary updates, status checking, and voting, maintained by the system
+- **Orchestration Tools**: Built-in functions for summary updates, status checking, and voting, maintained by the system
 - **Standardized Communication**: Consistent interaction protocols across all agent types
 
 ### Agent State Management
@@ -85,7 +85,7 @@ The selected representative agent receives the complete collection of all peer s
 
 ---
 
-*The system provides complete session state information to enable sophisticated coordination strategies while maintaining simplicity through the standardized `MassAgent` interface.*
+*The system provides complete session state information to enable sophisticated orchestration strategies while maintaining simplicity through the standardized `MassAgent` interface.*
 
 
 ## TODO List

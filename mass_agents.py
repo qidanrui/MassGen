@@ -36,8 +36,8 @@ except ImportError:
 class OpenAIMassAgent(MassAgent):
     """MassAgent wrapper for OpenAI agent implementation."""
     
-    def __init__(self, agent_id: int, coordination_system=None, model: str = "o4-mini", **kwargs):
-        super().__init__(agent_id, coordination_system)
+    def __init__(self, agent_id: int, orchestration_system=None, model: str = "o4-mini", **kwargs):
+        super().__init__(agent_id, orchestration_system)
         self.model = model
         self.kwargs = kwargs
         self._client = None  # Store client for cleanup
@@ -103,8 +103,8 @@ class OpenAIMassAgent(MassAgent):
 class GeminiMassAgent(MassAgent):
     """MassAgent wrapper for Gemini agent implementation."""
     
-    def __init__(self, agent_id: int, coordination_system=None, model: str = "gemini-2.5-flash", **kwargs):
-        super().__init__(agent_id, coordination_system)
+    def __init__(self, agent_id: int, orchestration_system=None, model: str = "gemini-2.5-flash", **kwargs):
+        super().__init__(agent_id, orchestration_system)
         self.model = model
         self.kwargs = kwargs
         self._session = None  # Store session for cleanup
@@ -174,8 +174,8 @@ class GeminiMassAgent(MassAgent):
 class GrokMassAgent(MassAgent):
     """MassAgent wrapper for Grok agent implementation."""
     
-    def __init__(self, agent_id: int, coordination_system=None, model: str = "grok-4", **kwargs):
-        super().__init__(agent_id, coordination_system)
+    def __init__(self, agent_id: int, orchestration_system=None, model: str = "grok-4", **kwargs):
+        super().__init__(agent_id, orchestration_system)
         self.model = model
         self.kwargs = kwargs
         self._client = None  # Store client for cleanup
@@ -243,14 +243,14 @@ class GrokMassAgent(MassAgent):
             )
 
 # Agent factory function
-def create_agent(agent_type: str, agent_id: int, coordination_system=None, **kwargs) -> MassAgent:
+def create_agent(agent_type: str, agent_id: int, orchestration_system=None, **kwargs) -> MassAgent:
     """
     Factory function to create agents of different types.
     
     Args:
         agent_type: Type of agent to create ("openai", "gemini", "grok")
         agent_id: Unique identifier for the agent
-        coordination_system: Reference to the coordination system
+        orchestration_system: Reference to the orchestration system
         **kwargs: Additional arguments passed to the agent constructor
         
     Returns:
@@ -266,4 +266,4 @@ def create_agent(agent_type: str, agent_id: int, coordination_system=None, **kwa
         raise ValueError(f"Unknown agent type: {agent_type}. Available types: {list(agent_classes.keys())}")
     
     agent_class = agent_classes[agent_type.lower()]
-    return agent_class(agent_id=agent_id, coordination_system=coordination_system, **kwargs) 
+    return agent_class(agent_id=agent_id, orchestration_system=orchestration_system, **kwargs) 

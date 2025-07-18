@@ -30,7 +30,7 @@ class SystemMetrics:
     
 @dataclass
 class SystemState:
-    """Overall state of the MASS coordination system."""
+    """Overall state of the MASS orchestration system."""
     task: Optional[TaskInput] = None
     phase: str = "initial"  # "initial", "collaboration", "debate", "presentation", "completed"
     start_time: Optional[float] = None
@@ -123,9 +123,9 @@ def evaluate_answer(extracted_answer: str, expected_answer: str, answer_type: st
     
     return False
 
-class MassCoordinationSystem:
+class MassOrchestrationSystem:
     """
-    Central coordination system for managing multiple agents in the MASS framework.
+    Central orchestration system for managing multiple agents in the MASS framework.
     
     This system handles:
     - Agent state management and synchronization
@@ -137,7 +137,7 @@ class MassCoordinationSystem:
     
     def __init__(self, max_rounds: int = 5, consensus_threshold: float = 1.0):
         """
-        Initialize the coordination system.
+        Initialize the orchestration system.
         
         Args:
             max_rounds: Maximum number of collaboration rounds before fallback to majority vote
@@ -159,7 +159,7 @@ class MassCoordinationSystem:
         
     def register_agent(self, agent):
         """
-        Register an agent with the coordination system.
+        Register an agent with the orchestration system.
         
         Args:
             agent: MassAgent instance to register
@@ -167,7 +167,7 @@ class MassCoordinationSystem:
         with self._lock:
             self.agents[agent.agent_id] = agent
             self.agent_states[agent.agent_id] = agent.state
-            agent.coordination_system = self
+            agent.orchestration_system = self
     
     def start_task(self, task: TaskInput):
         """
@@ -177,7 +177,7 @@ class MassCoordinationSystem:
             task: TaskInput containing the problem to solve
         """
         with self._lock:
-            logger.info("🎯 COORDINATION SYSTEM: Starting new task")
+            logger.info("🎯 ORCHESTRATION SYSTEM: Starting new task")
             logger.info(f"   Task ID: {task.task_id}")
             logger.info(f"   Question preview: {task.question}")
             logger.info(f"   Registered agents: {list(self.agents.keys())}")
@@ -675,7 +675,7 @@ class MassCoordinationSystem:
         })
     
     def _log_event(self, event_type: str, data: Dict[str, Any]):
-        """Log a coordination system event."""
+        """Log a orchestration system event."""
         self.communication_log.append({
             "timestamp": time.time(),
             "event_type": event_type,
