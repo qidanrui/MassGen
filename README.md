@@ -43,82 +43,39 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 
 ```mermaid
 graph TB
-    %% User Input
-    U[👤 User Task]
-    
-    %% Agent 1 Sequential Block
-    subgraph A1_Block [🤖 Agent 1]
-        A1_Search[🔍 Web Search]
-        A1_Code[💻 Code Execution]
-        A1_Analysis[📊 Analysis]
-        A1_Search --> A1_Code
-        A1_Code --> A1_Analysis
-    end
-    
-    %% Agent 2 Sequential Block  
-    subgraph A2_Block [🤖 Agent 2]
-        A2_Search[🔍 Web Search]
-        A2_Code[💻 Code Execution]
-        A2_Analysis[📊 Analysis]
-        A2_Search --> A2_Code
-        A2_Code --> A2_Analysis
-    end
-    
-    %% Agent 3 Sequential Block
-    subgraph A3_Block [🤖 Agent 3]
-        A3_Search[🔍 Web Search]
-        A3_Code[💻 Code Execution] 
-        A3_Analysis[📊 Analysis]
-        A3_Search --> A3_Code
-        A3_Code --> A3_Analysis
-    end
-    
-    %% Agent N Sequential Block
-    subgraph AN_Block [🤖 Agent N]
-        AN_Search[🔍 Web Search]
-        AN_Code[💻 Code Execution]
-        AN_Analysis[📊 Analysis]
-        AN_Search --> AN_Code
-        AN_Code --> AN_Analysis
-    end
-    
-    %% User task triggers all agents
-    U --> A1_Block
-    U --> A2_Block
-    U --> A3_Block
-    U --> AN_Block
+    %% User Input directly to Multiple Agents
+    U[👤 User Task] --> A1[🤖 Agent 1<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
+    U --> A2[🤖 Agent 2<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
+    U --> A3[🤖 Agent 3<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
+    U --> AN[🤖 Agent N<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
     
     %% Shared Memory Hub
     SM[🧠 Shared Memory<br/>💾 Save Updates<br/>📖 Load Updates]
     
-    %% Agents interact with shared memory
-    A1_Block <--> SM
-    A2_Block <--> SM
-    A3_Block <--> SM
-    AN_Block <--> SM
+    %% Agents interact with shared memory during task solving
+    A1 <--> SM
+    A2 <--> SM
+    A3 <--> SM
+    AN <--> SM
     
-    %% Voting Process
-    V[🗳️ Voting Process<br/>Each agent votes for the representative agent]
+    %% Voting Process at bottom
+    A1 --> V[🗳️ Voting Process<br/>Each agent votes for the representative agent]
+    A2 --> V
+    A3 --> V
+    AN --> V
     
-    %% Agents participate in voting
-    A1_Block --> V
-    A2_Block --> V
-    A3_Block --> V
-    AN_Block --> V
-    
-    %% Final Answer by Representative Agent
+    %% Consensus Check
     V --> F[🏆 Representative Agent<br/>✨Present Final Answer]
     
     %% Styling
     classDef userNode fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
     classDef agentNode fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef agentSubNode fill:#fce4ec,stroke:#ad1457,stroke-width:1px
     classDef memoryNode fill:#fff3e0,stroke:#f57c00,stroke-width:2px
     classDef voteNode fill:#fce4ec,stroke:#c2185b,stroke-width:2px
     classDef finalNode fill:#e0f2f1,stroke:#00695c,stroke-width:3px
     
     class U userNode
-    class A1_Search,A1_Code,A1_Analysis,A2_Search,A2_Code,A2_Analysis,A3_Search,A3_Code,A3_Analysis,AN_Search,AN_Code,AN_Analysis agentSubNode
+    class A1,A2,A3,AN agentNode
     class SM memoryNode
     class V voteNode
     class F finalNode
