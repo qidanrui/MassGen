@@ -661,7 +661,7 @@ class MassWorkflowManager:
         # Update streaming display - agent starting
         if self.streaming_orchestrator:
             asyncio.run(self.streaming_orchestrator.stream_agent_output(
-                agent.agent_id, f"{'─' * 40}\n🚀 Starting {phase} phase...\n{'─' * 40}\n"
+                agent.agent_id, f"{'=' * 40}\n🚀 Starting {phase} phase...\n{'=' * 40}\n"
             ))
             self.streaming_orchestrator.update_agent_status(agent.agent_id, f"working_{phase}")
         
@@ -780,7 +780,7 @@ class MassWorkflowManager:
         # Update streaming display - agent completed
         if self.streaming_orchestrator:
             asyncio.run(self.streaming_orchestrator.stream_agent_output(
-                agent.agent_id, f"{'─' * 40}\n✅ Completed {phase} phase ({agent_execution_time:.2f}s)\n{'─' * 40}\n"
+                agent.agent_id, f"{'=' * 40}\n✅ Completed {phase} phase ({agent_execution_time:.2f}s)\n{'=' * 40}\n"
             ))
         
         print(f"✅ SYSTEM: Agent {agent.agent_id} completed {phase} phase ({agent_execution_time:.2f}s)")

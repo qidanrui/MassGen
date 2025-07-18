@@ -439,9 +439,9 @@ class MassSystem:
             print("─" * 60)
             
             # Final Answer and Evaluation
-            print("\n" + "─" * 40)
+            print("\n" + "=" * 40)
             print("🔥 FINAL ANSWER & EVALUATION")
-            print("─" * 40)
+            print("=" * 40)
             
             extracted_answer = final_solution.get('extracted_answer', 'None')
             expected_answer = final_solution.get('expected_answer', 'None')
@@ -460,7 +460,7 @@ class MassSystem:
             else:
                 print("⚠️  EVALUATION: Not Available")
             
-            print("─" * 40)
+            print("=" * 40)
             print("=" * 40)
             
             # Additional performance metrics
