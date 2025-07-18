@@ -63,7 +63,7 @@ def process_message(messages, model="grok-4", tools=["live_search"], max_retries
             api_key_val = api_key
 
         if not api_key_val:
-            raise ValueError("GROK_API_KEY not found in environment variables")
+            raise ValueError("XAI_API_KEY not found in environment variables")
 
         # Create Grok client
         client = Client(api_key=api_key_val)
