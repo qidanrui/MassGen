@@ -39,6 +39,8 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 
 ## 🏗️ How It Works
 
+## 🏗️ How It Works
+
 ```mermaid
 graph TB
     %% User Input
@@ -104,17 +106,8 @@ graph TB
     A3_Block --> V
     AN_Block --> V
     
-    %% Consensus Check
-    V --> C{🏛️ Consensus<br/>Reached?}
-    
-    %% No Consensus - back to shared memory for more collaboration
-    C -->|❌ No| SM
-    
-    %% Consensus Reached
-    C -->|✅ Yes| R[🤝 Converged]
-    
     %% Final Answer by Representative Agent
-    R --> F[🏆 Representative Agent<br/>✨Present Final Answer]
+    V --> F[🏆 Representative Agent<br/>✨Present Final Answer]
     
     %% Styling
     classDef userNode fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
@@ -127,9 +120,10 @@ graph TB
     class U userNode
     class A1_Search,A1_Code,A1_Analysis,A2_Search,A2_Code,A2_Analysis,A3_Search,A3_Code,A3_Analysis,AN_Search,AN_Code,AN_Analysis agentSubNode
     class SM memoryNode
-    class V,C voteNode
-    class R,F finalNode
+    class V voteNode
+    class F finalNode
 ```
+
 
 MASS assigns the same task to multiple agents who work independently while observing and learning from each other's progress. This collaborative approach ensures high-quality solutions through:
 
@@ -137,62 +131,6 @@ MASS assigns the same task to multiple agents who work independently while obser
 - 🔍 **Continuous Monitoring**: Real-time observation of peer progress  
 - 🧩 **Knowledge Integration**: Agents incorporate insights from peers
 - 🏆 **Democratic Selection**: Best solution chosen through consensus
-
----
-
-## 🔄 Agent Workflow
-
-### 🎬 Phase 1: Initial Processing
-> **Objective**: Generate independent solution as starting point
-
-```
-📨 Task Received → 🧠 Processing → 📋 Summary Generated → 📢 Shared with Peers
-```
-
-**Process**:
-1. 📥 Agent receives the task and processes it using `process_message()`
-2. 🎯 Develops initial solution with comprehensive summary report
-3. 📤 System automatically saves and shares summary with all peer agents
-
-### 🤝 Phase 2: Collaboration & Refinement
-> **Objective**: Leverage peer insights to improve solutions
-
-```
-👀 Monitor Peers → 📊 Analyze Solutions → 🤔 Decision → 🔄 Refine OR 🗳️ Vote
-```
-
-**Process**:
-1. 🔍 Agent monitors peer updates every `check_update_frequency` (default: 3 seconds)
-2. **Upon discovering new peer summaries**:
-   - 🔄 Triggers new inference cycle to reassess situation
-   - 📊 Analyzes own solution against all peer solutions
-   - ⚖️ Evaluates relative quality and correctness
-3. **Agent chooses action**:
-   - 🔧 **Continue Working**: Incorporates insights, maintains `working` status
-   - 🗳️ **Vote**: Identifies superior solution, changes status to `voted`
-
-### 🏛️ Phase 3: Consensus Building & Debate
-> **Objective**: Reach agreement through iterative review
-
-```
-📊 Consensus Check → ✅ Majority Found OR 💬 Debate → 🔄 Repeat
-```
-
-**Process**:
-1. 📈 **Consensus Check**: Evaluates if results meet majority threshold
-2. **Outcome Determination**:
-   - ✅ **Consensus Achieved**: Majority-selected agent becomes representative
-   - 🚫 **No Consensus**: Initiates structured debate with all solutions
-3. 🔄 **Iterative Process**: Phases 2-3 alternate until consensus or max rounds
-
-### 🎯 Phase 4: Final Presentation
-> **Objective**: Deliver definitive solution with full context
-
-```
-🏆 Representative Selected → 📚 Review All Solutions → ✨ Final Answer
-```
-
-The selected representative receives all peer solutions and voting opinions, then synthesizes the final answer with complete reasoning and context.
 
 ---
 
