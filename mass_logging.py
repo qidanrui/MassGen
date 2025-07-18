@@ -105,9 +105,20 @@ class MassLogManager:
     
     def _setup_logging(self):
         """Set up file logging configuration."""
+        # Skip file logging setup in non-blocking mode
+        if self.non_blocking:
+            return
+            
         log_formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
+        
+        # Ensure log directory exists before creating file handler
+        try:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f"Warning: Failed to create log directory {self.log_dir}, skipping file logging: {e}")
+            return
         
         # Create session-specific log file handler
         session_log_handler = logging.FileHandler(

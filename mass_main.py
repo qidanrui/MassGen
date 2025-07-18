@@ -283,18 +283,22 @@ class MassSystem:
         """
         try:
             
-            if os.path.exists(question) and question.endswith(".json"):
-                # load it as a json file
-                with open(question, 'r', encoding='utf-8') as f:
-                    task_data = json.load(f)
-                question = task_data.get("question", "")
-                context = task_data.get("context", {})
-                task_id = task_data.get("task_id", f"simple_task_{int(datetime.now().timestamp())}")
-                task = TaskInput(
-                    question=question,
-                    context=context,
-                    task_id=task_id
-                )
+            if os.path.exists(question):
+                if question.endswith(".json"):
+                    # load it as a json file
+                    with open(question, 'r', encoding='utf-8') as f:
+                        task_data = json.load(f)
+                    question = task_data.get("question", "")
+                    context = task_data.get("context", {})
+                    task_id = task_data.get("task_id", f"simple_task_{int(datetime.now().timestamp())}")
+                elif question.endswith(".txt"):
+                    # load it as a txt file
+                    with open(question, 'r', encoding='utf-8') as f:
+                        question = f.read()
+                    context = {}
+                    task_id = f"simple_task_{int(datetime.now().timestamp())}"
+                else:
+                    raise ValueError(f"Unsupported file type: {question}")
             else:
                 # Create simple task input
                 task = TaskInput(

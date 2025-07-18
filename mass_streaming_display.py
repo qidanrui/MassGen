@@ -9,7 +9,7 @@ import unicodedata
 from typing import Dict, List, Optional, Callable
 
 class MultiRegionDisplay:
-    def __init__(self, display_enabled: bool = True, max_lines: int = 80):
+    def __init__(self, display_enabled: bool = True, max_lines: int = 40):
         self.display_enabled = display_enabled
         self.max_lines = max_lines  # Maximum lines to display per agent
         self.agent_outputs: Dict[int, str] = {}
@@ -92,37 +92,146 @@ class MultiRegionDisplay:
         
         # Function to calculate actual display width of text
         def get_display_width(text):
-            """Calculate the actual display width of text accounting for emojis and unicode."""
+            """Calculate the actual display width of text accounting for emojis, unicode, and ANSI codes."""
             if not text:
                 return 0
+            
+            # Strip ANSI escape sequences first
+            import re
+            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+            clean_text = ansi_escape.sub('', text)
+            
+            # Try to use wcwidth library if available for more accurate width calculation
+            try:
+                import wcwidth
+                total_width = 0
+                for char in clean_text:
+                    char_width = wcwidth.wcwidth(char)
+                    if char_width is None:
+                        # wcwidth returns None for control characters, treat as 0 width
+                        char_width = 0
+                    elif char_width < 0:
+                        # Some terminals treat certain characters as 0 width
+                        char_width = 0
+                    total_width += char_width
+                return total_width
+            except ImportError:
+                # Fallback to manual calculation if wcwidth not available
+                pass
+            
+            # Manual fallback with specific emoji handling
             width = 0
-            for char in text:
-                # Check if it's an emoji or wide character
-                if ord(char) >= 0x1F600:  # Emoji range
+            i = 0
+            while i < len(clean_text):
+                char = clean_text[i]
+                char_code = ord(char)
+                
+                # Check for specific problematic emojis first
+                if char == '🗳':  # Ballot box (often 1 width)
+                    # Check if followed by variation selector
+                    if i + 1 < len(clean_text) and ord(clean_text[i + 1]) == 0xFE0F:
+                        width += 1  # 🗳️ often renders as 1 width despite being an emoji
+                        i += 2  # Skip both characters
+                        continue
+                    else:
+                        width += 1
+                        i += 1
+                        continue
+                
+                # Zero-width characters
+                if char_code in [0xFE0F, 0x200D]:  # Variation selectors and joiners
+                    i += 1
+                    continue
+                
+                # Standard emoji detection for other characters
+                if (
+                    # Main emoji blocks
+                    (0x1F600 <= char_code <= 0x1F64F) or  # Emoticons  
+                    (0x1F300 <= char_code <= 0x1F5FF) or  # Misc Symbols and Pictographs
+                    (0x1F680 <= char_code <= 0x1F6FF) or  # Transport and Map Symbols
+                    (0x1F700 <= char_code <= 0x1F77F) or  # Alchemical Symbols
+                    (0x1F780 <= char_code <= 0x1F7FF) or  # Geometric Shapes Extended
+                    (0x1F800 <= char_code <= 0x1F8FF) or  # Supplemental Arrows-C
+                    (0x1F900 <= char_code <= 0x1F9FF) or  # Supplemental Symbols and Pictographs
+                    (0x1FA00 <= char_code <= 0x1FA6F) or  # Chess Symbols
+                    (0x1FA70 <= char_code <= 0x1FAFF) or  # Symbols and Pictographs Extended-A
+                    # Additional emoji ranges
+                    (0x2600 <= char_code <= 0x26FF) or   # Miscellaneous Symbols
+                    (0x2700 <= char_code <= 0x27BF)      # Dingbats (✅ etc)
+                ):
                     width += 2
                 elif unicodedata.east_asian_width(char) in ('F', 'W'):  # Full-width or wide
                     width += 2
                 else:
                     width += 1
+                i += 1
             return width
         
         # Function to pad text to exact display width
         def pad_to_width(text, target_width, align='left'):
-            """Pad text to exact display width, handling unicode properly."""
+            """Pad text to exact display width, handling unicode and ANSI codes properly."""
             current_width = get_display_width(text)
             if current_width >= target_width:
-                # Truncate if too long
+                # Truncate if too long - need to handle ANSI codes properly
+                import re
+                ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+                clean_text = ansi_escape.sub('', text)
+                
                 result = ""
                 width = 0
-                for char in text:
-                    char_width = 2 if (ord(char) >= 0x1F600 or 
-                                     unicodedata.east_asian_width(char) in ('F', 'W')) else 1
+                text_pos = 0
+                clean_pos = 0
+                
+                while text_pos < len(text) and clean_pos < len(clean_text):
+                    # Check if we're at an ANSI sequence
+                    if text[text_pos:text_pos+1] == '\x1B':
+                        # Find the end of the ANSI sequence
+                        ansi_match = ansi_escape.match(text[text_pos:])
+                        if ansi_match:
+                            # Add the entire ANSI sequence without counting width
+                            result += ansi_match.group()
+                            text_pos += len(ansi_match.group())
+                            continue
+                    
+                    # Regular character - handle specific emojis first
+                    char = clean_text[clean_pos]
+                    char_code = ord(char)
+                    
+                    # Handle specific problematic emojis
+                    if char == '🗳':  # Ballot box (often 1 width)
+                        # Check if this will be followed by variation selector in original text
+                        char_width = 1  # 🗳️ often renders as 1 width despite being an emoji
+                    elif char_code in [0xFE0F, 0x200D]:  # Zero-width characters
+                        char_width = 0
+                    elif (
+                        # Main emoji blocks
+                        (0x1F600 <= char_code <= 0x1F64F) or  # Emoticons
+                        (0x1F300 <= char_code <= 0x1F5FF) or  # Misc Symbols and Pictographs
+                        (0x1F680 <= char_code <= 0x1F6FF) or  # Transport and Map Symbols
+                        (0x1F700 <= char_code <= 0x1F77F) or  # Alchemical Symbols
+                        (0x1F780 <= char_code <= 0x1F7FF) or  # Geometric Shapes Extended
+                        (0x1F800 <= char_code <= 0x1F8FF) or  # Supplemental Arrows-C
+                        (0x1F900 <= char_code <= 0x1F9FF) or  # Supplemental Symbols and Pictographs
+                        (0x1FA00 <= char_code <= 0x1FA6F) or  # Chess Symbols
+                        (0x1FA70 <= char_code <= 0x1FAFF) or  # Symbols and Pictographs Extended-A
+                        # Additional emoji ranges
+                        (0x2600 <= char_code <= 0x26FF) or   # Miscellaneous Symbols
+                        (0x2700 <= char_code <= 0x27BF) or   # Dingbats (✅ etc)
+                        unicodedata.east_asian_width(char) in ('F', 'W')  # Full-width or wide
+                    ):
+                        char_width = 2
+                    else:
+                        char_width = 1
+                    
                     if width + char_width <= target_width - 1:  # Leave room for ellipsis
-                        result += char
+                        result += text[text_pos]
                         width += char_width
+                        text_pos += 1
+                        clean_pos += 1
                     else:
                         result += "…"
                         break
+                
                 return result
             
             # Add padding
@@ -136,7 +245,50 @@ class MultiRegionDisplay:
             else:  # left align
                 return text + " " * padding_needed
         
-        # Print header with exact formatting
+        # Print MASS system header with enhanced styling
+        # ANSI color codes
+        BRIGHT_CYAN = '\033[96m'
+        BRIGHT_BLUE = '\033[94m'
+        BRIGHT_GREEN = '\033[92m'
+        BRIGHT_YELLOW = '\033[93m'
+        BRIGHT_MAGENTA = '\033[95m'
+        BRIGHT_RED = '\033[91m'
+        BOLD = '\033[1m'
+        RESET = '\033[0m'
+        
+        # Create enhanced multi-line header
+        print("")
+        
+        # Top border with gradient effect
+        top_border = f"{BRIGHT_CYAN}{BOLD}╔{'═' * (actual_width - 2)}╗{RESET}"
+        print(top_border)
+        
+        # Empty line
+        empty_line = f"{BRIGHT_CYAN}║{' ' * (actual_width - 2)}║{RESET}"
+        print(empty_line)
+        
+        # Main title line
+        title_text = "🚀 MASS - Multi-Agent Scaling System 🚀"
+        title_display_width = get_display_width(title_text)
+        title_padding = (actual_width - 2 - title_display_width) // 2
+        title_line = f"{BRIGHT_CYAN}║{' ' * title_padding}{BRIGHT_YELLOW}{BOLD}{title_text}{RESET}{' ' * (actual_width - 2 - title_padding - title_display_width)}{BRIGHT_CYAN}║{RESET}"
+        print(title_line)
+        
+        # Subtitle line
+        subtitle_text = "🔬 Advanced Agent Collaboration Framework"
+        subtitle_display_width = get_display_width(subtitle_text)
+        subtitle_padding = (actual_width - 2 - subtitle_display_width) // 2
+        subtitle_line = f"{BRIGHT_CYAN}║{' ' * subtitle_padding}{BRIGHT_GREEN}{subtitle_text}{RESET}{' ' * (actual_width - 2 - subtitle_padding - subtitle_display_width)}{BRIGHT_CYAN}║{RESET}"
+        print(subtitle_line)
+        
+        # Another empty line
+        print(empty_line)
+        
+        # Bottom border
+        bottom_border = f"{BRIGHT_CYAN}{BOLD}╚{'═' * (actual_width - 2)}╝{RESET}"
+        print(bottom_border)
+        
+        # Print agent column headers
         header_sep = "─" * actual_width
         print(f"\n{header_sep}")
         
@@ -191,7 +343,7 @@ class MultiRegionDisplay:
         print(header_sep)
 
 class StreamingOrchestrator:
-    def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 80):
+    def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 40):
         self.display = MultiRegionDisplay(display_enabled, max_lines)
         self.stream_callback = stream_callback
         self.active_agents: Dict[int, str] = {}
@@ -231,7 +383,7 @@ class StreamingOrchestrator:
 def create_streaming_display(display_type: str = "terminal", 
                            display_enabled: bool = True,
                            stream_callback: Optional[Callable] = None,
-                           max_lines: int = 80):
+                           max_lines: int = 40):
     return StreamingOrchestrator(display_enabled, stream_callback, max_lines)
 
 def integrate_with_workflow_manager(workflow_manager, streaming_orchestrator):

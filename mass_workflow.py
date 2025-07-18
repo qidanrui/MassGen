@@ -37,7 +37,7 @@ class MassWorkflowManager:
                  max_collaboration_rounds: int = 5,  # Maximum collaboration rounds
                  streaming_display: bool = True,  # Enable streaming display
                  stream_callback: Optional[Callable] = None,  # Custom stream callback
-                 max_display_lines: int = 80):  # Maximum lines to display per agent
+                 max_display_lines: int = 40):  # Maximum lines to display per agent
         """
         Initialize the workflow manager.
         
@@ -48,7 +48,7 @@ class MassWorkflowManager:
             max_collaboration_rounds: Maximum number of collaboration rounds (default 5)
             streaming_display: Whether to enable streaming display (default True)
             stream_callback: Optional custom callback for streaming integration
-            max_display_lines: Maximum lines to display per agent (default 80)
+            max_display_lines: Maximum lines to display per agent (default 40)
         """
         self.orchestration_system = orchestration_system
         self.parallel_execution = parallel_execution
