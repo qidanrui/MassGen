@@ -209,12 +209,75 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                             stream_callback("[FUNCTION] Function call completed")
                         except Exception as e:
                             print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.code_interpreter_call.in_progress":
+                        # Code interpreter call started
+                        try:
+                            stream_callback("[CODE] Starting code execution...")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.code_interpreter_call_code.delta":
+                        # Code being written/streamed
+                        # if hasattr(chunk, 'delta') and chunk.delta:
+                        #     try:
+                        #         stream_callback(f"[CODE] {chunk.delta}")
+                        #     except Exception as e:
+                        #         print(f"Stream callback error: {e}")
+                        pass
+                    elif chunk.type == "response.code_interpreter_call_code.done":
+                        # Code writing completed
+                        try:
+                            stream_callback("[CODE] Code writing completed")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.code_interpreter_call.interpreting":
+                        # Code is being executed
+                        try:
+                            stream_callback("[CODE] Executing code...")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.code_interpreter_call.completed":
+                        # Code execution completed
+                        try:
+                            stream_callback("[CODE] Code execution completed")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
                     elif chunk.type == "response.output_item.added":
                         # New output item added
                         if hasattr(chunk, 'item') and chunk.item:
                             if hasattr(chunk.item, 'type') and chunk.item.type == "web_search_call":
                                 try:
                                     stream_callback("[SEARCH] Starting web search...")
+                                except Exception as e:
+                                    print(f"Stream callback error: {e}")
+                            elif hasattr(chunk.item, 'type') and chunk.item.type == "reasoning":
+                                try:
+                                    stream_callback("[REASONING] Reasoning in progress...")
+                                except Exception as e:
+                                    print(f"Stream callback error: {e}")
+                            elif hasattr(chunk.item, 'type') and chunk.item.type == "code_interpreter_call":
+                                try:
+                                    stream_callback("[CODE] Code interpreter starting...")
+                                except Exception as e:
+                                    print(f"Stream callback error: {e}")        
+                    elif chunk.type == "response.output_item.done":
+                        # Check if this is a completed web search with query or reasoning completion
+                        if hasattr(chunk, 'item') and chunk.item:
+                            if hasattr(chunk.item, 'type') and chunk.item.type == "web_search_call":
+                                if hasattr(chunk.item, 'action') and hasattr(chunk.item.action, 'query'):
+                                    search_query = chunk.item.action.query
+                                    if search_query:
+                                        try:
+                                            stream_callback(f"[SEARCH] Completed search for: {search_query}")
+                                        except Exception as e:
+                                            print(f"Stream callback error: {e}")
+                            elif hasattr(chunk.item, 'type') and chunk.item.type == "reasoning":
+                                try:
+                                    stream_callback("[REASONING] Reasoning completed")
+                                except Exception as e:
+                                    print(f"Stream callback error: {e}")
+                            elif hasattr(chunk.item, 'type') and chunk.item.type == "code_interpreter_call":
+                                try:
+                                    stream_callback("[CODE] Code interpreter completed")
                                 except Exception as e:
                                     print(f"Stream callback error: {e}")
                     elif chunk.type == "response.web_search_call.in_progress":
@@ -227,17 +290,6 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                             stream_callback("[SEARCH] Searching...")
                         except Exception as e:
                             print(f"Stream callback error: {e}")
-                    elif chunk.type == "response.output_item.done":
-                        # Check if this is a completed web search with query
-                        if hasattr(chunk, 'item') and chunk.item:
-                            if hasattr(chunk.item, 'type') and chunk.item.type == "web_search_call":
-                                if hasattr(chunk.item, 'action') and hasattr(chunk.item.action, 'query'):
-                                    search_query = chunk.item.action.query
-                                    if search_query:
-                                        try:
-                                            stream_callback(f"[SEARCH] Completed search for: {search_query}")
-                                        except Exception as e:
-                                            print(f"Stream callback error: {e}")
                     elif chunk.type == "response.web_search_call.completed":
                         try:
                             stream_callback("[SEARCH] Search completed")
@@ -253,9 +305,7 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                             stream_callback("[DONE] Response complete")
                         except Exception as e:
                             print(f"Stream callback error: {e}")
-                    # Remove debug output for cleaner streaming
-                    # else:
-                    #     print(f"DEBUG: Other event type: {chunk.type}")
+
             
             result = {"text": text, "code": code, "citations": citations, "function_calls": function_calls}
         else:

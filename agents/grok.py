@@ -197,28 +197,28 @@ def process_message(messages, model="grok-4", tools=["live_search"], max_retries
 
 if __name__ == '__main__':
     # Test streaming callback functionality without making API calls
-    def test_stream_callback():
-        chunks_received = []
+    # def test_stream_callback():
+    #     chunks_received = []
         
-        def stream_handler(chunk):
-            chunks_received.append(chunk)
-            print(f"Received chunk: {chunk}")
+    #     def stream_handler(chunk):
+    #         chunks_received.append(chunk)
+    #         print(f"Received chunk: {chunk}")
         
-        # Test the callback function works
-        stream_handler("test chunk")
-        assert len(chunks_received) == 1
-        assert chunks_received[0] == "test chunk"
-        print("✓ Stream callback test passed")
+    #     # Test the callback function works
+    #     stream_handler("test chunk")
+    #     assert len(chunks_received) == 1
+    #     assert chunks_received[0] == "test chunk"
+    #     print("✓ Stream callback test passed")
     
-    test_stream_callback()
+    # test_stream_callback()
     
-    # Cheap real API test with minimal tokens
-    messages = [
-        {"role": "user", "content": "Hi"}
-    ]
+    # # Cheap real API test with minimal tokens
+    # messages = [
+    #     {"role": "user", "content": "Hi"}
+    # ]
     
-    def stream_handler(chunk):
-        print(chunk, end="")
+    # def stream_handler(chunk):
+    #     print(chunk, end="")
 
     # Uncomment below to test streaming with tools (costs money)
     # print("--- Streaming Test with Tools ---")
@@ -228,3 +228,5 @@ if __name__ == '__main__':
     # result = process_message(messages_with_search, model="grok-3", tools=["live_search"], stream=True, stream_callback=stream_handler, max_tokens=50)
     # print(f"\nResult: {result}")
     # print("Test completed!")
+    pass
+    # print(response.content)  # The full response

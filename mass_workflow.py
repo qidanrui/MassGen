@@ -698,8 +698,10 @@ class MassWorkflowManager:
             """Callback to stream LLM response chunks to the display."""
             if self.streaming_orchestrator and chunk:
                 try:
-                    # Check if this is a search query or function call message
-                    if chunk.startswith("[SEARCH]") or chunk.startswith("[FUNCTION]") or chunk.startswith("[COMPLETE]") or chunk.startswith("[DONE]"):
+                    # Check if this is a search query, function call, code, or reasoning message
+                    if (chunk.startswith("[SEARCH]") or chunk.startswith("[FUNCTION]") or 
+                        chunk.startswith("[CODE]") or chunk.startswith("[REASONING]") or 
+                        chunk.startswith("[COMPLETE]") or chunk.startswith("[DONE]")):
                         # Display search queries and function calls in agent region with better formatting
                         if "[SEARCH]" in chunk:
                             # Clean up search query display and add to agent output
@@ -712,6 +714,20 @@ class MassWorkflowManager:
                             # Clean up function call display and add to agent output
                             clean_chunk = chunk.replace("[FUNCTION]", "").strip()
                             formatted_chunk = f"🔧 {clean_chunk}\n"
+                            asyncio.run(self.streaming_orchestrator.stream_agent_output(
+                                agent.agent_id, formatted_chunk
+                            ))
+                        elif "[CODE]" in chunk:
+                            # Clean up code execution display and add to agent output
+                            clean_chunk = chunk.replace("[CODE]", "").strip()
+                            formatted_chunk = f"💻 {clean_chunk}\n"
+                            asyncio.run(self.streaming_orchestrator.stream_agent_output(
+                                agent.agent_id, formatted_chunk
+                            ))
+                        elif "[REASONING]" in chunk:
+                            # Clean up reasoning display and add to agent output
+                            clean_chunk = chunk.replace("[REASONING]", "").strip()
+                            formatted_chunk = f"🧠 {clean_chunk}\n"
                             asyncio.run(self.streaming_orchestrator.stream_agent_output(
                                 agent.agent_id, formatted_chunk
                             ))
