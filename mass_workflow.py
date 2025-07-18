@@ -31,7 +31,6 @@ class MassWorkflowManager:
     """
     
     def __init__(self, coordination_system: MassCoordinationSystem, 
-                 max_phase_duration: int = 300,  # 5 minutes per phase
                  parallel_execution: bool = True,
                  check_update_frequency: float = 3.0,  # 3 seconds default as per README
                  max_collaboration_rounds: int = 5):  # Maximum collaboration rounds
@@ -40,13 +39,11 @@ class MassWorkflowManager:
         
         Args:
             coordination_system: The coordination system managing agents
-            max_phase_duration: Maximum time allowed per phase in seconds
             parallel_execution: Whether to run agents in parallel
             check_update_frequency: How often agents check for updates in seconds (default 3)
             max_collaboration_rounds: Maximum number of collaboration rounds (default 5)
         """
         self.coordination_system = coordination_system
-        self.max_phase_duration = max_phase_duration
         self.parallel_execution = parallel_execution
         self.check_update_frequency = check_update_frequency
         self.max_collaboration_rounds = max_collaboration_rounds
@@ -251,7 +248,7 @@ class MassWorkflowManager:
                 }
                 
                 completed_count = 0
-                for future in as_completed(future_to_agent, timeout=self.max_phase_duration):
+                for future in as_completed(future_to_agent):
                     agent = future_to_agent[future]
                     result = future.result()  # Let exceptions propagate
                     results.append({
@@ -320,15 +317,31 @@ class MassWorkflowManager:
                 agent for agent in all_agents
                 if self.coordination_system.agent_states[agent.agent_id].status == "working"
             ]
+            failed_agents = [
+                agent for agent in all_agents
+                if self.coordination_system.agent_states[agent.agent_id].status == "failed"
+            ]
             
             print(f"   📊 Round {round_num + 1} Start Status:")
             print(f"   👥 Working agents: {[a.agent_id for a in working_agents]} ({len(working_agents)} total)")
             print(f"   🗳️  Voted agents: {[a.agent_id for a in voted_agents]} ({len(voted_agents)} total)")
+            print(f"   💥 Failed agents: {[a.agent_id for a in failed_agents]} ({len(failed_agents)} total)")
             
             # Exit condition 1: All agents have voted
             if len(voted_agents) == len(all_agents):
                 logger.info("All agents have voted - ending collaboration phase")
                 print(f"   ✅ EXIT CONDITION: All {len(all_agents)} agents have voted")
+                print(f"   ➡️  Moving to debate phase")
+                break
+            
+            # Exit condition 2: All agents either voted, or failed
+            failed_agents = [
+                agent for agent in all_agents
+                if self.coordination_system.agent_states[agent.agent_id].status == "failed"
+            ]
+            if len(voted_agents) + len(failed_agents) == len(all_agents):
+                logger.info("All agents have either voted or failed - ending collaboration phase")
+                print(f"   ✅ EXIT CONDITION: All agents voted ({len(voted_agents)}) or failed ({len(failed_agents)})")
                 print(f"   ➡️  Moving to debate phase")
                 break
             
@@ -342,7 +355,7 @@ class MassWorkflowManager:
             # Continuous update checking mechanism as per README
             round_start_time = time.time()
             agents_processed_this_round = set()
-            round_timeout = 120  # Maximum time per round to prevent infinite loops
+            round_timeout = 180  # Maximum time per round to prevent infinite loops
             
             while True:
                 current_time = time.time()
@@ -392,9 +405,8 @@ class MassWorkflowManager:
                             for agent in current_working_agents
                         }
                         
-                        # Give agents enough time to complete - use the full phase duration
-                        timeout_per_agent = self.max_phase_duration
-                        for future in as_completed(future_to_agent, timeout=timeout_per_agent):
+                        # Agents will handle their own timeouts internally
+                        for future in as_completed(future_to_agent):
                             agent = future_to_agent[future]
                             result = future.result()  # Let exceptions propagate
                             round_results.append({
@@ -441,10 +453,15 @@ class MassWorkflowManager:
                 agent for agent in self.coordination_system.agents.values()
                 if self.coordination_system.agent_states[agent.agent_id].status == "working"
             ]
+            final_failed_agents = [
+                agent for agent in self.coordination_system.agents.values()
+                if self.coordination_system.agent_states[agent.agent_id].status == "failed"
+            ]
             
             print(f"\n📊 End of Round {round_num + 1}:")
             print(f"   👥 Working agents: {[a.agent_id for a in final_working_agents]} ({len(final_working_agents)} total)")
             print(f"   🗳️  Voted agents: {[a.agent_id for a in final_voted_agents]} ({len(final_voted_agents)} total)")
+            print(f"   💥 Failed agents: {[a.agent_id for a in final_failed_agents]} ({len(final_failed_agents)} total)")
             
             if progress_callback:
                 progress_callback("collaboration", round_num + 1, self.max_collaboration_rounds)
@@ -456,10 +473,10 @@ class MassWorkflowManager:
                 print(f"   ➡️  Moving to debate phase")
                 break
             
-            # Exit condition: All agents have voted
-            if len(final_voted_agents) == len(all_agents):
-                logger.info("All agents have voted at end of collaboration round")
-                print(f"   ✅ EXIT CONDITION: All {len(all_agents)} agents have voted")
+            # Exit condition: All agents have voted or failed
+            if len(final_voted_agents) + len(final_failed_agents) == len(all_agents):
+                logger.info("All agents have either voted or failed at end of collaboration round")
+                print(f"   ✅ EXIT CONDITION: All agents voted ({len(final_voted_agents)}) or failed ({len(final_failed_agents)})")
                 print(f"   ➡️  Moving to debate phase")
                 break
         
@@ -473,10 +490,15 @@ class MassWorkflowManager:
                 agent for agent in self.coordination_system.agents.values()
                 if self.coordination_system.agent_states[agent.agent_id].status == "working"
             ]
+            final_failed = [
+                agent for agent in self.coordination_system.agents.values()
+                if self.coordination_system.agent_states[agent.agent_id].status == "failed"
+            ]
             logger.info(f"Maximum collaboration rounds ({self.max_collaboration_rounds}) reached")
             print(f"\n🔄 EXIT CONDITION: Maximum collaboration rounds ({self.max_collaboration_rounds}) reached")
             print(f"   👥 Final working agents: {[a.agent_id for a in final_working]} ({len(final_working)} total)")
             print(f"   🗳️  Final voted agents: {[a.agent_id for a in final_voted]} ({len(final_voted)} total)")
+            print(f"   💥 Final failed agents: {[a.agent_id for a in final_failed]} ({len(final_failed)} total)")
             print(f"   ➡️  Moving to debate phase")
         
         return results
@@ -599,8 +621,20 @@ class MassWorkflowManager:
         
         agent_start_time = time.time()
         
-        # Process the task using the agent's new method
-        response = agent.process_task(task, phase)
+        # Process the task using the agent's new method with timeout
+        # Set phase-specific timeouts
+        phase_timeouts = {
+            "initial": 180,      # 2 minutes for initial processing
+            "collaboration": 180, # 2 minutes for collaboration
+            "debate": 180,        # 2 minutes for debate
+            "presentation": 180   # 2 minutes for presentation
+        }
+        timeout = phase_timeouts.get(phase, 180)
+        
+        print(f"   ⏰ Agent {agent.agent_id} timeout set to {timeout}s for {phase} phase")
+        logger.debug(f"Agent {agent.agent_id} processing with {timeout}s timeout")
+        
+        response = agent.process_task(task, phase, timeout=timeout)
         
         # Record execution time
         agent_execution_time = time.time() - agent_start_time
@@ -630,9 +664,25 @@ class MassWorkflowManager:
         """
         print(f"\n🔧 Processing Agent {agent.agent_id} coordination ({phase} phase):")
         
+        # Extract summary report first
+        summary_report = self._extract_summary_report(response.text)
+        
+        # Check if the summary is effectively empty and mark agent as failed if so
+        if not summary_report or len(summary_report.strip()) == 0:
+            agent.mark_failed("Empty summary report")
+            print(f"   💥 Agent {agent.agent_id} FAILED: Empty summary report")
+            logger.warning(f"Agent {agent.agent_id} failed due to empty summary report")
+            return  # Exit early for failed agents
+        
+        # Check for extremely short summaries that might indicate failure
+        if len(summary_report.strip()) < 20:  # Less than 20 characters
+            agent.mark_failed("Summary too short (likely model error)")
+            print(f"   💥 Agent {agent.agent_id} FAILED: Summary too short ({len(summary_report.strip())} chars)")
+            logger.warning(f"Agent {agent.agent_id} failed due to very short summary ({len(summary_report.strip())} chars)")
+            return  # Exit early for failed agents
+        
         if phase == "initial":
             # Phase 1: Only extract summary, NO answer extraction
-            summary_report = self._extract_summary_report(response.text)
             agent.update_summary(summary_report)  # No final_answer parameter
             print(f"   📝 Updated summary for Agent {agent.agent_id}")
             print(f"   📊 Summary length: {len(summary_report)} characters")
@@ -654,7 +704,6 @@ class MassWorkflowManager:
                 logger.info(f"Agent {agent.agent_id} voted for agent {vote_target}")
             else:
                 # Agent updated their own solution - extract summary only, NO answer
-                summary_report = self._extract_summary_report(response.text)
                 agent.update_summary(summary_report)  # No final_answer parameter
                 print(f"   📝 Agent {agent.agent_id} updated their solution")
                 print(f"   📊 Updated summary length: {len(summary_report)} characters")
@@ -677,7 +726,6 @@ class MassWorkflowManager:
                 logger.info(f"Agent {agent.agent_id} voted for agent {vote_target}")
             else:
                 # Agent updated their own solution - extract summary AND final answer
-                summary_report = self._extract_summary_report(response.text)
                 final_answer = self._extract_answer(response.text)  # Only in debate phase!
                 agent.update_summary(summary_report, final_answer)
                 print(f"   📝 Agent {agent.agent_id} updated their solution")
@@ -689,7 +737,6 @@ class MassWorkflowManager:
                 
         elif phase == "presentation":
             # Phase 4: Extract final summary report and answer (no voting in presentation phase)
-            summary_report = self._extract_summary_report(response.text)
             final_answer = self._extract_answer(response.text)
             agent.update_summary(summary_report, final_answer)
             print(f"   📝 Agent {agent.agent_id} provided final presentation")

@@ -81,7 +81,7 @@ class OpenAIMassAgent(MassAgent):
                 model=self.model,
                 tools=tools,
                 temperature=temperature,
-                timeout=timeout,
+                processing_timeout=timeout,
                 **merged_kwargs
             )
             
@@ -152,7 +152,7 @@ class GeminiMassAgent(MassAgent):
                 model=self.model,
                 tools=tools,
                 temperature=temperature,
-                timeout=timeout,
+                processing_timeout=timeout,
                 **merged_kwargs
             )
             
@@ -223,7 +223,7 @@ class GrokMassAgent(MassAgent):
                 model=self.model,
                 tools=tools,
                 temperature=temperature,
-                timeout=timeout,
+                processing_timeout=timeout,
                 **merged_kwargs
             )
             

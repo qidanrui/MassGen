@@ -145,7 +145,6 @@ class MassSystem:
         # Configuration parameters
         self.max_rounds = self.config.get("max_rounds", 5)
         self.consensus_threshold = self.config.get("consensus_threshold", 1.0)
-        self.max_phase_duration = self.config.get("max_phase_duration", 300)
         self.parallel_execution = self.config.get("parallel_execution", True)
         self.check_update_frequency = self.config.get("check_update_frequency", 3)  # Default 3 seconds as per README
         
@@ -162,7 +161,6 @@ class MassSystem:
         logger.info(f"Configuration:")
         logger.info(f"  - Max rounds: {self.max_rounds}")
         logger.info(f"  - Consensus threshold: {self.consensus_threshold}")
-        logger.info(f"  - Max phase duration: {self.max_phase_duration} seconds")
         logger.info(f"  - Parallel execution: {self.parallel_execution}")
         logger.info(f"  - Agent count: {len(agent_configs)}")
         
@@ -208,11 +206,10 @@ class MassSystem:
         logger.info("Creating workflow manager...")
         self.workflow_manager = MassWorkflowManager(
             coordination_system=self.coordination_system,
-            max_phase_duration=self.max_phase_duration,
             parallel_execution=self.parallel_execution,
             check_update_frequency=self.check_update_frequency
         )
-        logger.debug(f"Workflow manager created with max_phase_duration={self.max_phase_duration}, parallel={self.parallel_execution}, check_update_frequency={self.check_update_frequency}")
+        logger.debug(f"Workflow manager created with parallel={self.parallel_execution}, check_update_frequency={self.check_update_frequency}")
         
         logger.info("✓ MASS system initialization completed successfully")
         logger.info(f"✓ Total agents registered: {len(self.agents)}")
@@ -243,7 +240,6 @@ class MassSystem:
         logger.info(f"  - Number of agents: {len(self.agents)}")
         logger.info(f"  - Agent types: {[type(agent).__name__ for agent in self.agents]}")
         logger.info(f"  - Parallel execution: {self.parallel_execution}")
-        logger.info(f"  - Max phase duration: {self.max_phase_duration}s")
         logger.info("=" * 80)
         
         # Add default progress callback if none provided
@@ -616,12 +612,7 @@ def parse_arguments():
         help="Consensus threshold (0.0-1.0, default: 1.0 = unanimous)"
     )
     
-    parser.add_argument(
-        "--max-phase-duration",
-        type=int,
-        default=300,
-        help="Maximum duration per phase in seconds (default: 300)"
-    )
+
     
     parser.add_argument(
         "--check-update-frequency",
@@ -658,7 +649,6 @@ def main():
         config.update({
             "max_rounds": args.max_rounds,
             "consensus_threshold": args.consensus_threshold,
-            "max_phase_duration": args.max_phase_duration,
             "parallel_execution": not args.sequential if args.sequential else args.parallel,
             "check_update_frequency": args.check_update_frequency
         })

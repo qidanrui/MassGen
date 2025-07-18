@@ -10,7 +10,7 @@ import os
 class AgentState:
     """Represents the current state of an agent in the MASS system."""
     agent_id: int
-    status: str = "working"  # "working" or "voted"
+    status: str = "working"  # "working", "voted", or "failed"
     working_summary: str = ""
     final_answer: str = ""  # The final answer extracted from agent response
     execution_start_time: Optional[float] = None
@@ -194,6 +194,20 @@ class MassAgent(ABC):
             self.state.vote_target = target_agent_id
             self.state.execution_end_time = time.time()
     
+    def mark_failed(self, reason: str = ""):
+        """
+        Mark this agent as failed.
+        
+        Args:
+            reason: Optional reason for the failure
+        """
+        if self.coordination_system:
+            self.coordination_system.mark_agent_failed(self.agent_id, reason)
+        else:
+            # Update local state
+            self.state.status = "failed"
+            self.state.execution_end_time = time.time()
+    
     def get_workflow_instructions(self, phase: str) -> str:
         """
         Get phase-specific instructions for the agent workflow.
@@ -290,7 +304,7 @@ You have been voted by other agents to present the final answer.
         }
         return instructions.get(phase, "")
     
-    def process_task(self, task: TaskInput, phase: str = "initial") -> AgentResponse:
+    def process_task(self, task: TaskInput, phase: str = "initial", timeout: float = None) -> AgentResponse:
         """
         Process a task in a specific workflow phase.
         Now leverages incremental update detection to avoid reprocessing seen updates.
@@ -298,6 +312,7 @@ You have been voted by other agents to present the final answer.
         Args:
             task: The task to process
             phase: The workflow phase ("initial", "collaboration", "debate", "presentation")
+            timeout: Maximum time to spend processing (in seconds)
             
         Returns:
             AgentResponse containing the agent's response
@@ -389,7 +404,7 @@ You have been voted by other agents to present the final answer.
         tools = self._get_available_tools()
         
         # Process the message using the agent's specific implementation
-        response = self.process_message(messages, tools=tools)
+        response = self.process_message(messages, tools=tools, timeout=timeout)
         
         return response
     

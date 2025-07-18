@@ -266,6 +266,7 @@ class MassCoordinationSystem:
                     "total_agents": len(self.agents),
                     "voted_agents": len([s for s in self.agent_states.values() if s.status == "voted"]),
                     "working_agents": len([s for s in self.agent_states.values() if s.status == "working"]),
+                    "failed_agents": len([s for s in self.agent_states.values() if s.status == "failed"]),
                     "current_round": max_updates_by_any_agent
                 },
                 "voting_status": self._get_voting_status(),
@@ -468,17 +469,73 @@ class MassCoordinationSystem:
             
             return consensus_reached
     
+    def mark_agent_failed(self, agent_id: int, reason: str = ""):
+        """
+        Mark an agent as failed.
+        
+        Args:
+            agent_id: ID of the agent to mark as failed
+            reason: Optional reason for the failure
+        """
+        with self._lock:
+            logger.info(f"💥 AGENT FAILURE: Agent {agent_id} marked as failed")
+            logger.debug(f"   Failure reason: {reason}")
+            
+            print(f"      💥 MARK_FAILED: Agent {agent_id}")
+            print(f"      📊 Current phase: {self.system_state.phase}")
+            print(f"      📝 Reason: {reason}")
+            
+            if agent_id not in self.agent_states:
+                logger.error(f"   ❌ Invalid agent: Agent {agent_id} not registered")
+                raise ValueError(f"Agent {agent_id} not registered")
+            
+            # Update agent state
+            old_status = self.agent_states[agent_id].status
+            self.agent_states[agent_id].status = "failed"
+            self.agent_states[agent_id].execution_end_time = time.time()
+            logger.debug(f"   Agent {agent_id} status updated to 'failed'")
+            
+            # Log to the comprehensive logging system
+            if self.log_manager:
+                print(f"      📝 Logging failure event via log_manager")
+                self.log_manager.log_agent_status_change(
+                    agent_id=agent_id,
+                    old_status=old_status,
+                    new_status="failed",
+                    phase=self.system_state.phase
+                )
+                print(f"      ✅ Failure event logged successfully")
+            else:
+                print(f"      ⚠️  No log_manager available - failure event not logged")
+            
+            # Log the failure event
+            self._log_event("agent_failed", {
+                "agent_id": agent_id,
+                "reason": reason,
+                "timestamp": time.time(),
+                "old_status": old_status
+            })
+            
+            # Show current agent status distribution
+            status_counts = Counter(state.status for state in self.agent_states.values())
+            logger.info(f"   📊 Status distribution: {dict(status_counts)}")
+            logger.info(f"   📈 Failed agents: {status_counts.get('failed', 0)}/{len(self.agent_states)} total")
+    
     def _get_voting_status(self) -> Dict[str, Any]:
         """Get current voting status and distribution."""
         vote_counts = Counter(vote.target_id for vote in self.votes)
         total_agents = len(self.agents)
+        failed_agents = len([s for s in self.agent_states.values() if s.status == "failed"])
+        votable_agents = total_agents - failed_agents
         voted_agents = len(self.votes)
         
         return {
             "vote_distribution": dict(vote_counts),
             "total_agents": total_agents,
+            "failed_agents": failed_agents,
+            "votable_agents": votable_agents,
             "voted_agents": voted_agents,
-            "votes_needed_for_consensus": max(1, int(total_agents * self.consensus_threshold)),
+            "votes_needed_for_consensus": max(1, int(votable_agents * self.consensus_threshold)),
             "leading_agent": vote_counts.most_common(1)[0] if vote_counts else None
         }
     
@@ -486,7 +543,11 @@ class MassCoordinationSystem:
         """Check if consensus has been reached and update system state accordingly."""
         vote_counts = Counter(vote.target_id for vote in self.votes)
         total_agents = len(self.agents)
-        votes_needed = max(1, int(total_agents * self.consensus_threshold))
+        failed_agents_count = len([s for s in self.agent_states.values() if s.status == "failed"])
+        votable_agents_count = total_agents - failed_agents_count
+        
+        # Calculate votes needed based on votable agents, not total agents
+        votes_needed = max(1, int(votable_agents_count * self.consensus_threshold))
         
         # Calculate max updates by any agent (this is the new "round" concept)
         max_updates_by_any_agent = max(
@@ -494,7 +555,8 @@ class MassCoordinationSystem:
         ) if self.agent_states else 0
         
         print(f"         🔍 Checking consensus:")
-        print(f"            🎯 Votes needed: {votes_needed}/{total_agents} (threshold: {self.consensus_threshold})")
+        print(f"            👥 Total agents: {total_agents}, Failed: {failed_agents_count}, Votable: {votable_agents_count}")
+        print(f"            🎯 Votes needed: {votes_needed}/{votable_agents_count} (threshold: {self.consensus_threshold})")
         print(f"            📊 Vote counts: {dict(vote_counts)}")
         print(f"            🔄 Max updates by any agent: {max_updates_by_any_agent}/{self.max_rounds}")
         
@@ -506,43 +568,67 @@ class MassCoordinationSystem:
             self._reach_consensus(winning_agent_id)
             return True
         
-        # Check if we should force a decision (max updates reached by any agent OR all agents voted)
+        # Check if we should force a decision (max updates reached by any agent OR all non-failed agents voted)
         should_force_decision = (
             max_updates_by_any_agent >= self.max_rounds or 
-            len(self.votes) == total_agents
+            len(self.votes) == votable_agents_count
         )
         
-        if should_force_decision and vote_counts:
-            # Handle ties in voting by earliest vote timestamp as per README
-            max_votes = vote_counts.most_common(1)[0][1]
-            tied_agents = [agent_id for agent_id, votes in vote_counts.items() if votes == max_votes]
-            
-            if len(tied_agents) > 1:
-                # Tie-breaking by earliest vote timestamp as per README requirement
-                print(f"            🎲 TIE DETECTED: {len(tied_agents)} agents tied with {max_votes} votes each")
+        print(f"            🗳️  Current votes: {len(self.votes)}/{votable_agents_count}")
+        print(f"            🔄 Should force decision: {should_force_decision}")
+        
+        if should_force_decision:
+            if vote_counts:
+                # Handle ties in voting by earliest vote timestamp as per README
+                max_votes = vote_counts.most_common(1)[0][1]
+                tied_agents = [agent_id for agent_id, votes in vote_counts.items() if votes == max_votes]
                 
-                earliest_vote_time = float('inf')
-                winning_agent_id = tied_agents[0]
+                if len(tied_agents) > 1:
+                    # Tie-breaking by earliest vote timestamp as per README requirement
+                    print(f"            🎲 TIE DETECTED: {len(tied_agents)} agents tied with {max_votes} votes each")
+                    
+                    earliest_vote_time = float('inf')
+                    winning_agent_id = tied_agents[0]
+                    
+                    for agent_id in tied_agents:
+                        # Find the earliest vote for this agent
+                        agent_votes = [v for v in self.votes if v.target_id == agent_id]
+                        if agent_votes:
+                            earliest_agent_vote = min(agent_votes, key=lambda v: v.timestamp)
+                            if earliest_agent_vote.timestamp < earliest_vote_time:
+                                earliest_vote_time = earliest_agent_vote.timestamp
+                                winning_agent_id = agent_id
+                    
+                    print(f"            ⏰ Tie-breaking by earliest vote: Agent {winning_agent_id} (vote at {earliest_vote_time})")
+                    logger.info(f"Tie broken by earliest vote timestamp: Agent {winning_agent_id}")
+                else:
+                    winning_agent_id = tied_agents[0]
                 
-                for agent_id in tied_agents:
-                    # Find the earliest vote for this agent
-                    agent_votes = [v for v in self.votes if v.target_id == agent_id]
-                    if agent_votes:
-                        earliest_agent_vote = min(agent_votes, key=lambda v: v.timestamp)
-                        if earliest_agent_vote.timestamp < earliest_vote_time:
-                            earliest_vote_time = earliest_agent_vote.timestamp
-                            winning_agent_id = agent_id
-                
-                print(f"            ⏰ Tie-breaking by earliest vote: Agent {winning_agent_id} (vote at {earliest_vote_time})")
-                logger.info(f"Tie broken by earliest vote timestamp: Agent {winning_agent_id}")
+                reason = "MAX UPDATES REACHED" if max_updates_by_any_agent >= self.max_rounds else "ALL NON-FAILED AGENTS VOTED"
+                print(f"            🔄 {reason}: Selecting winner based on votes")
+                print(f"            🏆 Agent {winning_agent_id} wins with {vote_counts[winning_agent_id]} votes")
+                self._reach_consensus(winning_agent_id)
+                return True
             else:
-                winning_agent_id = tied_agents[0]
-            
-            reason = "MAX UPDATES REACHED" if max_updates_by_any_agent >= self.max_rounds else "ALL AGENTS VOTED"
-            print(f"            🔄 {reason}: Selecting winner based on votes")
-            print(f"            🏆 Agent {winning_agent_id} wins with {vote_counts[winning_agent_id]} votes")
-            self._reach_consensus(winning_agent_id)
-            return True
+                # Edge case: No votes cast (e.g., all agents failed)
+                # Select the first working agent, or if none, select any agent that has a summary
+                working_agents = [aid for aid, state in self.agent_states.items() if state.status == "working"]
+                agents_with_summary = [aid for aid, state in self.agent_states.items() if state.working_summary]
+                
+                if working_agents:
+                    winning_agent_id = working_agents[0]
+                    print(f"            🆘 NO VOTES: Selecting first working agent {winning_agent_id}")
+                elif agents_with_summary:
+                    winning_agent_id = agents_with_summary[0]
+                    print(f"            🆘 NO VOTES: Selecting first agent with summary {winning_agent_id}")
+                else:
+                    # Last resort: select any agent
+                    winning_agent_id = list(self.agents.keys())[0]
+                    print(f"            🆘 NO VOTES: Selecting first available agent {winning_agent_id}")
+                
+                logger.warning(f"No votes cast - fallback selection: Agent {winning_agent_id}")
+                self._reach_consensus(winning_agent_id)
+                return True
         
         # Continue waiting for more votes
         if len(self.votes) < total_agents:
