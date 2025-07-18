@@ -3,7 +3,6 @@ import time
 import json
 import threading
 from openai import OpenAI
-from mock_tools import update_summary, check_updates
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -61,9 +60,9 @@ def parse_completion(response, add_citations=True):
     
     return {"text": text, "code": code, "citations": citations, "function_calls": function_calls}
 
-def process_message(messages, model="o4-mini", tools=["live_search", "code_execution"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None, processing_timeout=180):
+def process_message(messages, model="o4-mini", tools=["live_search", "code_execution"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None, processing_timeout=180, stream=False, stream_callback=None):
     """
-    Generate content using OpenAI API.
+    Generate content using OpenAI API with optional streaming support.
     
     Args:
         messages: List of messages in OpenAI format
@@ -75,6 +74,8 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
         top_p: Top-p value for generation
         api_key: OpenAI API key (if None, will get from environment)
         processing_timeout: Total timeout for entire processing including retries (default: 180)
+        stream: Whether to stream the response (default: False)
+        stream_callback: Optional callback function for streaming chunks
     
     Returns:
         dict: {"text": text, "code": code, "citations": citations, "function_calls": function_calls}
@@ -93,7 +94,9 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
         # Create OpenAI client without individual timeouts
         client = OpenAI(api_key=api_key_val)
         
-        # Prepare tools
+        # All models can use the same Responses API - no need to distinguish
+        
+        # Prepare tools (Responses API format - same for all models)
         formatted_tools = []
         
         # Add other custom tools
@@ -109,12 +112,6 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
             else:
                 raise ValueError(f"Invalid tool type: {type(tool)}")
         
-        # Check if the model supports reasoning
-        if "o1" in model or "o4-mini" in model or "o4" in model:
-            reasoning_model = True
-        else:
-            reasoning_model = False
-        
         # Convert messages to the format expected by OpenAI responses API
         # For now, we'll use the last user message as input
         input_text = ""
@@ -129,23 +126,34 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
         # print(f"[OAI] Instructions: {instructions}")
         # print(f"[OAI] Input: {input_text}")
         # print(f"[OAI] Formatted tools: {formatted_tools}")
+        # print(f"[OAI] Stream: {stream}")
+        # print(f"[OAI] Stream callback: {stream_callback}")
         # _ = input("[OAI] Press Enter to continue...")
         
-        # Make API request with retry logic
+        # Make API request with retry logic (use Responses API for all models)
         completion = None
         retry = 0
         while retry < max_retries:
             try:
-                response = client.responses.create(
-                    model=model,
-                    tools=formatted_tools if formatted_tools else None,
-                    instructions=instructions if instructions else None,
-                    input=input_text,
-                    reasoning={"effort": "medium"} if reasoning_model else None,
-                    temperature=temperature if not reasoning_model else None,
-                    max_output_tokens=max_tokens if max_tokens else None,
-                    top_p=top_p if top_p else None
-                )
+                # Use responses API for all models (supports streaming)
+                # Note: Some models like o4-mini don't support temperature parameter
+                params = {
+                    'model': model,
+                    'tools': formatted_tools if formatted_tools else None,
+                    'instructions': instructions if instructions else None,
+                    'input': input_text,
+                    'max_output_tokens': max_tokens if max_tokens else None,
+                    'stream': stream if stream and stream_callback else False
+                }
+                
+                # Only add temperature and top_p for models that support them
+                # All o-series models (o1, o3, o4, etc.) don't support temperature/top_p
+                if temperature is not None and not model.startswith('o'):
+                    params['temperature'] = temperature
+                if top_p is not None and not model.startswith('o'):
+                    params['top_p'] = top_p
+                
+                response = client.responses.create(**params)
                 completion = response
                 break
             except Exception as e:
@@ -157,6 +165,9 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
             # If we failed all retries, return empty response instead of raising exception
             print(f"Failed to get completion after {max_retries} retries, returning empty response")
             return {"text": "", "code": [], "citations": [], "function_calls": []}
+        
+        # print(f"[OAI] Completion received: {type(completion)}")
+        # print(f"[OAI] Stream mode: {stream and stream_callback}")
 
         # print(completion)
         # output = completion.output
@@ -166,8 +177,90 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
         #     _ = input("[OAI] Press Enter to continue...")
 
         
-        # Parse the completion and return text and code
-        result = parse_completion(completion, add_citations=True)
+        # Handle Responses API response (same for all models)
+        if stream and stream_callback:
+            # Handle streaming response
+            text = ""
+            code = []
+            citations = []
+            function_calls = []
+            
+            for chunk in completion:
+                # Handle different event types from responses API streaming
+                if hasattr(chunk, 'type'):
+                    if chunk.type == "response.output_text.delta":
+                        # This is a text delta event
+                        if hasattr(chunk, 'delta') and chunk.delta:
+                            chunk_text = chunk.delta
+                            text += chunk_text
+                            try:
+                                stream_callback(chunk_text)
+                            except Exception as e:
+                                print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.function_call_output.delta":
+                        # Function call streaming
+                        try:
+                            stream_callback(f"[FUNCTION] {chunk.delta if hasattr(chunk, 'delta') else 'Function call'}")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.function_call_output.done":
+                        # Function call completed
+                        try:
+                            stream_callback("[FUNCTION] Function call completed")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.output_item.added":
+                        # New output item added
+                        if hasattr(chunk, 'item') and chunk.item:
+                            if hasattr(chunk.item, 'type') and chunk.item.type == "web_search_call":
+                                try:
+                                    stream_callback("[SEARCH] Starting web search...")
+                                except Exception as e:
+                                    print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.web_search_call.in_progress":
+                        try:
+                            stream_callback("[SEARCH] Search in progress...")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.web_search_call.searching":
+                        try:
+                            stream_callback("[SEARCH] Searching...")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.output_item.done":
+                        # Check if this is a completed web search with query
+                        if hasattr(chunk, 'item') and chunk.item:
+                            if hasattr(chunk.item, 'type') and chunk.item.type == "web_search_call":
+                                if hasattr(chunk.item, 'action') and hasattr(chunk.item.action, 'query'):
+                                    search_query = chunk.item.action.query
+                                    if search_query:
+                                        try:
+                                            stream_callback(f"[SEARCH] Completed search for: {search_query}")
+                                        except Exception as e:
+                                            print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.web_search_call.completed":
+                        try:
+                            stream_callback("[SEARCH] Search completed")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.output_text.annotation.added":
+                        try:
+                            stream_callback("[CITATION] Citation added")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.completed":
+                        try:
+                            stream_callback("[DONE] Response complete")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
+                    # Remove debug output for cleaner streaming
+                    # else:
+                    #     print(f"DEBUG: Other event type: {chunk.type}")
+            
+            result = {"text": text, "code": code, "citations": citations, "function_calls": function_calls}
+        else:
+            # Parse non-streaming response using existing parse_completion function
+            result = parse_completion(completion, add_citations=True)
         
         # print("[OAI] Result: ", json.dumps(result, indent=4))
         # _ = input("[OAI] Press Enter to continue...")
@@ -219,6 +312,15 @@ if __name__ == "__main__":
     tools=["live_search", "code_execution"]
     # tools.append(function_to_json(update_summary))
     # tools.append(function_to_json(check_updates))
+    
+    # Uncomment to test streaming with search query display (costs money)
+    # def stream_handler(chunk):
+    #     print(chunk, end="")
+    # 
+    # print("--- OpenAI Streaming with Search Query ---")
+    # tool_messages = [{"role": "user", "content": "What's the weather like in Berlin?"}]
+    # result = process_message(tool_messages, model="gpt-4o-mini", tools=["live_search"], stream=True, stream_callback=stream_handler, max_tokens=100)
+    # print(f"\nResult: {result}")
     
     result = process_message(messages, tools=tools, temperature=0.1)
     print("--------------------------------")

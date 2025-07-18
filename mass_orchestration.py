@@ -135,13 +135,14 @@ class MassOrchestrationSystem:
     - Session state tracking
     """
     
-    def __init__(self, max_rounds: int = 5, consensus_threshold: float = 1.0):
+    def __init__(self, max_rounds: int = 5, consensus_threshold: float = 1.0, streaming_orchestrator=None):
         """
         Initialize the orchestration system.
         
         Args:
             max_rounds: Maximum number of collaboration rounds before fallback to majority vote
             consensus_threshold: Fraction of agents that must agree for consensus (1.0 = unanimous)
+            streaming_orchestrator: Optional streaming orchestrator for real-time display
         """
         self.agents: Dict[int, Any] = {}  # agent_id -> MassAgent instance
         self.agent_states: Dict[int, AgentState] = {}
@@ -150,6 +151,7 @@ class MassOrchestrationSystem:
         self.max_rounds = max_rounds
         self.consensus_threshold = consensus_threshold
         self._lock = threading.Lock()
+        self.streaming_orchestrator = streaming_orchestrator
         
         # Communication logs
         self.communication_log: List[Dict[str, Any]] = []
@@ -646,6 +648,11 @@ class MassOrchestrationSystem:
         self.system_state.final_solution_agent_id = winning_agent_id
         self.system_state.phase = "completed"
         self.system_state.end_time = time.time()
+        
+        # Update streaming orchestrator if available
+        if self.streaming_orchestrator:
+            vote_distribution = dict(Counter(vote.target_id for vote in self.votes))
+            self.streaming_orchestrator.update_consensus_status(winning_agent_id, vote_distribution)
         
         # Log to the comprehensive logging system
         if self.log_manager:

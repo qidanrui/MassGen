@@ -767,14 +767,9 @@ class MassLogManager:
         worker_thread = threading.Thread(target=worker, daemon=True)
         worker_thread.start()
         
-        # Wait for completion with timeout (30 seconds should be enough for report generation)
-        worker_thread.join(timeout=30.0)
-        
-        if not result_container["completed"]:
-            print(f"⏰ Report export timed out after 30 seconds - skipping report")
-            return ""
-        else:
-            return result_container["result"]
+        # Skip report generation to avoid timeout issues
+        print("📊 Skipping detailed report generation")
+        return ""
     
     def cleanup(self):
         """Clean up and finalize the logging session."""

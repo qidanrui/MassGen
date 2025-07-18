@@ -93,7 +93,8 @@ class MassAgent(ABC):
     
     @abstractmethod
     def process_message(self, messages: List[Dict[str, str]], tools: List[str] = None, 
-                       temperature: float = None, timeout: float = None, **kwargs) -> AgentResponse:
+                       temperature: float = None, timeout: float = None, stream: bool = False,
+                       stream_callback: Optional[callable] = None, **kwargs) -> AgentResponse:
         """
         Core LLM inference function for task processing.
         
@@ -104,6 +105,9 @@ class MassAgent(ABC):
             messages: List of messages in OpenAI format
             tools: List of tools available to the agent
             temperature: Sampling temperature for the LLM
+            timeout: Timeout for processing
+            stream: Whether to stream the response
+            stream_callback: Optional callback function for streaming chunks
             **kwargs: Additional parameters specific to the agent implementation
             
         Returns:
@@ -304,7 +308,8 @@ You have been voted by other agents to present the final answer.
         }
         return instructions.get(phase, "")
     
-    def process_task(self, task: TaskInput, phase: str = "initial", timeout: float = None) -> AgentResponse:
+    def process_task(self, task: TaskInput, phase: str = "initial", timeout: float = None, 
+                    stream: bool = False, stream_callback: Optional[callable] = None) -> AgentResponse:
         """
         Process a task in a specific workflow phase.
         Now leverages incremental update detection to avoid reprocessing seen updates.
@@ -313,6 +318,8 @@ You have been voted by other agents to present the final answer.
             task: The task to process
             phase: The workflow phase ("initial", "collaboration", "debate", "presentation")
             timeout: Maximum time to spend processing (in seconds)
+            stream: Whether to stream the response
+            stream_callback: Optional callback function for streaming chunks
             
         Returns:
             AgentResponse containing the agent's response
@@ -404,7 +411,8 @@ You have been voted by other agents to present the final answer.
         tools = self._get_available_tools()
         
         # Process the message using the agent's specific implementation
-        response = self.process_message(messages, tools=tools, timeout=timeout)
+        response = self.process_message(messages, tools=tools, timeout=timeout, 
+                                       stream=stream, stream_callback=stream_callback)
         
         return response
     

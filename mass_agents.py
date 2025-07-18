@@ -59,7 +59,8 @@ class OpenAIMassAgent(MassAgent):
             self._client = None
     
     def process_message(self, messages: List[Dict[str, str]], tools: List[str] = None, 
-                       temperature: float = 0.7, timeout: float = None, **kwargs) -> AgentResponse:
+                       temperature: float = 0.7, timeout: float = None, stream: bool = False,
+                       stream_callback: Optional[callable] = None, **kwargs) -> AgentResponse:
         """Process message using OpenAI backend."""
         if tools is None:
             tools = self._get_available_tools()
@@ -82,6 +83,8 @@ class OpenAIMassAgent(MassAgent):
                 tools=tools,
                 temperature=temperature,
                 processing_timeout=timeout,
+                stream=stream,
+                stream_callback=stream_callback,
                 **merged_kwargs
             )
             
@@ -130,7 +133,8 @@ class GeminiMassAgent(MassAgent):
             self._session = None
     
     def process_message(self, messages: List[Dict[str, str]], tools: List[str] = None, 
-                       temperature: float = 0.7, timeout: float = None, **kwargs) -> AgentResponse:
+                       temperature: float = 0.7, timeout: float = None, stream: bool = False,
+                       stream_callback: Optional[callable] = None, **kwargs) -> AgentResponse:
         """Process message using Gemini backend."""
         if tools is None:
             tools = self._get_available_tools()
@@ -153,6 +157,8 @@ class GeminiMassAgent(MassAgent):
                 tools=tools,
                 temperature=temperature,
                 processing_timeout=timeout,
+                stream=stream,
+                stream_callback=stream_callback,
                 **merged_kwargs
             )
             
@@ -201,7 +207,8 @@ class GrokMassAgent(MassAgent):
             self._client = None
     
     def process_message(self, messages: List[Dict[str, str]], tools: List[str] = None, 
-                       temperature: float = 0.7, timeout: float = None, **kwargs) -> AgentResponse:
+                       temperature: float = 0.7, timeout: float = None, stream: bool = False,
+                       stream_callback: Optional[callable] = None, **kwargs) -> AgentResponse:
         """Process message using Grok backend."""
         if tools is None:
             tools = self._get_available_tools()
@@ -224,6 +231,8 @@ class GrokMassAgent(MassAgent):
                 tools=tools,
                 temperature=temperature,
                 processing_timeout=timeout,
+                stream=stream,
+                stream_callback=stream_callback,
                 **merged_kwargs
             )
             
