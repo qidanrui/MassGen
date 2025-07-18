@@ -7,16 +7,19 @@ This is a **reference implementation** showing the planned features and sophisti
 ## 🎯 Key Differences from Current Implementation
 
 ### Advanced Agent Interface
+
 - **Sophisticated Tool System**: `update_summary()`, `check_updates()`, `vote()`, `no_update()` with proper validation
 - **Smart Notifications**: Queued notification system with intelligent reactivation
 - **Streaming Integration**: Full streaming support for all agent interactions
 
 ### Enhanced Backend Support
+
 - **Multi-Provider Support**: OpenAI, Anthropic, xAI, Google with unified interface
 - **Advanced Tool Integration**: Built-in tools, MCP servers, custom functions
 - **Cost Tracking**: Comprehensive cost analysis and budget management
 
 ### Sophisticated Orchestration
+
 - **Convergence Detection**: Smart detection of when agents reach consensus
 - **Restart Logic**: Intelligent agent reactivation based on notifications and state
 - **Performance Analytics**: Detailed tracing and performance analysis
@@ -26,7 +29,7 @@ This is a **reference implementation** showing the planned features and sophisti
 The features in this directory will be gradually integrated into the main project:
 
 1. **Phase 1**: Backend unification and tool integration
-2. **Phase 2**: Enhanced agent interface and notification system  
+2. **Phase 2**: Enhanced agent interface and notification system
 3. **Phase 3**: Advanced orchestration and convergence detection
 4. **Phase 4**: Analytics, tracing, and performance optimization
 
@@ -78,19 +81,22 @@ After the convergence, the system will use the voted agent to present the final 
 
 Each agent uses the `MassAgent` interface with minimal complexity designed for LLM-based agents:
 
-### LLM-Callable Tools (provided by system):
+### LLM-Callable Tools (provided by system)
+
 - `update_summary(new_content)` - Update working summary, triggers notifications to others
-- `check_updates()` - Get dict of updated summaries from other agents  
+- `check_updates()` - Get dict of updated summaries from other agents
 - `vote(agent_id)` - Vote for representative (can be called multiple times to change vote)
 - `no_update()` - Signal that no further updates are needed (requires update_summary AND vote first)
 - `get_session_info(include_summaries=False)` - Get session context including agent statuses, time, costs
 
-### Core Methods:
+### Core Methods
+
 - `process_message(message)` - Common async streaming method for all LLM interactions
 - `work_on_task(task, restart_instruction=None)` - Work on task (handles both initial work and restarts)
 - `present_final_answer(task)` - Present final answer as representative (uses process_message)
 
-### System Behavior:
+### System Behavior
+
 - **Notifications queued by default** until agent calls `check_updates()`
 - **Tool usage validation** enforces correct order: `update_summary()` → `vote()` → `no_update()`
 - **Multiple voting allowed** - agents can change votes with new `vote()` calls
@@ -100,10 +106,12 @@ Each agent uses the `MassAgent` interface with minimal complexity designed for L
   - An agent receives notifications while not working (reactivation)
 - **All agent interactions stream responses** for real-time visibility
 
-### Agent Configuration:
+### Agent Configuration
+
 Agents are configured with model settings and specialized instructions for:
+
 1. **Summary updates** - How and when to call `update_summary()`
-2. **Notification handling** - When to call `check_updates()`  
+2. **Notification handling** - When to call `check_updates()`
 3. **Stopping and voting** - When to call `vote()` and stop working
 4. **Final answer presentation** - How to structure final responses
 5. **Collaboration** - How to incorporate others' insights
@@ -112,11 +120,12 @@ Agents are configured with model settings and specialized instructions for:
 Each agent can use any backend (frontier models + tools/MCP, custom implementations) as long as they implement this interface. The system provides complete session state including per-agent status, update counts, costs, and convergence progress.
 
 ### Running Example
+
 A user creates two agents, one based on the default model of ChatGPT, and another based on Grok-4. Both agents have built-in tools enabled. The task is:
 
   What is the earliest known date recorded by a pre-Columbian civilization in the Americas in the aboriginal writing system?
 
-The ChatGPT agent finds the correct Long Count date (7.16.3.2.13) but gets the Gregorian conversion wrong (estimates Sep 9, 36 BCE). The Grok-4 agent initially gets the timeframe completely wrong. After they see each other's summaries through the notification system, Grok-4 uses ChatGPT's Long Count date and provides the correct conversion: 7.16.3.2.13 = December 10th, 36 B.C. The system converges on this correct answer, demonstrating how multi-agent collaboration improves accuracy. 
+The ChatGPT agent finds the correct Long Count date (7.16.3.2.13) but gets the Gregorian conversion wrong (estimates Sep 9, 36 BCE). The Grok-4 agent initially gets the timeframe completely wrong. After they see each other's summaries through the notification system, Grok-4 uses ChatGPT's Long Count date and provides the correct conversion: 7.16.3.2.13 = December 10th, 36 B.C. The system converges on this correct answer, demonstrating how multi-agent collaboration improves accuracy.
 
 ## 🚀 Quick Start
 
@@ -141,6 +150,7 @@ python3 setup_env.py
 ```
 
 Your `.env` file should look like:
+
 ```bash
 # Get from: https://platform.openai.com/api-keys
 OPENAI_API_KEY=sk-your-openai-key-here
@@ -178,7 +188,7 @@ analytical_config = AgentConfig(
 )
 creative_config = AgentConfig(
     backend_params={
-        "model": "gpt-4o-mini", 
+        "model": "gpt-4o-mini",
         "temperature": 0.8,  # More creative
         "max_tokens": 4000
     }
@@ -200,7 +210,7 @@ from mass import MassAgent, MassOrchestrator, AgentConfig
 async def main():
     # Create orchestrator
     orchestrator = MassOrchestrator(max_duration=30.0)
-    
+
     # Configure different agent types
     analytical_config = AgentConfig(
         backend_params={
@@ -211,26 +221,26 @@ async def main():
     )
     creative_config = AgentConfig(
         backend_params={
-            "model": "gpt-4o-mini", 
+            "model": "gpt-4o-mini",
             "temperature": 0.8,
             "max_tokens": 4000
         }
     )
-    
+
     # Add agents with different personalities
     agents = [
         MassAgent("analytical_agent", analytical_config),
         MassAgent("creative_agent", creative_config)
     ]
-    
+
     for agent in agents:
         orchestrator.add_agent(agent)
-    
+
     # Run orchestration
     result = await orchestrator.orchestrate(
         "What is the derivative of x^2 * sin(x)?"
     )
-    
+
     print(f"Answer: {result.final_response}")
     print(f"Representative: {result.representative_agent}")
     print(f"Time: {result.total_time:.1f}s")
@@ -264,7 +274,7 @@ openai_config = AgentConfig(
 )
 
 anthropic_config = AgentConfig(
-    model_name="claude-3-sonnet-20240229", 
+    model_name="claude-3-sonnet-20240229",
     api_key="your-anthropic-key",
     temperature=0.7
 )
@@ -298,7 +308,7 @@ async def compare_configurations():
     )
     creative_config = AgentConfig(
         backend_params={
-            "model": "gpt-4o-mini", 
+            "model": "gpt-4o-mini",
             "temperature": 0.8,
             "max_tokens": 4000
         }
@@ -310,33 +320,33 @@ async def compare_configurations():
             "max_tokens": 3000
         }
     )
-    
+
     # Test different agent combinations
     configs = [
         ("analytical_team", [analytical_config, analytical_config]),
         ("diverse_team", [analytical_config, creative_config, practical_config]),
         ("creative_team", [creative_config, creative_config])
     ]
-    
+
     task = "Design a sustainable urban transportation system"
     results = {}
-    
+
     for config_name, agent_configs in configs:
         orchestrator = MassOrchestrator()
         for i, config in enumerate(agent_configs):
             agent = MassAgent(f"agent_{i}", config)
             orchestrator.add_agent(agent)
-        
+
         result = await orchestrator.orchestrate(task)
         results[config_name] = result
-    
+
     return results
 ```
 
 ### Detailed Analytics
 
 - Agent performance rankings
-- Task type difficulty analysis  
+- Task type difficulty analysis
 - Consensus vs accuracy correlation
 - Response time vs quality tradeoffs
 - Provider-specific strengths/weaknesses
@@ -390,10 +400,10 @@ config = AgentConfig(
     max_tokens=4000,  # Maximum tokens per request
     temperature=0.7,  # Response randomness (0.0-1.0)
     timeout_seconds=300,  # Request timeout
-    
+
     # Framework-specific settings
     message_templates=None,  # Custom message templates
-    
+
     # Instructions for different behaviors (customizable)
     summary_update_instructions="...",  # How to use update_summary()
     notification_handling_instructions="...",  # How to use check_updates()
@@ -401,13 +411,13 @@ config = AgentConfig(
     final_answer_instructions="...",  # How to present final answers
     collaboration_instructions="...",  # How to collaborate
     reactivation_instructions="...",  # How to handle restart_work()
-    
+
     # Advanced options
     enable_streaming=True,  # Enable streaming responses
     max_restart_attempts=3,  # Max restart attempts
     cost_limits={  # Cost tracking limits
         "max_input_tokens": 50000,
-        "max_output_tokens": 20000, 
+        "max_output_tokens": 20000,
         "max_cost_usd": 10.0
     }
 )
@@ -430,7 +440,7 @@ analytical_config = AgentConfig(
 
 creative_config = AgentConfig(
     backend_params={
-        "model": "gpt-4o-mini", 
+        "model": "gpt-4o-mini",
         "temperature": 0.8,      # Creative and innovative
         "max_tokens": 4000,      # Concise but creative
         "builtin_tools": ["web_search"]

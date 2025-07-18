@@ -5,61 +5,75 @@ Anthropic backend implementation.
 """
 
 import os
-from typing import Dict, List, Any, AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
+from typing import Any
+
 from .base import LLMBackend, StreamChunk
 
 
 class AnthropicBackend(LLMBackend):
     """Anthropic backend using the Claude API."""
-    
-    def __init__(self, api_key: Optional[str] = None, **kwargs):
+
+    def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key, **kwargs)
         self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
-    
-    async def stream_with_tools(self, model: str, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], 
-                              has_called_update_summary: bool = False, has_voted: bool = False,
-                              pending_notifications: int = 0, agent_ids: List[str] = None, 
-                              provider_tools: Optional[List[str]] = None, **kwargs) -> AsyncGenerator[StreamChunk, None]:
+
+    async def stream_with_tools(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        has_called_update_summary: bool = False,
+        has_voted: bool = False,
+        pending_notifications: int = 0,
+        agent_ids: list[str] = None,
+        provider_tools: list[str] | None = None,
+        **kwargs,
+    ) -> AsyncGenerator[StreamChunk, None]:
         """Stream response using Anthropic API."""
         try:
             import anthropic
-            
+
             client = anthropic.AsyncAnthropic(api_key=self.api_key)
-            
+
             # Convert tools to Anthropic format
             anthropic_tools = []
             for tool in tools:
-                anthropic_tools.append({
-                    "name": tool["function"]["name"],
-                    "description": tool["function"]["description"],
-                    "input_schema": tool["function"]["parameters"]
-                })
-            
+                anthropic_tools.append(
+                    {
+                        "name": tool["function"]["name"],
+                        "description": tool["function"]["description"],
+                        "input_schema": tool["function"]["parameters"],
+                    }
+                )
+
             # Extract max_tokens and temperature from kwargs
             max_tokens = kwargs.get("max_tokens", 1000)
             temperature = kwargs.get("temperature", 0.7)
-            
+
             async with client.messages.stream(
                 model=model,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 messages=messages,
-                tools=anthropic_tools
+                tools=anthropic_tools,
             ) as stream:
                 content = ""
                 tool_calls = []
-                
+
                 async for event in stream:
                     if event.type == "content_block_start":
                         if event.content_block.type == "text":
                             pass  # Ready to receive text
                         elif event.content_block.type == "tool_use":
-                            tool_calls.append({
-                                "id": event.content_block.id,
-                                "type": "function",
-                                "name": event.content_block.name,
-                                "arguments": {}
-                            })
+                            tool_calls.append(
+                                {
+                                    "id": event.content_block.id,
+                                    "type": "function",
+                                    "name": event.content_block.name,
+                                    "arguments": {},
+                                }
+                            )
                     elif event.type == "content_block_delta":
                         if event.delta.type == "text_delta":
                             content += event.delta.text
@@ -73,38 +87,38 @@ class AnthropicBackend(LLMBackend):
                             for tc in tool_calls:
                                 if tc["id"] == event.content_block.id:
                                     tc["arguments"] = event.content_block.input
-                
+
                 # If tool calls were made, yield them
                 if tool_calls:
                     yield StreamChunk(
-                        type="tool_calls",
-                        content=content,
-                        tool_calls=tool_calls
+                        type="tool_calls", content=content, tool_calls=tool_calls
                     )
                 else:
                     # No tool calls, LLM is done
                     yield StreamChunk(type="done")
-            
+
         except Exception as e:
             yield StreamChunk(type="error", error=str(e))
-    
+
     def get_provider_name(self) -> str:
         """Get the provider name."""
         return "Anthropic"
-    
+
     def estimate_tokens(self, text: str) -> int:
         """Estimate token count for text (rough approximation)."""
         # Rough estimate: 4 characters per token for English text
         return len(text) // 4
-    
-    def calculate_cost(self, input_tokens: int, output_tokens: int, model: str) -> float:
+
+    def calculate_cost(
+        self, input_tokens: int, output_tokens: int, model: str
+    ) -> float:
         """Calculate cost for Anthropic token usage (2024-2025 pricing).
-        
+
         Pricing last updated: December 2024
         Source: https://www.anthropic.com/pricing
         """
         model_lower = model.lower()
-        
+
         # Anthropic pricing (as of 2024-2025)
         if "claude-4" in model_lower:
             if "opus" in model_lower:
@@ -141,7 +155,9 @@ class AnthropicBackend(LLMBackend):
                 else:
                     # Claude-3 Haiku
                     input_cost = input_tokens * 0.00025 / 1000  # $0.00025 per 1K tokens
-                    output_cost = output_tokens * 0.00125 / 1000  # $0.00125 per 1K tokens
+                    output_cost = (
+                        output_tokens * 0.00125 / 1000
+                    )  # $0.00125 per 1K tokens
             else:
                 # Default Claude-3 pricing (Sonnet)
                 input_cost = input_tokens * 0.003 / 1000
@@ -150,9 +166,9 @@ class AnthropicBackend(LLMBackend):
             # Default Anthropic pricing (use Claude-3 Sonnet rates)
             input_cost = input_tokens * 0.003 / 1000
             output_cost = output_tokens * 0.015 / 1000
-        
+
         return input_cost + output_cost
-    
-    def get_supported_builtin_tools(self) -> List[str]:
+
+    def get_supported_builtin_tools(self) -> list[str]:
         """Get list of builtin tools supported by Anthropic."""
         return ["code_execution"]  # Anthropic supports code execution (beta)

@@ -34,36 +34,36 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 ```mermaid
 graph TB
     O[🚀 MASS Orchestrator<br/>📋 Task Distribution & Coordination]
-    
+
     A1[🤖 Agent 1<br/>🏗️ Anthropic/Claude<br/>📝 Working Summary]
     A2[🤖 Agent 2<br/>🌟 Google/Gemini<br/>📝 Working Summary]
     A3[🤖 Agent 3<br/>🤖 OpenAI/GPT + Tools<br/>📝 Working Summary]
     A4[🤖 Agent 4<br/>⚡ xAI/Grok + Search<br/>📝 Working Summary]
-    
+
     H[🔄 Shared Collaboration Hub<br/>📡 Real-time Notification System<br/>🎯 Convergence Detection<br/>🤝 Consensus Building]
-    
+
     O --> A1
     O --> A2
     O --> A3
     O --> A4
-    
+
     A1 <--> H
     A2 <--> H
     A3 <--> H
     A4 <--> H
-    
+
     A1 -.-> A2
     A1 -.-> A3
     A1 -.-> A4
     A2 -.-> A3
     A2 -.-> A4
     A3 -.-> A4
-    
+
     classDef orchestrator fill:#e1f5fe,stroke:#0288d1,stroke-width:3px
     classDef agent fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
     classDef hub fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
     classDef collaboration stroke:#ff9800,stroke-width:1px,stroke-dasharray: 5 5
-    
+
     class O orchestrator
     class A1,A2,A3,A4 agent
     class H hub
@@ -88,6 +88,7 @@ This collaborative approach ensures that the final output leverages collective i
 ## 🚀 Quick Start
 
 ### 1. 📥 Installation
+
 ```bash
 git clone https://github.com/Leezekun/MassAgent.git
 cd MassAgent
@@ -95,18 +96,21 @@ pip install -r requirements.txt
 ```
 
 ### 2. 🔐 API Configuration
+
 Create a `.env` file in the `agents/` directory with your API keys:
+
 ```bash
 # Copy example configuration
 cp agents/.env.example agents/.env
 
 # Edit agents/.env with your API keys
 OPENAI_API_KEY=sk-your-openai-key-here
-XAI_API_KEY=xai-your-xai-key-here  
+XAI_API_KEY=xai-your-xai-key-here
 GEMINI_API_KEY=your-gemini-key-here
 ```
 
 ### 3. 🏃 Run Example
+
 ```bash
 # Run simple multi-agent example
 python mass_main.py --config example_config.json
@@ -116,6 +120,7 @@ python mass_main.py --task "Solve the equation: 2x + 3 = 7"
 ```
 
 ### 4. 📊 View Results
+
 The system will show real-time collaboration between agents and present the final converged solution.
 
 ---
@@ -125,6 +130,7 @@ The system will show real-time collaboration between agents and present the fina
 > **Early Development Stage** - This project is currently in active development and requires significant improvements.
 
 ### Current Limitations
+
 - **Basic Implementation**: The current system provides an early prototype but lacks the sophisticated features planned for the full MASS system
 - **Limited Model Support**: Claude/Anthropic integration is planned but not yet implemented (Gemini, OpenAI, and xAI/Grok are currently supported)
 - **Simple Collaboration**: Current notification and convergence mechanisms need enhancement for seamless real-time collaboration
@@ -134,14 +140,14 @@ The system will show real-time collaboration between agents and present the fina
 
 This project is evolving toward the **advanced MASS architecture** found in `future_mass/`, which includes:
 
-- **Enhanced Agent Interface**: Sophisticated `update_summary()`, `check_updates()`, and notification systems 
+- **Enhanced Agent Interface**: Sophisticated `update_summary()`, `check_updates()`, and notification systems
 - **Comprehensive Backend Support**: Full integration with Claude, Gemini, GPT, Grok + tools and MCP servers
 - **Rich Analytics & Tracing**: Detailed performance analysis, cost tracking, and API tracing capabilities
-- **Extensible Framework**: Modular design for easy addition of new agents, benchmarks, and evaluation metrics
+- **Extensible Framework**: Modular design for easy addition of new agents, benchmarks, and evaluation; integration with AgentOS like [AG2](ag2.ai).
 
 ### 📋 Planned Improvements
 
-- [ ] Implement advanced agent collaboration patterns from `future_mass/`
+- [ ] Implement advanced agent collaboration patterns in `future_mass/`
 - [ ] Add comprehensive tool integration and MCP server support
 - [ ] Enhance streaming display system with better formatting
 - [ ] Implement proper cost tracking and budget management
