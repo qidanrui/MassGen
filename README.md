@@ -60,7 +60,7 @@ graph TB
     AN <--> SM
     
     %% Voting Process at bottom
-    A1 --> V[🗳️ Voting Process<br/>Each agent votes for best solution]
+    A1 --> V[🗳️ Voting Process<br/>Each agent votes for the representative agent]
     A2 --> V
     A3 --> V
     AN --> V
