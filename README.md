@@ -41,14 +41,11 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 
 ```mermaid
 graph TB
-    %% User Input
-    U[👤 User Task] --> T[📋 Task Assignment]
-    
-    %% Multiple Agents Working with Tools
-    T --> A1[🤖 Agent 1<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
-    T --> A2[🤖 Agent 2<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
-    T --> A3[🤖 Agent 3<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
-    T --> AN[🤖 Agent N<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
+    %% User Input directly to Multiple Agents
+    U[👤 User Task] --> A1[🤖 Agent 1<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
+    U --> A2[🤖 Agent 2<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
+    U --> A3[🤖 Agent 3<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
+    U --> AN[🤖 Agent N<br/>🔍 Search Tools<br/>💻 Code Execution<br/>📊 Analysis]
     
     %% Shared Memory Hub
     SM[🧠 Shared Memory<br/>💾 Save Updates<br/>📖 Load Updates]
