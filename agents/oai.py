@@ -288,7 +288,7 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
     if result_container["completed"]:
         return result_container["result"]
     else:
-        print(f"Processing timed out after {processing_timeout} seconds, returning empty response")
+        print(f"⏰ SYSTEM: Processing timed out after {processing_timeout} seconds")
         # Thread will be automatically killed when this function returns (daemon thread)
         return {"text": "", "code": [], "citations": [], "function_calls": []}
 

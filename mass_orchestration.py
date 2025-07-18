@@ -223,9 +223,9 @@ class MassOrchestrationSystem:
             old_summary_length = len(self.agent_states[agent_id].working_summary)
             self.agent_states[agent_id].add_update(summary, final_answer)
             
-            print(f"      📝 Agent {agent_id} summary updated:")
-            print(f"         📏 Summary Length: {old_summary_length} → {len(summary)} chars")
-            print(f"         🔍 Preview: {summary}")
+            preview = summary[:100] + "..." if len(summary) > 100 else summary
+            print(f"📝 Agent {agent_id} summary updated ({old_summary_length} → {len(summary)} chars)")
+            print(f"   🔍 {preview}")
             
             # Log to the comprehensive logging system
             if self.log_manager:
@@ -390,11 +390,9 @@ class MassOrchestrationSystem:
             logger.info(f"🗳️ VOTING: Agent {voter_id} casting vote")
             logger.debug(f"   Vote details: {voter_id} → {target_id}")
             
-            print(f"      🗳️  CAST_VOTE: Agent {voter_id} → Agent {target_id}")
-            print(f"      📊 Current phase: {self.system_state.phase}")
-            print(f"      🔧 Log manager exists: {self.log_manager is not None}")
+            print(f"🗳️  VOTE: Agent {voter_id} → Agent {target_id} ({self.system_state.phase})")
             if response_text:
-                print(f"      📝 Response text length: {len(response_text)} characters")
+                print(f"   📝 Response: {len(response_text)} chars")
             
             if voter_id not in self.agent_states:
                 logger.error(f"   ❌ Invalid voter: Agent {voter_id} not registered")
