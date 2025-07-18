@@ -7,10 +7,10 @@ It handles system initialization, agent setup, and workflow execution.
 
 Usage examples:
     # Run with a JSON task file
-    python mass_main.py --task-file hle/test_case.json --agents gpt-4o,gemini-2.5-flash,grok-4
+    python mass_main.py --task-file test_case1.json --agents o4-mini,gemini-2.5-flash,grok-4
 
     # Run with custom configuration
-    python mass_main.py --task-file task.json --agents o3-mini,gpt-4o-mini,gemini-2.5-pro --config config.json
+    python mass_main.py --task-file test_case1.json --agents o4-mini,gemini-2.5-flash,grok-4 --config config.json
 
     # Run programmatically
     from mass_main import MassSystem
