@@ -754,9 +754,36 @@ class MassWorkflowManager:
                         or chunk.startswith("[REASONING]")
                         or chunk.startswith("[COMPLETE]")
                         or chunk.startswith("[DONE]")
+                        or chunk.startswith("[CODE_LOG_ONLY]")
+                        or chunk.startswith("[CODE_DISPLAY_ONLY]")
                     ):
+                        # Handle special CODE_LOG_ONLY messages - log but don't display
+                        if chunk.startswith("[CODE_LOG_ONLY]"):
+                            # Extract the actual code content by removing the prefix
+                            code_content = chunk[len("[CODE_LOG_ONLY]"):]
+                            # Send to streaming system for logging only - agent will receive it but console won't show it
+                            # We do this by directly calling the streaming display's log function
+                            if self.streaming_orchestrator and hasattr(self.streaming_orchestrator.display, '_write_agent_log'):
+                                self.streaming_orchestrator.display._write_agent_log(agent.agent_id, code_content)
+                            # Don't send anything to console display
+                            return
+                        
+                        # Handle special CODE_DISPLAY_ONLY messages - display but don't log
+                        elif chunk.startswith("[CODE_DISPLAY_ONLY]"):
+                            # Extract the display content by removing the prefix
+                            display_content = chunk[len("[CODE_DISPLAY_ONLY]"):]
+                            # Update display directly without logging to file
+                            if self.streaming_orchestrator and hasattr(self.streaming_orchestrator.display, 'agent_outputs'):
+                                with self.streaming_orchestrator.display._lock:
+                                    if agent.agent_id not in self.streaming_orchestrator.display.agent_outputs:
+                                        self.streaming_orchestrator.display.agent_outputs[agent.agent_id] = ""
+                                    self.streaming_orchestrator.display.agent_outputs[agent.agent_id] += display_content
+                                    # Update display without logging
+                                    self.streaming_orchestrator.display._update_display()
+                            return
+                        
                         # Display search queries and function calls in agent region with better formatting
-                        if "[SEARCH]" in chunk:
+                        elif "[SEARCH]" in chunk:
                             # Clean up search query display and add to agent output
                             clean_chunk = chunk.replace("[SEARCH]", "").strip()
                             formatted_chunk = f"\n🔍 {clean_chunk}\n"

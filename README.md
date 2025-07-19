@@ -116,7 +116,7 @@ GEMINI_API_KEY=your-gemini-key-here
 python mass_main.py --config example_config.json
 
 # Or run with custom task
-python cli.py --question "2312312 * (142342 + 222552) = ?"
+python cli.py --question "2312312 * (142342 + 222552) = ?" --agents o4-mini,gemini-2.5-flash,grok-4
 ```
 
 ### 4. 📊 View Results
@@ -162,6 +162,7 @@ This project is evolving toward the **advanced MASS architecture** found in `fut
 - [ ] Change the workflow from system maintained to agent maintain
 - [ ] (optional) Convert Gemini from Request to API
 - [ ] (optional) Add Claude and Fireworks backend
+- [ ] (optional) Add more tools (DuckDuckGo Search, and calculators)
 
 
 **Contributions Welcome!** We encourage developers to help bridge the gap between the current implementation and the target architecture.

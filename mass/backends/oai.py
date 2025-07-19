@@ -128,10 +128,13 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
         retry = 0
         while retry < max_retries:
             try:
+                # Create a local copy of model to avoid scoping issues
+                model_name = model
+                
                 # Use responses API for all models (supports streaming)
                 # Note: Some models like o4-mini don't support temperature parameter
                 params = {
-                    "model": model,
+                    "model": model_name,
                     "tools": formatted_tools if formatted_tools else None,
                     "instructions": instructions if instructions else None,
                     "input": input_text,
@@ -141,11 +144,23 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
 
                 # Only add temperature and top_p for models that support them
                 # All o-series models (o1, o3, o4, etc.) don't support temperature/top_p
-                if temperature is not None and not model.startswith("o"):
+                if temperature is not None and not model_name.startswith("o"):
                     params["temperature"] = temperature
-                if top_p is not None and not model.startswith("o"):
+                if top_p is not None and not model_name.startswith("o"):
                     params["top_p"] = top_p
-
+                if model_name.startswith("o") and model_name.endswith("-low"):
+                    params["reasoning"] = {"effort": "low"}
+                    model_name = model_name.replace("-low", "")
+                    params["model"] = model_name
+                if model_name.startswith("o") and model_name.endswith("-medium"):
+                    params["reasoning"] = {"effort": "medium"}
+                    model_name = model_name.replace("-medium", "")
+                    params["model"] = model_name
+                if model_name.startswith("o") and model_name.endswith("-high"):
+                    params["reasoning"] = {"effort": "high"}
+                    model_name = model_name.replace("-high", "")
+                    params["model"] = model_name
+                    
                 response = client.responses.create(**params)
                 completion = response
                 break
@@ -176,6 +191,10 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
             code = []
             citations = []
             function_calls = []
+            
+            # Code streaming tracking
+            code_lines_shown = 0
+            current_code_chunk = ""
 
             for chunk in completion:
                 # Handle different event types from responses API streaming
@@ -203,18 +222,39 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                             print(f"Stream callback error: {e}")
                     elif chunk.type == "response.code_interpreter_call.in_progress":
                         # Code interpreter call started
+                        # Reset code streaming tracking for new code block
+                        code_lines_shown = 0
+                        current_code_chunk = ""
                         try:
                             stream_callback("[CODE] Starting code execution...")
                         except Exception as e:
                             print(f"Stream callback error: {e}")
                     elif chunk.type == "response.code_interpreter_call_code.delta":
                         # Code being written/streamed
-                        # if hasattr(chunk, 'delta') and chunk.delta:
-                        #     try:
-                        #         stream_callback(f"[CODE] {chunk.delta}")
-                        #     except Exception as e:
-                        #         print(f"Stream callback error: {e}")
-                        pass
+                        if hasattr(chunk, 'delta') and chunk.delta:
+                            try:
+                                # Add to current code chunk for tracking
+                                current_code_chunk += chunk.delta
+                                
+                                # Count lines in this delta
+                                new_lines = chunk.delta.count('\n')
+                                
+                                if code_lines_shown < 5:
+                                    # Still within first 5 lines - send normally for display & logging
+                                    stream_callback(chunk.delta)
+                                    code_lines_shown += new_lines
+                                    
+                                    # Check if we just exceeded 3 lines with this chunk
+                                    if code_lines_shown >= 3:
+                                        # Send truncation message for display only (not logging)
+                                        stream_callback('[CODE_DISPLAY_ONLY]\n[CODE] ... (full code in log file)')
+                                else:
+                                    # Beyond 3 lines - send with special prefix for logging only
+                                    # The workflow can detect this prefix and log but not display
+                                    stream_callback(f"[CODE_LOG_ONLY]{chunk.delta}")
+                                         
+                            except Exception as e:
+                                print(f"Stream callback error: {e}")
                     elif chunk.type == "response.code_interpreter_call_code.done":
                         # Code writing completed
                         try:
