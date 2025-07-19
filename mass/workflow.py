@@ -10,9 +10,8 @@ This module handles the orchestration of the four-phase workflow:
 import asyncio
 import logging
 import time
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, Dict, List, Callable
 
 from .agent import AgentResponse, MassAgent, TaskInput
 from .logging import get_log_manager

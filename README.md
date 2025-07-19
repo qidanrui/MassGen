@@ -116,7 +116,7 @@ GEMINI_API_KEY=your-gemini-key-here
 python mass_main.py --config example_config.json
 
 # Or run with custom task
-python mass_main.py --task "Solve the equation: 2x + 3 = 7"
+python cli.py --question "2312312 * (142342 + 222552) = ?"
 ```
 
 ### 4. 📊 View Results

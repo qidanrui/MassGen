@@ -20,7 +20,7 @@ from .agent import AgentResponse, MassAgent
 
 # Try to import function_to_json, but make it optional
 try:
-    from agents.util import function_to_json
+   from .backends.util import function_to_json
 except ImportError:
     # Fallback if agents.util is not available
     def function_to_json(func):
@@ -43,7 +43,7 @@ class OpenAIMassAgent(MassAgent):
 
         # Import the OpenAI process_message function
         try:
-            from agents.oai import process_message as oai_process_message
+            from .backends.oai import process_message as oai_process_message
 
             self._process_message_impl = oai_process_message
         except ImportError:
@@ -128,7 +128,7 @@ class GeminiMassAgent(MassAgent):
 
         # Import the Gemini process_message function
         try:
-            from agents.gemini import process_message as gemini_process_message
+            from .backends.gemini import process_message as gemini_process_message
 
             self._process_message_impl = gemini_process_message
         except ImportError:
@@ -212,7 +212,7 @@ class GrokMassAgent(MassAgent):
 
         # Import the Grok process_message function
         try:
-            from agents.grok import process_message as grok_process_message
+            from .backends.grok import process_message as grok_process_message
 
             self._process_message_impl = grok_process_message
         except ImportError:

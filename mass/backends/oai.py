@@ -123,14 +123,6 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
             if message["role"] == "system":
                 instructions = message["content"]
 
-        # print("--------------------------------")
-        # print(f"[OAI] Instructions: {instructions}")
-        # print(f"[OAI] Input: {input_text}")
-        # print(f"[OAI] Formatted tools: {formatted_tools}")
-        # print(f"[OAI] Stream: {stream}")
-        # print(f"[OAI] Stream callback: {stream_callback}")
-        # _ = input("[OAI] Press Enter to continue...")
-
         # Make API request with retry logic (use Responses API for all models)
         completion = None
         retry = 0

@@ -152,7 +152,7 @@ ehthumbs.db
 Thumbs.db
 
 # MASS specific files
-agents/.env
+backends/.env
 swarm/.env
 *.log
 *logs/

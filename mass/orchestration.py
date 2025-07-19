@@ -5,7 +5,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, Dict, List
 
 from .agent import AgentState, TaskInput
 from .logging import get_log_manager

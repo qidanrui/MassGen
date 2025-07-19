@@ -7,14 +7,11 @@ It handles system initialization, agent setup, and workflow execution.
 
 Usage examples:
     # Simple usage - just provide a question and models
-    from mass_main import MassSystem
+    from mass import MassSystem
     system = MassSystem()
     result = system.run_mass_agents("What is 2+2?", ["gpt-4o", "gemini-2.5-flash"])
     print(result["answer"])
     print(result["summary"])
-
-    # Command line usage
-    python mass_main.py --question "What is 242342*2432423?" --agents gpt-4o,gemini-2.5-flash,grok-4
 """
 
 import argparse
@@ -31,12 +28,12 @@ from datetime import datetime
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(__file__))
 
-from mass_agent import TaskInput
-from mass_orchestration import MassOrchestrationSystem
-from mass_workflow import MassWorkflowManager
-from mass_agents import create_agent
-from mass_logging import initialize_logging, cleanup_logging
-from agents.constants import get_agent_type_from_model, get_available_models
+from .agent import TaskInput
+from .orchestration import MassOrchestrationSystem
+from .workflow import MassWorkflowManager
+from .agents import create_agent
+from .logging import initialize_logging, cleanup_logging
+from .backends.constants import get_agent_type_from_model, get_available_models
 
 def create_agent_configs_from_models(model_names: List[str]) -> List[Dict[str, Any]]:
     """
