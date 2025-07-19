@@ -195,6 +195,7 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
             # Code streaming tracking
             code_lines_shown = 0
             current_code_chunk = ""
+            truncation_message_sent = False
 
             for chunk in completion:
                 # Handle different event types from responses API streaming
@@ -225,6 +226,7 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                         # Reset code streaming tracking for new code block
                         code_lines_shown = 0
                         current_code_chunk = ""
+                        truncation_message_sent = False
                         try:
                             stream_callback("[CODE] Starting code execution...")
                         except Exception as e:
@@ -239,15 +241,16 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                                 # Count lines in this delta
                                 new_lines = chunk.delta.count('\n')
                                 
-                                if code_lines_shown < 5:
-                                    # Still within first 5 lines - send normally for display & logging
+                                if code_lines_shown < 3:
+                                    # Still within first 3 lines - send normally for display & logging
                                     stream_callback(chunk.delta)
                                     code_lines_shown += new_lines
                                     
                                     # Check if we just exceeded 3 lines with this chunk
-                                    if code_lines_shown >= 3:
+                                    if code_lines_shown >= 3 and not truncation_message_sent:
                                         # Send truncation message for display only (not logging)
                                         stream_callback('[CODE_DISPLAY_ONLY]\n[CODE] ... (full code in log file)')
+                                        truncation_message_sent = True
                                 else:
                                     # Beyond 3 lines - send with special prefix for logging only
                                     # The workflow can detect this prefix and log but not display

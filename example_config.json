@@ -1,6 +1,0 @@
-{
-    "max_rounds": 5,
-    "consensus_threshold": 1.0,
-    "parallel_execution": true,
-    "check_update_frequency": 3.0
-}

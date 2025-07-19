@@ -2,84 +2,91 @@ import os
 import threading
 import time
 
-import requests
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
 def parse_completion(completion, add_citations=True):
-    """Parse the completion response from Gemini API."""
-    candidates = completion["candidates"]
-    candidate = candidates[0]
-
-    # The final response is in the content field
-    parts = candidate["content"]["parts"]
-
+    """Parse the completion response from Gemini API using the official SDK."""
     text = ""
     code = []
     citations = []
 
-    # Parse the text and code from the parts
-    for part in parts:
-        if "text" in part:
-            text += part["text"]
-        elif "executableCode" in part:
-            code.append(part["executableCode"]["code"])
+    # Handle response from the official SDK
+    if hasattr(completion, 'text'):
+        text = completion.text
+    elif hasattr(completion, 'candidates') and completion.candidates:
+        candidate = completion.candidates[0]
+        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+            for part in candidate.content.parts:
+                if hasattr(part, 'text') and part.text:
+                    text += part.text
+                elif hasattr(part, 'executable_code') and part.executable_code and hasattr(part.executable_code, 'code') and part.executable_code.code:
+                    code.append(part.executable_code.code)
 
-    try:
-        # The grounding metadata is in the groundingMetadata field
-        groundingMetadata = candidate["groundingMetadata"]
+    # Extract citations if available
+    if add_citations and hasattr(completion, 'candidates') and completion.candidates:
+        candidate = completion.candidates[0]
+        if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+            grounding_metadata = candidate.grounding_metadata
+            
+            if (hasattr(grounding_metadata, 'grounding_supports') and grounding_metadata.grounding_supports and
+                hasattr(grounding_metadata, 'grounding_chunks') and grounding_metadata.grounding_chunks):
+                supports = grounding_metadata.grounding_supports
+                chunks = grounding_metadata.grounding_chunks
 
-        # Extract citations if available
-        if add_citations and "groundingSupports" in groundingMetadata and "groundingChunks" in groundingMetadata:
-            supports = groundingMetadata["groundingSupports"]
-            chunks = groundingMetadata["groundingChunks"]
+                # First, collect all citation information
+                for support in supports:
+                    if hasattr(support, 'segment') and support.segment:
+                        start_index = support.segment.start_index
+                        end_index = support.segment.end_index
+                        
+                        if hasattr(support, 'grounding_chunk_indices') and support.grounding_chunk_indices:
+                            for i in support.grounding_chunk_indices:
+                                if i < len(chunks):
+                                    chunk = chunks[i]
+                                    if hasattr(chunk, 'web') and chunk.web:
+                                        uri = chunk.web.uri
+                                        title = getattr(chunk.web, 'title', '')
+                                        citations.append(
+                                            {
+                                                "url": uri,
+                                                "title": title,
+                                                "start_index": start_index,
+                                                "end_index": end_index,
+                                                "chunk_index": i,
+                                            }
+                                        )
 
-            # First, collect all citation information
-            for support in supports:
-                start_index = support["segment"]["startIndex"]
-                end_index = support["segment"]["endIndex"]
-                if support["groundingChunkIndices"]:
-                    for i in support["groundingChunkIndices"]:
-                        if i < len(chunks):
-                            chunk = chunks[i]
-                            if "web" in chunk:
-                                uri = chunk["web"]["uri"]
-                                title = chunk["web"].get("title", "")
-                                citations.append(
-                                    {
-                                        "url": uri,
-                                        "title": title,
-                                        "start_index": start_index,
-                                        "end_index": end_index,
-                                        "chunk_index": i,
-                                    }
-                                )
+                # Sort supports by end_index in descending order to avoid shifting issues when inserting.
+                if supports:
+                    sorted_supports = sorted(supports, key=lambda s: s.segment.end_index, reverse=True)
 
-            # Sort supports by end_index in descending order to avoid shifting issues when inserting.
-            sorted_supports = sorted(supports, key=lambda s: s["segment"]["endIndex"], reverse=True)
+                    for support in sorted_supports:
+                        if hasattr(support, 'segment') and support.segment:
+                            end_index = support.segment.end_index
+                            if hasattr(support, 'grounding_chunk_indices') and support.grounding_chunk_indices:
+                                # Create citation string like [1](link1)[2](link2)
+                                citation_links = []
+                                for i in support.grounding_chunk_indices:
+                                    if i < len(chunks):
+                                        chunk = chunks[i]
+                                        if hasattr(chunk, 'web') and chunk.web:
+                                            uri = chunk.web.uri
+                                            citation_links.append(f"[{i + 1}]({uri})")
 
-            for support in sorted_supports:
-                end_index = support["segment"]["endIndex"]
-                if support["groundingChunkIndices"]:
-                    # Create citation string like [1](link1)[2](link2)
-                    citation_links = []
-                    for i in support["groundingChunkIndices"]:
-                        if i < len(chunks):
-                            uri = chunks[i]["web"]["uri"]
-                            citation_links.append(f"[{i + 1}]({uri})")
-
-                    citation_string = ", ".join(citation_links)
-                    text = text[:end_index] + citation_string + text[end_index:]
-    except Exception as e:
-        print(f"Error parsing completion: {e}")
+                                if citation_links:
+                                    citation_string = ", ".join(citation_links)
+                                    text = text[:end_index] + citation_string + text[end_index:]
 
     return {"text": text, "code": code, "citations": citations}
 
 def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, processing_timeout=150, stream=False, stream_callback=None):
     """
-    Generate content using Gemini API.
+    Generate content using Gemini API with the official google.genai SDK.
 
     Args:
         messages: List of messages in OpenAI format
@@ -109,150 +116,182 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
         if not api_key_val:
             raise ValueError("GEMINI_API_KEY not found in environment variables")
 
+        # Set the API key for the client
+        # genai.configure(api_key=api_key_val)
+        client = genai.Client(api_key=api_key_val)
+
         # Convert messages from OpenAI format to Gemini format
         gemini_messages = []
-        gemini_system_instruction = None
+        system_instruction = None
 
         for message in messages:
             role = message["role"]
             content = message["content"]
 
             if role == "system":
-                gemini_system_instruction = {"parts": [{"text": content}]}
+                system_instruction = content
             elif role == "user":
-                gemini_messages.append({"role": "user", "parts": [{"text": content}]})
+                gemini_messages.append(types.Content(role="user", parts=[types.Part(text=content)]))
             elif role == "assistant":
-                gemini_messages.append({"role": "model", "parts": [{"text": content}]})
-
-        # Set up safety settings
-        gemini_safety_settings = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ]
+                gemini_messages.append(types.Content(role="model", parts=[types.Part(text=content)]))
 
         # Set up generation config
-        gemini_generation_config = {}
+        generation_config = {}
         if temperature is not None:
-            gemini_generation_config["temperature"] = temperature
+            generation_config["temperature"] = temperature
         if top_p is not None:
-            gemini_generation_config["topP"] = top_p
+            generation_config["top_p"] = top_p
         if max_tokens is not None:
-            gemini_generation_config["maxOutputTokens"] = max_tokens
+            generation_config["max_output_tokens"] = max_tokens
 
         # Set up tools
         gemini_tools = []
-
+        
         if "live_search" in tools:
-            gemini_tools.append({"google_search": {}})
+            gemini_tools.append(types.Tool(googleSearch=types.GoogleSearch()))
 
         if "code_execution" in tools:
-            gemini_tools.append({"code_execution": {}})
+            gemini_tools.append(types.Tool(codeExecution=types.ToolCodeExecution()))
+
         # TODO: add other custom tools
 
-        # Construct the payload according to the version
-        payload = {
+        # Set up safety settings
+        safety_settings = [
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE
+            ),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE
+            ),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE
+            ),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE
+            ),
+        ]
+
+        # Prepare the request parameters
+        request_params = {
+            "model": model,
             "contents": gemini_messages,
-            "safetySettings": gemini_safety_settings,
-            "generationConfig": gemini_generation_config,
+            "config": types.GenerateContentConfig(
+                safety_settings=safety_settings,
+                **generation_config
+            )
         }
-        if gemini_system_instruction:
-            payload["system_instruction"] = gemini_system_instruction
+
+        if system_instruction:
+            request_params["config"].system_instruction = types.Content(
+                parts=[types.Part(text=system_instruction)]
+            )
+
         if gemini_tools:
-            payload["tools"] = gemini_tools
+            request_params["config"].tools = gemini_tools
 
-        headers = {"Content-Type": "application/json"}
-        beta = "v1alpha" if "thinking" in model else "v1beta"
-
-        # Use streaming endpoint if streaming is requested
-        if stream and stream_callback:
-            url = f"https://generativelanguage.googleapis.com/{beta}/models/{model}:streamGenerateContent?key={api_key_val}"
-        else:
-            url = f"https://generativelanguage.googleapis.com/{beta}/models/{model}:generateContent?key={api_key_val}"
-
-        # Make API request
-        # Retry up to max_retries times if there is an error
+        # Make API request with retry logic
         completion = None
         retry = 0
         while retry < max_retries:
             try:
                 if stream and stream_callback:
                     # Handle streaming response
-                    response = requests.post(url, headers=headers, json=payload, stream=True)
-                    response.raise_for_status()
-
-                    # Process streaming response
                     text = ""
                     code = []
                     citations = []
+                    
+                    # Code streaming tracking
+                    code_lines_shown = 0
+                    current_code_chunk = ""
 
-                    # Process streaming response - Gemini returns complete JSON in chunks
-                    try:
-                        # Read the complete response
-                        response_data = response.json()
-
-                        # Process the response (same as non-streaming)
-                        if isinstance(response_data, list) and len(response_data) > 0:
-                            for candidate_data in response_data:
-                                if "candidates" in candidate_data and len(candidate_data["candidates"]) > 0:
-                                    candidate = candidate_data["candidates"][0]
-
-                                    # Process content parts
-                                    if "content" in candidate and "parts" in candidate["content"]:
-                                        for part in candidate["content"]["parts"]:
-                                            if "text" in part:
-                                                chunk_text = part["text"]
-                                                text += chunk_text
-                                                # Simulate streaming by sending the complete text
-                                                try:
-                                                    stream_callback(chunk_text)
-                                                except Exception as e:
-                                                    print(f"Stream callback error: {e}")
-                                            elif "functionCall" in part:
-                                                try:
-                                                    function_name = part["functionCall"].get("name", "unknown")
-                                                    if (
-                                                        function_name == "google_search"
-                                                        and "args" in part["functionCall"]
-                                                    ):
-                                                        search_args = part["functionCall"]["args"]
-                                                        if isinstance(search_args, dict) and "query" in search_args:
-                                                            search_query = search_args["query"]
-                                                            stream_callback(f"[SEARCH] Searching for: {search_query}")
-                                                        else:
-                                                            stream_callback(f"[SEARCH] Performing Google search")
-                                                    else:
-                                                        stream_callback(f"[FUNCTION] Calling {function_name}")
-                                                except Exception as e:
-                                                    print(f"Stream callback error: {e}")
-                                            elif "functionResponse" in part:
-                                                try:
-                                                    stream_callback("[FUNCTION] Function response received")
-                                                except Exception as e:
-                                                    print(f"Stream callback error: {e}")
-
-                                    # Check for grounding metadata with search queries
-                                    if "groundingMetadata" in candidate:
-                                        grounding_metadata = candidate["groundingMetadata"]
-                                        if "webSearchQueries" in grounding_metadata:
-                                            for search_query in grounding_metadata["webSearchQueries"]:
-                                                try:
-                                                    stream_callback(f"[SEARCH] Used search query: {search_query}")
-                                                except Exception as e:
-                                                    print(f"Stream callback error: {e}")
-
-                                    # Check for finish reason
-                                    if "finishReason" in candidate:
-                                        finish_reason = candidate["finishReason"]
-                                        if finish_reason == "STOP":
+                    stream_response = client.models.generate_content_stream(**request_params)
+                    
+                    for chunk in stream_response:
+                        # Handle text chunks
+                        if hasattr(chunk, 'text') and chunk.text:
+                            chunk_text = chunk.text
+                            text += chunk_text
+                            try:
+                                stream_callback(chunk_text)
+                            except Exception as e:
+                                print(f"Stream callback error: {e}")
+                        
+                        # Handle other chunk types if available in the SDK
+                        elif hasattr(chunk, 'candidates') and chunk.candidates:
+                            candidate = chunk.candidates[0]
+                            if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                                for part in candidate.content.parts:
+                                    if hasattr(part, 'text') and part.text:
+                                        chunk_text = part.text
+                                        text += chunk_text
+                                        try:
+                                            stream_callback(chunk_text)
+                                        except Exception as e:
+                                            print(f"Stream callback error: {e}")
+                                    elif hasattr(part, 'executable_code') and part.executable_code and hasattr(part.executable_code, 'code') and part.executable_code.code:
+                                        # Handle code execution streaming
+                                        code_text = part.executable_code.code
+                                        code.append(code_text)
+                                        
+                                        # Apply similar code streaming logic as in oai.py
+                                        code_lines = code_text.split('\n')
+                                        
+                                        if code_lines_shown == 0:
                                             try:
-                                                stream_callback("[COMPLETE] Generation finished")
+                                                stream_callback("[CODE] Starting code execution...")
                                             except Exception as e:
                                                 print(f"Stream callback error: {e}")
+                                        
+                                        for line in code_lines:
+                                            if code_lines_shown < 3:
+                                                try:
+                                                    stream_callback(line + '\n')
+                                                    code_lines_shown += 1
+                                                except Exception as e:
+                                                    print(f"Stream callback error: {e}")
+                                            elif code_lines_shown == 3:
+                                                try:
+                                                    stream_callback('[CODE_DISPLAY_ONLY]\n[CODE] ... (full code in log file)')
+                                                    code_lines_shown += 1  # Ensure this message is only sent once
+                                                except Exception as e:
+                                                    print(f"Stream callback error: {e}")
+                                            else:
+                                                try:
+                                                    stream_callback(f"[CODE_LOG_ONLY]{line}\n")
+                                                except Exception as e:
+                                                    print(f"Stream callback error: {e}")
+                                    
+                                    elif hasattr(part, 'function_call'):
+                                        # Handle function calls
+                                        function_name = getattr(part.function_call, 'name', 'unknown')
+                                        try:
+                                            if function_name == 'google_search':
+                                                # Extract search query if available
+                                                if hasattr(part.function_call, 'args') and 'query' in part.function_call.args:
+                                                    search_query = part.function_call.args['query']
+                                                    stream_callback(f"[SEARCH] Searching for: {search_query}")
+                                                else:
+                                                    stream_callback("[SEARCH] Performing Google search")
+                                            else:
+                                                stream_callback(f"[FUNCTION] Calling {function_name}")
+                                        except Exception as e:
+                                            print(f"Stream callback error: {e}")
+                                    
+                                    elif hasattr(part, 'function_response'):
+                                        try:
+                                            stream_callback("[FUNCTION] Function response received")
+                                        except Exception as e:
+                                            print(f"Stream callback error: {e}")
+
+                    # Handle completion
+                    try:
+                        stream_callback("[COMPLETE] Generation finished")
                     except Exception as e:
-                        print(f"[GEMINI] Error processing streaming response: {e}")
-                        # Fallback to non-streaming parsing
+                        print(f"Stream callback error: {e}")
 
                     return {
                         "text": text,
@@ -262,13 +301,10 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                     }
                 else:
                     # Handle non-streaming response
-                    response = requests.post(url, headers=headers, json=payload)
-                    # response.raise_for_status()
-                    completion = response.json()
+                    completion = client.models.generate_content(**request_params)
                 break
-            except requests.exceptions.Timeout:
-                return {"text": "", "code": [], "citations": [], "function_calls": []}
-            except Exception:
+            except Exception as e:
+                print(f"Error on attempt {retry + 1}: {e}")
                 retry += 1
                 time.sleep(1.5)
 
