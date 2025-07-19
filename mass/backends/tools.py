@@ -49,7 +49,7 @@ def vote(agent_id: int):
     """
     return f"Vote for agent {agent_id}"
 
-def execute_python_code(code: str, timeout: Optional[int] = 10) -> Dict[str, Any]:
+def python_interpreter(code: str, timeout: Optional[int] = 10) -> Dict[str, Any]:
     """
     Execute Python code in an isolated subprocess and return its output.
 
@@ -65,6 +65,8 @@ def execute_python_code(code: str, timeout: Optional[int] = 10) -> Dict[str, Any
         - 'success': Boolean indicating if execution was successful
         - 'error': Error message if execution failed
     """
+    # Ensure timeout is between 0 and 60 seconds
+    timeout = max(min(timeout, 60), 0)
     try:
         # Run the code in a separate Python process
         result = subprocess.run(
