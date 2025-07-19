@@ -7,15 +7,106 @@ import time
 import threading
 import unicodedata
 from typing import Dict, List, Optional, Callable
+from datetime import datetime
 
 class MultiRegionDisplay:
-    def __init__(self, display_enabled: bool = True, max_lines: int = 40):
+    def __init__(self, display_enabled: bool = True, max_lines: int = 40, save_logs: bool = True):
         self.display_enabled = display_enabled
         self.max_lines = max_lines  # Maximum lines to display per agent
+        self.save_logs = save_logs  # Whether to save logs to files
         self.agent_outputs: Dict[int, str] = {}
+        self.agent_models: Dict[int, str] = {}  # Store model names for each agent
         self.system_messages: List[str] = []
         self.start_time = time.time()
         self._lock = threading.Lock()
+        
+        # Initialize logging directory and files
+        if self.save_logs:
+            self._setup_logging()
+    
+    def set_agent_model(self, agent_id: int, model_name: str):
+        """Set the model name for a specific agent."""
+        with self._lock:
+            self.agent_models[agent_id] = model_name
+    
+    def _setup_logging(self):
+        """Set up the logging directory and initialize log files."""
+        # Create logs directory if it doesn't exist
+        base_logs_dir = "logs"
+        os.makedirs(base_logs_dir, exist_ok=True)
+        
+        # Create timestamped subdirectory for this session
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.session_logs_dir = os.path.join(base_logs_dir, timestamp)
+        os.makedirs(self.session_logs_dir, exist_ok=True)
+        
+        # Initialize log file paths with simple names
+        self.agent_log_files = {}
+        self.system_log_file = os.path.join(self.session_logs_dir, "system.txt")
+        
+        # Initialize system log file
+        with open(self.system_log_file, 'w', encoding='utf-8') as f:
+            f.write(f"MASS System Messages Log\n")
+            f.write(f"Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write("=" * 80 + "\n\n")
+    
+    def _get_agent_log_file(self, agent_id: int) -> str:
+        """Get or create the log file path for a specific agent."""
+        if agent_id not in self.agent_log_files:
+            # Use simple filename: agent_0.txt, agent_1.txt, etc.
+            self.agent_log_files[agent_id] = os.path.join(self.session_logs_dir, f"agent_{agent_id}.txt")
+            
+            # Initialize agent log file
+            with open(self.agent_log_files[agent_id], 'w', encoding='utf-8') as f:
+                f.write(f"MASS Agent {agent_id} Output Log\n")
+                f.write(f"Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 80 + "\n\n")
+        
+        return self.agent_log_files[agent_id]
+    
+    def get_agent_log_path_for_display(self, agent_id: int) -> str:
+        """Get the log file path for display purposes (clickable link)."""
+        if not self.save_logs:
+            return ""
+        
+        # Ensure the log file exists by calling _get_agent_log_file
+        log_path = self._get_agent_log_file(agent_id)
+        
+        # Return relative path for better display
+        return log_path
+    
+    def get_system_log_path_for_display(self) -> str:
+        """Get the system log file path for display purposes (clickable link)."""
+        if not self.save_logs:
+            return ""
+        
+        return self.system_log_file
+    
+    def _write_agent_log(self, agent_id: int, content: str):
+        """Write content to the agent's log file."""
+        if not self.save_logs:
+            return
+            
+        try:
+            log_file = self._get_agent_log_file(agent_id)
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(content)
+                f.flush()  # Ensure immediate write
+        except Exception as e:
+            print(f"Error writing to agent {agent_id} log: {e}")
+    
+    def _write_system_log(self, message: str):
+        """Write a system message to the system log file."""
+        if not self.save_logs:
+            return
+            
+        try:
+            with open(self.system_log_file, 'a', encoding='utf-8') as f:
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                f.write(f"[{timestamp}] {message}\n")
+                f.flush()  # Ensure immediate write
+        except Exception as e:
+            print(f"Error writing to system log: {e}")
         
     async def stream_output(self, agent_id: int, content: str):
         if not self.display_enabled:
@@ -26,6 +117,10 @@ class MultiRegionDisplay:
                 self.agent_outputs[agent_id] = ""
             
             self.agent_outputs[agent_id] += content
+            
+            # Write to log file immediately
+            self._write_agent_log(agent_id, content)
+            
             self._update_display()
     
     def finalize_message(self, agent_id: int):
@@ -35,6 +130,10 @@ class MultiRegionDisplay:
         with self._lock:
             if agent_id in self.agent_outputs:
                 self.agent_outputs[agent_id] += "\n"
+                
+                # Write newline to log file
+                self._write_agent_log(agent_id, "\n")
+                
                 self._update_display()
     
     def add_system_message(self, message: str):
@@ -43,6 +142,10 @@ class MultiRegionDisplay:
             
         with self._lock:
             self.system_messages.append(message)
+            
+            # Write to system log file immediately  
+            self._write_system_log(message)
+            
             # Keep only the last 10 system messages to prevent overflow
             if len(self.system_messages) > 10:
                 self.system_messages = self.system_messages[-10:]
@@ -292,15 +395,44 @@ class MultiRegionDisplay:
         header_sep = "─" * actual_width
         print(f"\n{header_sep}")
         
+        # First row: Agent names with model information
         header_parts = []
         for agent_id in agent_ids:
-            agent_name = f"🤖 Agent {agent_id}"
+            model_name = self.agent_models.get(agent_id, "")
+            if model_name:
+                agent_name = f"🤖 Agent {agent_id} ({model_name})"
+            else:
+                agent_name = f"🤖 Agent {agent_id}"
             # Center the agent name in the column with proper display width
             header_content = pad_to_width(agent_name, col_width, 'center')
             header_parts.append(header_content)
         
         header_line = " " + " │ ".join(header_parts) + " "
         print(header_line)
+        
+        # Second row: Log file links (if logging is enabled) with underlines
+        if self.save_logs and hasattr(self, 'session_logs_dir'):
+            # ANSI escape codes for formatting
+            UNDERLINE = '\033[4m'
+            RESET = '\033[0m'
+            
+            link_parts = []
+            for agent_id in agent_ids:
+                log_path = self.get_agent_log_path_for_display(agent_id)
+                if log_path:
+                    # Create a shortened display version of the path
+                    display_path = log_path.replace(os.getcwd() + "/", "") if log_path.startswith(os.getcwd()) else log_path
+                    # Truncate if too long for column
+                    if len(display_path) > col_width - 2:
+                        display_path = "..." + display_path[-(col_width-5):]
+                    link_content = pad_to_width(f"📁 {UNDERLINE}{display_path}{RESET}", col_width, 'center')
+                else:
+                    link_content = pad_to_width("", col_width, 'center')
+                link_parts.append(link_content)
+            
+            link_line = " " + " │ ".join(link_parts) + " "
+            print(link_line)
+        
         print(header_sep)
         
         # Print content rows with exact column alignment
@@ -322,6 +454,24 @@ class MultiRegionDisplay:
             print(f"\n{header_sep}")
             system_header = f" 📋 SYSTEM MESSAGES{' ' * (actual_width - 19)} "
             print(system_header)
+            
+            # Add system log file link if logging is enabled
+            if self.save_logs and hasattr(self, 'system_log_file'):
+                system_log_path = self.get_system_log_path_for_display()
+                if system_log_path:
+                    # ANSI escape codes for formatting
+                    UNDERLINE = '\033[4m'
+                    RESET = '\033[0m'
+                    
+                    # Create a shortened display version of the path
+                    display_path = system_log_path.replace(os.getcwd() + "/", "") if system_log_path.startswith(os.getcwd()) else system_log_path
+                    # Truncate if too long
+                    max_path_width = actual_width - 6  # Account for padding and folder icon
+                    if len(display_path) > max_path_width:
+                        display_path = "..." + display_path[-(max_path_width-3):]
+                    system_link_line = f" 📁 {UNDERLINE}{display_path}{RESET}{' ' * (actual_width - len(f' 📁 {display_path}') - 1)} "
+                    print(system_link_line)
+            
             print(header_sep)
             for message in self.system_messages:
                 # Wrap long system messages to fit width
@@ -343,8 +493,8 @@ class MultiRegionDisplay:
         print(header_sep)
 
 class StreamingOrchestrator:
-    def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 40):
-        self.display = MultiRegionDisplay(display_enabled, max_lines)
+    def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 40, save_logs: bool = True):
+        self.display = MultiRegionDisplay(display_enabled, max_lines, save_logs)
         self.stream_callback = stream_callback
         self.active_agents: Dict[int, str] = {}
         
@@ -379,12 +529,31 @@ class StreamingOrchestrator:
     def add_system_message(self, message: str):
         """Add a custom system message to the display"""
         self.display.add_system_message(message)
+    
+    def get_agent_log_path(self, agent_id: int) -> str:
+        """Get the log file path for a specific agent."""
+        return self.display.get_agent_log_path_for_display(agent_id)
+    
+    def get_system_log_path(self) -> str:
+        """Get the system log file path."""
+        return self.display.get_system_log_path_for_display()
+    
+    def get_session_log_directory(self) -> str:
+        """Get the session log directory path."""
+        if hasattr(self.display, 'session_logs_dir'):
+            return self.display.session_logs_dir
+        return ""
+    
+    def set_agent_model(self, agent_id: int, model_name: str):
+        """Set the model name for a specific agent."""
+        self.display.set_agent_model(agent_id, model_name)
 
 def create_streaming_display(display_type: str = "terminal", 
                            display_enabled: bool = True,
                            stream_callback: Optional[Callable] = None,
-                           max_lines: int = 40):
-    return StreamingOrchestrator(display_enabled, stream_callback, max_lines)
+                           max_lines: int = 40,
+                           save_logs: bool = True):
+    return StreamingOrchestrator(display_enabled, stream_callback, max_lines, save_logs)
 
 def integrate_with_workflow_manager(workflow_manager, streaming_orchestrator):
     workflow_manager.streaming_orchestrator = streaming_orchestrator

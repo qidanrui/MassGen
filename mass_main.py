@@ -121,6 +121,7 @@ class MassSystem:
         self.consensus_threshold = self.config.get("consensus_threshold", 1.0)
         self.parallel_execution = self.config.get("parallel_execution", True)
         self.check_update_frequency = self.config.get("check_update_frequency", 3)
+        self.save_logs = self.config.get("save_logs", True)  # Whether to save logs to files
 
     def initialize_system(self, agent_configs: List[Dict[str, Any]]):
         """
@@ -180,12 +181,19 @@ class MassSystem:
             parallel_execution=self.parallel_execution,
             check_update_frequency=self.check_update_frequency,
             streaming_display=True,
-            stream_callback=None
+            stream_callback=None,
+            save_logs=self.save_logs
         )
         
         # Connect streaming orchestrator to orchestration system
         if self.workflow_manager.streaming_orchestrator:
             self.orchestration_system.streaming_orchestrator = self.workflow_manager.streaming_orchestrator
+            
+            # Set agent model names in the display
+            for agent_id, agent in self.orchestration_system.agents.items():
+                if hasattr(agent, 'model'):
+                    model_name = agent.model
+                    self.workflow_manager.streaming_orchestrator.set_agent_model(agent_id, model_name)
         
         logger.info("✓ MASS system initialization completed successfully")
         logger.info("=" * 60)
