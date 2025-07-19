@@ -28,6 +28,7 @@ MODEL_MAPPINGS = {
     ],
     "gemini": ["gemini-2.5-flash", "gemini-2.5-pro"],
     "grok": [
+        "grok-3-mini",
         "grok-3",
         "grok-4",
     ],

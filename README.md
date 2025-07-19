@@ -157,10 +157,11 @@ This project is evolving toward the **advanced MASS architecture** found in `fut
 
 ### 📋 TODO
 
-- [ ] Fix Grok Fake Stream
+- [x] Fix Grok Fake Stream
+- [x] (optional) Convert Gemini from Request to API
 - [ ] Add function call feature to backends
+- [ ] The backends should support both their built-in tools (if exists) and provided custom tools
 - [ ] Change the workflow from system maintained to agent maintain
-- [ ] (optional) Convert Gemini from Request to API
 - [ ] (optional) Add Claude and Fireworks backend
 - [ ] (optional) Add more tools (DuckDuckGo Search, and calculators)
 

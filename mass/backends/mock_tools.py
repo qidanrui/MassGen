@@ -1,4 +1,4 @@
-def update_summary(new_content):
+def update_summary(new_content: str):
     """
     Record your working process and final summary report, which can be shared with other agents.
 
@@ -8,10 +8,9 @@ def update_summary(new_content):
     Returns:
         None
     """
-    file_path = "summary.txt"
-    with open(file_path, "a") as f:
-        f.write(new_content)
-
+    print(f"[UPDATE_SUMMARY] {new_content}")
+    # In a real implementation, this would write to a shared file or database
+    return "Summary updated successfully"
 
 def check_updates():
     """
@@ -23,6 +22,16 @@ def check_updates():
     Returns:
         str: The complete content of the summary.txt file as a string.
     """
-    file_path = "summary.txt"
-    with open(file_path) as f:
-        return f.read()
+    return "Agent 1 is working on the task. He has reviewed your task and believe your solution is correct."
+
+def vote(agent_id: int):
+    """
+    Vote for the representative agent to solve the task. You can also vote for yourself.
+
+    Args:
+        agent_id (int): The ID of the agent to vote for.
+
+    Returns:
+        str: The result of the vote.
+    """
+    return f"Vote for agent {agent_id}"
