@@ -3,6 +3,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Callable, Union, Optional, List, Dict
 
+@dataclass
+class TaskInput:
+    """Represents a task to be processed by the MASS system."""
+
+    question: str
+    context: Dict[str, Any] = field(default_factory=dict)
+    task_id: Optional[str] = None
+
 
 @dataclass
 class AgentState:
@@ -56,15 +64,6 @@ class AgentState:
                 if latest_timestamp > last_seen:
                     return True
         return False
-
-
-@dataclass
-class TaskInput:
-    """Represents a task to be processed by the MASS system."""
-
-    question: str
-    context: Dict[str, Any] = field(default_factory=dict)
-    task_id: Optional[str] = None
 
 
 @dataclass

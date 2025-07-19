@@ -7,217 +7,57 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Union, Optional, Dict, List
+import ast
+import operator
+import math
 
-from openai import ChatCompletion
-
-
-@dataclass
-class Function:
-    arguments: str
-    name: str
-
-    def to_dict(self):
-        return {"arguments": self.arguments, "name": self.name}
-
-
-@dataclass
-class ChatCompletionMessageToolCall:
-    id: str
-    function: Function
-    type: str
-
-    def to_dict(self):
-        return {"id": self.id, "function": self.function.to_dict(), "type": self.type}
-
-
-@dataclass
-class ChatCompletionMessage:
-    role: str
-    content: Optional[str]
-    thinking: Optional[str] = None
-    thinking_signature: Optional[str] = None
-    tool_calls: Union[List[ChatCompletionMessageToolCall], None] = None
-    function_call: Optional[Any] = None
-    refusal: Optional[Any] = None
-    audio: Optional[Any] = None
-    response_id: Optional[str] = None
-
-    def to_dict(self):
-        tool_calls_dict = [tool_call.to_dict() for tool_call in self.tool_calls] if self.tool_calls else None
-        return {
-            "content": self.content,
-            "thinking": self.thinking,
-            "thinking_signature": self.thinking_signature,
-            "role": self.role,
-            "tool_calls": tool_calls_dict,
-            "function_call": self.function_call,
-            "refusal": self.refusal,
-            "audio": self.audio,
-            "response_id": self.response_id,
-        }
-
-
-@dataclass
-class Choice:
-    finish_reason: str
-    index: int
-    logprobs: Optional[dict]
-    message: ChatCompletionMessage
-
-
-@dataclass
-class CompletionTokensDetails:
-    accepted_prediction_tokens: int = 0
-    audio_tokens: int = 0
-    reasoning_tokens: int = 0
-    rejected_prediction_tokens: int = 0
-
-
-@dataclass
-class PromptTokensDetails:
-    audio_tokens: int = 0
-    cached_tokens: int = 0
-
-
-@dataclass
-class CompletionUsage:
-    completion_tokens: int
-    prompt_tokens: int
-    total_tokens: int
-    completion_tokens_details: CompletionTokensDetails
-    prompt_tokens_details: PromptTokensDetails
-
-
-@dataclass
-class ChatCompletion:
-    id: str
-    choices: List[Choice]
-    created: int
-    model: str
-    object: str
-    system_fingerprint: str
-    usage: CompletionUsage
-    service_tier: Optional[Any] = None
-
-
-def _generate_random_id(length: int = 24) -> str:
-    """Generate a random ID string."""
-    characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    return "".join(random.choice(characters) for _ in range(length))
-
-
-def ChatCompletionMessage_to_dict(msg) -> Dict[str, Any]:
-    """Convert ChatCompletionMessage to a dict."""
-    try:
-        msg_dict = msg.to_dict()
-        return msg_dict
-    except Exception:
-        # Convert ChatCompletionMessage to dict and print
-        msg_dict = {
-            "role": msg.role,
-            "content": msg.content,
-        }
-
-        # Add tool_calls if present
-        if hasattr(msg, "tool_calls") and msg.tool_calls:
-            tool_calls = []
-            for tool_call in msg.tool_calls:
-                tool_call_dict = {
-                    "id": tool_call.id,
-                    "type": tool_call.type,
-                    "function": {
-                        "name": tool_call.function.name,
-                        "arguments": tool_call.function.arguments,
-                    },
+def execute_function_calls(function_calls, tool_mapping):
+        """Execute function calls and return formatted outputs for the conversation."""
+        function_outputs = []
+        for function_call in function_calls:
+            try:
+                # Get the function from tool mapping
+                target_function = None
+                function_name = function_call.get('name')
+                
+                # Look up function in tool_mapping
+                if function_name in tool_mapping:
+                    target_function = tool_mapping[function_name]
+                else:
+                    # Handle error case
+                    error_output = {
+                        "type": "function_call_output",
+                        "call_id": function_call.get('call_id'),
+                        "output": f"Error: Function '{function_name}' not found in tool mapping"
+                    }
+                    function_outputs.append(error_output)
+                    continue
+                
+                # Parse arguments and execute function
+                arguments = json.loads(function_call.get('arguments', '{}'))
+                result = target_function(**arguments)
+                
+                # Format the output according to Responses API requirements
+                function_output = {
+                    "type": "function_call_output",
+                    "call_id": function_call.get('call_id'),
+                    "output": str(result)
                 }
-                tool_calls.append(tool_call_dict)
-            msg_dict["tool_calls"] = tool_calls
-        return msg_dict
-
-
-def construct_chatcompletion(
-    role: str,
-    content: str,
-    tool_calls: Union[List[ChatCompletionMessageToolCall], None] = None,
-) -> ChatCompletion:
-    choices = [
-        Choice(
-            finish_reason="stop",
-            index=0,
-            logprobs=None,
-            message=ChatCompletionMessage(
-                content=content,
-                role=role,
-                tool_calls=tool_calls,
-                function_call=None,
-                refusal=None,
-                audio=None,
-            ),
-        )
-    ]
-    return ChatCompletion(
-        id=f"chatcmpl-{_generate_random_id()}",
-        choices=choices,
-        created=int(time.time()),
-        model="None",
-        object="chat.completion",
-        system_fingerprint=f"fp_{_generate_random_id(8)}",
-        usage=CompletionUsage(
-            completion_tokens=0,
-            prompt_tokens=0,
-            total_tokens=0,
-            completion_tokens_details=CompletionTokensDetails(),
-            prompt_tokens_details=PromptTokensDetails(),
-        ),
-    )
-
-
-def model_dump_json(message):
-    message_raw = {
-        "content": message.content,
-        "thinking": message.thinking,
-        "thinking_signature": message.thinking_signature,
-        "role": message.role,
-        "tool_calls": [
-            {
-                "function": {
-                    "name": tool.function.name,
-                    "arguments": tool.function.arguments,
-                },
-                "id": tool.id,
-                "type": tool.type,
-            }
-            for tool in (message.tool_calls or [])
-        ],
-    }
-    return json.dumps(message_raw)
-
-
-def debug_print(debug: bool, *args: str) -> None:
-    if not debug:
-        return
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    message = " ".join(map(str, args))
-    print(f"\033[97m[\033[90m{timestamp}\033[97m]\033[90m {message}\033[0m")
-    _ = input("Press Enter to continue...")
-
-
-def merge_fields(target, source):
-    for key, value in source.items():
-        if isinstance(value, str):
-            target[key] += value
-        elif value is not None and isinstance(value, dict):
-            merge_fields(target[key], value)
-
-
-def merge_chunk(final_response: dict, delta: dict) -> None:
-    delta.pop("role", None)
-    merge_fields(final_response, delta)
-
-    tool_calls = delta.get("tool_calls")
-    if tool_calls and len(tool_calls) > 0:
-        index = tool_calls[0].pop("index")
-        merge_fields(final_response["tool_calls"][index], tool_calls[0])
+                function_outputs.append(function_output)
+                
+                print(f"Executed function: {function_name}({arguments}) -> {result}")
+                
+            except Exception as e:
+                # Handle execution errors
+                error_output = {
+                    "type": "function_call_output", 
+                    "call_id": function_call.get('call_id'),
+                    "output": f"Error executing function: {str(e)}"
+                }
+                function_outputs.append(error_output)
+                print(f"Error executing function {function_name}: {e}")
+                
+        return function_outputs
 
 
 def function_to_json(func) -> dict:
@@ -267,96 +107,3 @@ def function_to_json(func) -> dict:
             "required": required,
         },
     }
-
-
-def display_messages(messages: List[Union[Dict[str, Any], ChatCompletionMessage]]) -> None:
-    """Display messages in a formatted way.
-
-    Args:
-        messages: List of messages, each can be either a dict or ChatCompletionMessage
-    """
-    for msg in messages:
-        if isinstance(msg, dict):
-            print(json.dumps(msg, indent=4))
-        else:
-            # Convert ChatCompletionMessage to dict and print
-            msg_dict = {
-                "role": msg.role,
-                "content": msg.content,
-            }
-
-            # Add tool_calls if present
-            if hasattr(msg, "tool_calls") and msg.tool_calls:
-                tool_calls = []
-                for tool_call in msg.tool_calls:
-                    tool_call_dict = {
-                        "id": tool_call.id,
-                        "type": tool_call.type,
-                        "function": {
-                            "name": tool_call.function.name,
-                            "arguments": tool_call.function.arguments,
-                        },
-                    }
-                    tool_calls.append(tool_call_dict)
-                msg_dict["tool_calls"] = tool_calls
-
-            print(json.dumps(msg_dict, indent=4))
-        print("---")  # Add separator between messages
-
-
-def execute_python_code(code: str, timeout: Optional[int] = 10) -> Dict[str, Any]:
-    """
-    Execute Python code in an isolated subprocess and return its output.
-
-    Args:
-        code: The Python code string to execute
-        timeout: Maximum execution time in seconds (default: 10, Must be less than 60 seconds)
-
-    Returns:
-        A dictionary containing:
-        - 'stdout': Standard output from the code execution
-        - 'stderr': Standard error from the code execution
-        - 'returncode': Exit code of the process (0 for success)
-        - 'success': Boolean indicating if execution was successful
-        - 'error': Error message if execution failed
-    """
-    try:
-        # Run the code in a separate Python process
-        result = subprocess.run(
-            [sys.executable, "-c", code],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-
-        return json.dumps(
-            {
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "returncode": result.returncode,
-                "success": result.returncode == 0,
-                "error": None,
-            }
-        )
-
-    except subprocess.TimeoutExpired:
-        return json.dumps(
-            {
-                "stdout": "",
-                "stderr": "",
-                "returncode": -1,
-                "success": False,
-                "error": f"Code execution timed out after {timeout} seconds",
-            }
-        )
-
-    except Exception as e:
-        return json.dumps(
-            {
-                "stdout": "",
-                "stderr": "",
-                "returncode": -1,
-                "success": False,
-                "error": f"Failed to execute code: {str(e)}",
-            }
-        )

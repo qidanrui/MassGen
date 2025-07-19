@@ -17,6 +17,7 @@ def parse_completion(completion, add_citations=True):
     code = []
     citations = []
     function_calls = []
+    reasoning_items = []
 
     # Handle response from the official SDK
     # Always parse candidates.content.parts for complete information
@@ -110,7 +111,11 @@ def parse_completion(completion, add_citations=True):
                                     citation_string = ", ".join(citation_links)
                                     text = text[:end_index] + citation_string + text[end_index:]
 
-    return {"text": text, "code": code, "citations": citations, "function_calls": function_calls}
+    return {"text": text, 
+            "code": code, 
+            "citations": citations, 
+            "function_calls": function_calls,
+            "reasoning_items": reasoning_items}
 
 def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, processing_timeout=150, stream=False, stream_callback=None):
     """

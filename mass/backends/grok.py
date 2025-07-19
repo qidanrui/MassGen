@@ -17,6 +17,8 @@ def parse_completion(response, add_citations=True):
     text = response.content
     code = []
     citations = []
+    function_calls = []
+    reasoning_items = []
 
     if add_citations and hasattr(response, "citations") and response.citations:
         citations = []
@@ -28,9 +30,6 @@ def parse_completion(response, add_citations=True):
             for idx, citation in enumerate(citations):
                 citation_content.append(f"[{idx}]({citation['url']})")
             text = text + "\n\n" + "\n".join(citation_content)
-
-    # Extract function calls from the response
-    function_calls = []
     
     # Check if response has tool_calls directly (some SDK formats)
     if hasattr(response, "tool_calls") and response.tool_calls:
@@ -64,7 +63,11 @@ def parse_completion(response, add_citations=True):
                             "arguments": tool_call.arguments
                         })
 
-    return {"text": text, "code": code, "citations": citations, "function_calls": function_calls}
+    return {"text": text, 
+            "code": code, 
+            "citations": citations, 
+            "function_calls": function_calls,
+            "reasoning_items": reasoning_items}
 
 def process_message(messages, model="grok-4", tools=None, max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, processing_timeout=150, stream=False, stream_callback=None):
     """
