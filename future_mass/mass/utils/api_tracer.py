@@ -8,7 +8,7 @@ import json
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Union, Optional, List, Dict
 
 
 @dataclass
@@ -16,8 +16,8 @@ class SourceLink:
     """Reference to source code location."""
 
     file_path: str
-    line_number: int | None = None
-    function_name: str | None = None
+    line_number: Optional[int] = None
+    function_name: Optional[str] = None
 
     def __str__(self) -> str:
         """Format as clickable link."""
@@ -34,11 +34,11 @@ class APITrace:
     provider: str
     model: str
     call_type: str  # "initial", "tool_response", "restart", "final"
-    request_data: dict[str, Any]
-    response_summary: str | None = None
-    source_links: list[SourceLink] = None
-    agent_id: str | None = None
-    session_id: str | None = None
+    request_data: Dict[str, Any]
+    response_summary: Optional[str] = None
+    source_links: List[SourceLink] = None
+    agent_id: Optional[str] = None
+    session_id: Optional[str] = None
 
     def __post_init__(self):
         if self.source_links is None:
@@ -52,7 +52,7 @@ class APITracer:
         self.enabled = enabled
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
-        self.traces: list[APITrace] = []
+        self.traces: List[APITrace] = []
 
         # Common source file paths for linking
         self.source_files = {
@@ -69,10 +69,10 @@ class APITracer:
         provider: str,
         model: str,
         call_type: str,
-        request_data: dict[str, Any],
-        agent_id: str | None = None,
-        session_id: str | None = None,
-        response_summary: str | None = None,
+        request_data: Dict[str, Any],
+        agent_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        response_summary: Optional[str] = None,
     ) -> None:
         """Record an API call trace."""
         if not self.enabled:
@@ -96,7 +96,7 @@ class APITracer:
         self.traces.append(trace)
         self._write_trace_file(trace)
 
-    def _get_source_links(self, provider: str, call_type: str) -> list[SourceLink]:
+    def _get_source_links(self, provider: str, call_type: str) -> List[SourceLink]:
         """Generate relevant source file links based on context."""
         links = []
 
@@ -217,7 +217,7 @@ class APITracer:
 
         return links
 
-    def _sanitize_request_data(self, data: dict[str, Any]) -> dict[str, Any]:
+    def _sanitize_request_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Remove sensitive data and format for readability."""
         sanitized = data.copy()
 
@@ -275,7 +275,7 @@ class APITracer:
         return "\n".join(summary)
 
     def export_session_report(
-        self, session_id: str, filename: str | None = None
+        self, session_id: str, filename: Optional[str] = None
     ) -> str:
         """Export all traces for a session to a comprehensive report."""
         session_traces = [t for t in self.traces if t.session_id == session_id]
@@ -330,7 +330,7 @@ class APITracer:
 
 
 # Global tracer instance
-_global_tracer: APITracer | None = None
+_global_tracer: Optional[APITracer] = None
 
 
 def get_tracer() -> APITracer:
@@ -345,7 +345,7 @@ def get_tracer() -> APITracer:
 
 
 def trace_api_call(
-    provider: str, model: str, call_type: str, request_data: dict[str, Any], **kwargs
+    provider: str, model: str, call_type: str, request_data: Dict[str, Any], **kwargs
 ) -> None:
     """Convenience function for tracing API calls."""
     get_tracer().trace_api_call(provider, model, call_type, request_data, **kwargs)

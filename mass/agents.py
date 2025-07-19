@@ -16,7 +16,7 @@ load_dotenv()
 # Add agents directory to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), "agents"))
 
-from mass_agent import AgentResponse, MassAgent
+from .agent import AgentResponse, MassAgent
 
 # Try to import function_to_json, but make it optional
 try:

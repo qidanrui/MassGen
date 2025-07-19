@@ -6,7 +6,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Union, Optional, Dict, List
 
 from openai import ChatCompletion
 
@@ -33,14 +33,14 @@ class ChatCompletionMessageToolCall:
 @dataclass
 class ChatCompletionMessage:
     role: str
-    content: str | None
-    thinking: str | None = None
-    thinking_signature: str | None = None
-    tool_calls: list[ChatCompletionMessageToolCall] | None = None
-    function_call: Any | None = None
-    refusal: Any | None = None
-    audio: Any | None = None
-    response_id: str | None = None
+    content: Optional[str]
+    thinking: Optional[str] = None
+    thinking_signature: Optional[str] = None
+    tool_calls: Union[List[ChatCompletionMessageToolCall], None] = None
+    function_call: Optional[Any] = None
+    refusal: Optional[Any] = None
+    audio: Optional[Any] = None
+    response_id: Optional[str] = None
 
     def to_dict(self):
         tool_calls_dict = [tool_call.to_dict() for tool_call in self.tool_calls] if self.tool_calls else None
@@ -61,7 +61,7 @@ class ChatCompletionMessage:
 class Choice:
     finish_reason: str
     index: int
-    logprobs: dict | None
+    logprobs: Optional[dict]
     message: ChatCompletionMessage
 
 
@@ -91,13 +91,13 @@ class CompletionUsage:
 @dataclass
 class ChatCompletion:
     id: str
-    choices: list[Choice]
+    choices: List[Choice]
     created: int
     model: str
     object: str
     system_fingerprint: str
     usage: CompletionUsage
-    service_tier: Any | None = None
+    service_tier: Optional[Any] = None
 
 
 def _generate_random_id(length: int = 24) -> str:
@@ -106,7 +106,7 @@ def _generate_random_id(length: int = 24) -> str:
     return "".join(random.choice(characters) for _ in range(length))
 
 
-def ChatCompletionMessage_to_dict(msg) -> dict[str, Any]:
+def ChatCompletionMessage_to_dict(msg) -> Dict[str, Any]:
     """Convert ChatCompletionMessage to a dict."""
     try:
         msg_dict = msg.to_dict()
@@ -138,7 +138,7 @@ def ChatCompletionMessage_to_dict(msg) -> dict[str, Any]:
 def construct_chatcompletion(
     role: str,
     content: str,
-    tool_calls: list[ChatCompletionMessageToolCall] | None = None,
+    tool_calls: Union[List[ChatCompletionMessageToolCall], None] = None,
 ) -> ChatCompletion:
     choices = [
         Choice(
@@ -269,7 +269,7 @@ def function_to_json(func) -> dict:
     }
 
 
-def display_messages(messages: list[dict[str, Any] | ChatCompletionMessage]) -> None:
+def display_messages(messages: List[Union[Dict[str, Any], ChatCompletionMessage]]) -> None:
     """Display messages in a formatted way.
 
     Args:
@@ -304,7 +304,7 @@ def display_messages(messages: list[dict[str, Any] | ChatCompletionMessage]) -> 
         print("---")  # Add separator between messages
 
 
-def execute_python_code(code: str, timeout: int | None = 10) -> dict[str, Any]:
+def execute_python_code(code: str, timeout: Optional[int] = 10) -> Dict[str, Any]:
     """
     Execute Python code in an isolated subprocess and return its output.
 

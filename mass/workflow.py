@@ -12,12 +12,12 @@ import logging
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Optional, Union, Dict, List
+from typing import Any, Optional, Union
 
-from mass_agent import AgentResponse, MassAgent, TaskInput
-from mass_logging import get_log_manager
-from mass_orchestration import MassOrchestrationSystem
-from mass_streaming_display import create_streaming_display
+from .agent import AgentResponse, MassAgent, TaskInput
+from .logging import get_log_manager
+from .orchestration import MassOrchestrationSystem
+from .streaming_display import create_streaming_display
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -760,28 +760,28 @@ class MassWorkflowManager:
                         if "[SEARCH]" in chunk:
                             # Clean up search query display and add to agent output
                             clean_chunk = chunk.replace("[SEARCH]", "").strip()
-                            formatted_chunk = f"🔍 {clean_chunk}\n"
+                            formatted_chunk = f"\n🔍 {clean_chunk}\n"
                             asyncio.run(
                                 self.streaming_orchestrator.stream_agent_output(agent.agent_id, formatted_chunk)
                             )
                         elif "[FUNCTION]" in chunk:
                             # Clean up function call display and add to agent output
                             clean_chunk = chunk.replace("[FUNCTION]", "").strip()
-                            formatted_chunk = f"🔧 {clean_chunk}\n"
+                            formatted_chunk = f"\n🔧 {clean_chunk}\n"
                             asyncio.run(
                                 self.streaming_orchestrator.stream_agent_output(agent.agent_id, formatted_chunk)
                             )
                         elif "[CODE]" in chunk:
                             # Clean up code execution display and add to agent output
                             clean_chunk = chunk.replace("[CODE]", "").strip()
-                            formatted_chunk = f"💻 {clean_chunk}\n"
+                            formatted_chunk = f"\n💻 {clean_chunk}\n"
                             asyncio.run(
                                 self.streaming_orchestrator.stream_agent_output(agent.agent_id, formatted_chunk)
                             )
                         elif "[REASONING]" in chunk:
                             # Clean up reasoning display and add to agent output
                             clean_chunk = chunk.replace("[REASONING]", "").strip()
-                            formatted_chunk = f"🧠 {clean_chunk}\n"
+                            formatted_chunk = f"\n🧠 {clean_chunk}\n"
                             asyncio.run(
                                 self.streaming_orchestrator.stream_agent_output(agent.agent_id, formatted_chunk)
                             )
@@ -794,7 +794,7 @@ class MassWorkflowManager:
                             )
                         else:
                             # Default agent output display
-                            formatted_chunk = f"ℹ️ {chunk}\n"
+                            formatted_chunk = f"\nℹ️ {chunk}\n"
                             asyncio.run(
                                 self.streaming_orchestrator.stream_agent_output(agent.agent_id, formatted_chunk)
                             )

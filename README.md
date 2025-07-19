@@ -155,6 +155,15 @@ This project is evolving toward the **advanced MASS architecture** found in `fut
 - [ ] Improve error handling and graceful failure recovery
 - [ ] Add web interface for better visualization and control
 
+### 📋 TODO
+
+- [ ] Fix Grok Fake Stream
+- [ ] Add function call feature to backends
+- [ ] Change the workflow from system maintained to agent maintain
+- [ ] (optional) Convert Gemini from Request to API
+- [ ] (optional) Add Claude and Fireworks backend
+
+
 **Contributions Welcome!** We encourage developers to help bridge the gap between the current implementation and the target architecture.
 
 ---

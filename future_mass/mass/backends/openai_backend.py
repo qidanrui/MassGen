@@ -6,7 +6,7 @@ OpenAI backend implementation.
 
 import os
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, Union, Optional, List, Dict
 
 from ..utils.api_tracer import trace_api_call
 from .base import LLMBackend, StreamChunk
@@ -15,20 +15,20 @@ from .base import LLMBackend, StreamChunk
 class OpenAIBackend(LLMBackend):
     """OpenAI backend using the Response API."""
 
-    def __init__(self, api_key: str | None = None, **kwargs):
+    def __init__(self, api_key: Optional[str] = None, **kwargs):
         super().__init__(api_key, **kwargs)
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
 
     async def stream_with_tools(
         self,
         model: str,
-        messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]],
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
         has_called_update_summary: bool = False,
         has_voted: bool = False,
         pending_notifications: int = 0,
-        agent_ids: list[str] = None,
-        provider_tools: list[str] | None = None,
+        agent_ids: List[str] = None,
+        provider_tools: Union[List[str], None] = None,
         **kwargs,
     ) -> AsyncGenerator[StreamChunk, None]:
         """Stream response using OpenAI Response API."""
@@ -124,7 +124,7 @@ class OpenAIBackend(LLMBackend):
         """Get the provider name."""
         return "OpenAI"
 
-    def get_supported_builtin_tools(self) -> list[str]:
+    def get_supported_builtin_tools(self) -> List[str]:
         """Get list of builtin tools supported by OpenAI."""
         return ["web_search", "code_interpreter"]
 
@@ -178,7 +178,7 @@ class OpenAIBackend(LLMBackend):
 
     def _determine_call_type(
         self,
-        messages: list[dict[str, Any]],
+        messages: List[Dict[str, Any]],
         has_called_update_summary: bool,
         has_voted: bool,
         pending_notifications: int,

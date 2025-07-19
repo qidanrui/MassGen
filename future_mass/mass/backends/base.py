@@ -7,7 +7,7 @@ Base backend interface for LLM providers.
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Union, Optional, Dict
 
 
 @dataclass
@@ -15,9 +15,9 @@ class StreamChunk:
     """Standardized chunk format for streaming responses."""
 
     type: str  # "content", "tool_calls", "done", "error"
-    content: str | None = None
-    tool_calls: list[dict[str, Any]] | None = None
-    error: str | None = None
+    content: Optional[str] = None
+    tool_calls: Union[List[Dict[str, Any]], None] = None
+    error: Optional[str] = None
 
 
 @dataclass
@@ -32,7 +32,7 @@ class TokenUsage:
 class LLMBackend(ABC):
     """Abstract base class for LLM providers."""
 
-    def __init__(self, api_key: str | None = None, **kwargs):
+    def __init__(self, api_key: Optional[str] = None, **kwargs):
         self.api_key = api_key
         self.config = kwargs
         self.token_usage = TokenUsage()
@@ -41,13 +41,13 @@ class LLMBackend(ABC):
     async def stream_with_tools(
         self,
         model: str,
-        messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]],
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
         has_called_update_summary: bool = False,
         has_voted: bool = False,
         pending_notifications: int = 0,
-        agent_ids: list[str] = None,
-        provider_tools: list[str] | None = None,
+        agent_ids: List[str] = None,
+        provider_tools: Union[List[str], None] = None,
         **kwargs,
     ) -> AsyncGenerator[StreamChunk, None]:
         """
@@ -83,7 +83,7 @@ class LLMBackend(ABC):
         """Calculate cost for token usage."""
 
     def update_token_usage(
-        self, messages: list[dict[str, Any]], response_content: str, model: str
+        self, messages: List[Dict[str, Any]], response_content: str, model: str
     ):
         """Update token usage tracking."""
         # Estimate input tokens from messages
@@ -109,11 +109,11 @@ class LLMBackend(ABC):
         """Reset token usage tracking."""
         self.token_usage = TokenUsage()
 
-    def get_supported_builtin_tools(self) -> list[str]:
+    def get_supported_builtin_tools(self) -> List[str]:
         """Get list of builtin tools supported by this provider."""
         return []  # Override in subclasses
 
-    def filter_provider_tools(self, requested_tools: list[str] | None) -> list[str]:
+    def filter_provider_tools(self, requested_tools: Union[List[str], None]) -> List[str]:
         """Filter requested provider tools to only supported ones."""
         if not requested_tools:
             return []

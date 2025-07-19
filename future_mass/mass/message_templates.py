@@ -4,7 +4,7 @@ All configurable message strings with automatic source tracing.
 """
 
 import inspect
-from typing import Any
+from typing import Any, Union, Optional, Dict
 
 from .utils.api_tracer import get_tracer
 
@@ -253,7 +253,7 @@ Present your response as the definitive answer to the task."""
     # TRACING INFRASTRUCTURE
     # =============================================================================
 
-    def _trace_template_usage(self, template_name: str, context: dict[str, Any]) -> str:
+    def _trace_template_usage(self, template_name: str, context: Dict[str, Any]) -> str:
         """Trace template usage for debugging."""
         # Get caller information
         frame = inspect.currentframe().f_back

@@ -1,7 +1,7 @@
 """Agent configuration for MASS framework."""
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union, List, Dict
 
 if TYPE_CHECKING:
     from .message_templates import MessageTemplates
@@ -18,16 +18,16 @@ class AgentConfig:
         message_templates: Custom message templates (None=default)
     """
 
-    backend_params: dict[str, Any] = field(default_factory=dict)
-    provider_tools: list[str] | None = None
-    user_tools: list[dict[str, Any]] = field(default_factory=list)
+    backend_params: Dict[str, Any] = field(default_factory=dict)
+    provider_tools: Union[List[str], None] = None
+    user_tools: List[Dict[str, Any]] = field(default_factory=list)
     message_templates: Optional["MessageTemplates"] = None
 
     @classmethod
     def create_gpt_config(
         cls,
         model: str = "gpt-4o-mini",
-        provider_tools: list[str] | None = None,
+        provider_tools: Union[List[str], None] = None,
         **kwargs,
     ) -> "AgentConfig":
         """Create OpenAI GPT configuration."""
@@ -39,7 +39,7 @@ class AgentConfig:
     def create_claude_config(
         cls,
         model: str = "claude-3-sonnet-20240229",
-        provider_tools: list[str] | None = None,
+        provider_tools: Union[List[str], None] = None,
         **kwargs,
     ) -> "AgentConfig":
         """Create Anthropic Claude configuration."""
@@ -51,7 +51,7 @@ class AgentConfig:
     def create_grok_config(
         cls,
         model: str = "grok-beta",
-        provider_tools: list[str] | None = None,
+        provider_tools: Union[List[str], None] = None,
         **kwargs,
     ) -> "AgentConfig":
         """Create Grok configuration."""
@@ -59,7 +59,7 @@ class AgentConfig:
             backend_params={"model": model, **kwargs}, provider_tools=provider_tools
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         result = {
             "backend_params": self.backend_params,
@@ -84,7 +84,7 @@ class AgentConfig:
         return result
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "AgentConfig":
+    def from_dict(cls, data: Dict[str, Any]) -> "AgentConfig":
         """Create from dictionary (for deserialization)."""
         # Extract basic fields
         backend_params = data.get("backend_params", {})

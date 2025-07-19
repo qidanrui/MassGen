@@ -8,7 +8,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union, Dict
 
 
 @dataclass
@@ -20,8 +20,8 @@ class SummaryFile:
     filepath: str
     timestamp: float
     created_at: str
-    session_id: str | None = None
-    content: str | None = None
+    session_id: Optional[str] = None
+    content: Optional[str] = None
 
     @classmethod
     def from_file(cls, filepath: Path) -> Optional["SummaryFile"]:
@@ -50,7 +50,7 @@ class SummaryManager:
         self.summaries_dir = Path(summaries_dir)
         self.summaries_dir.mkdir(exist_ok=True)
 
-    def list_summaries(self, agent_id: str | None = None) -> list[SummaryFile]:
+    def list_summaries(self, agent_id: Optional[str] = None) -> List[SummaryFile]:
         """List all summary files, optionally filtered by agent_id."""
         summaries = []
 
@@ -65,12 +65,12 @@ class SummaryManager:
         summaries.sort(key=lambda s: s.timestamp, reverse=True)
         return summaries
 
-    def get_latest_summary(self, agent_id: str) -> SummaryFile | None:
+    def get_latest_summary(self, agent_id: str) -> Optional[SummaryFile]:
         """Get the latest summary for an agent."""
         summaries = self.list_summaries(agent_id)
         return summaries[0] if summaries else None
 
-    def get_summary_by_version(self, agent_id: str, version: int) -> SummaryFile | None:
+    def get_summary_by_version(self, agent_id: str, version: int) -> Optional[SummaryFile]:
         """Get a specific version of an agent's summary."""
         summaries = self.list_summaries(agent_id)
         for summary in summaries:
@@ -78,7 +78,7 @@ class SummaryManager:
                 return summary
         return None
 
-    def cleanup_old_summaries(self, keep_latest: int = 5) -> dict[str, int]:
+    def cleanup_old_summaries(self, keep_latest: int = 5) -> Dict[str, int]:
         """Clean up old summary files, keeping only the latest N per agent."""
         cleanup_count = {}
 
@@ -110,7 +110,7 @@ class SummaryManager:
         return cleanup_count
 
     def export_session_summaries(
-        self, session_id: str, output_file: str | None = None
+        self, session_id: str, output_file: Optional[str] = None
     ) -> str:
         """Export all summaries for a session to a markdown file."""
         if not output_file:
@@ -153,7 +153,7 @@ class SummaryManager:
 
         return str(output_path)
 
-    def get_summary_stats(self) -> dict[str, Any]:
+    def get_summary_stats(self) -> Dict[str, Any]:
         """Get statistics about summary files."""
         summaries = self.list_summaries()
 

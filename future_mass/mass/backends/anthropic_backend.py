@@ -6,7 +6,7 @@ Anthropic backend implementation.
 
 import os
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, Union, Optional, List, Dict
 
 from .base import LLMBackend, StreamChunk
 
@@ -14,20 +14,20 @@ from .base import LLMBackend, StreamChunk
 class AnthropicBackend(LLMBackend):
     """Anthropic backend using the Claude API."""
 
-    def __init__(self, api_key: str | None = None, **kwargs):
+    def __init__(self, api_key: Optional[str] = None, **kwargs):
         super().__init__(api_key, **kwargs)
         self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
 
     async def stream_with_tools(
         self,
         model: str,
-        messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]],
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
         has_called_update_summary: bool = False,
         has_voted: bool = False,
         pending_notifications: int = 0,
-        agent_ids: list[str] = None,
-        provider_tools: list[str] | None = None,
+        agent_ids: List[str] = None,
+        provider_tools: Union[List[str], None] = None,
         **kwargs,
     ) -> AsyncGenerator[StreamChunk, None]:
         """Stream response using Anthropic API."""
@@ -169,6 +169,6 @@ class AnthropicBackend(LLMBackend):
 
         return input_cost + output_cost
 
-    def get_supported_builtin_tools(self) -> list[str]:
+    def get_supported_builtin_tools(self) -> List[str]:
         """Get list of builtin tools supported by Anthropic."""
         return ["code_execution"]  # Anthropic supports code execution (beta)

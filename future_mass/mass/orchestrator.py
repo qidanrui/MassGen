@@ -25,10 +25,10 @@ class MassOrchestrationResult:
     final_response: str
     representative_agent: str
     total_time: float
-    agent_summaries: dict[str, str]
-    vote_results: dict[str, str]
+    agent_summaries: Dict[str, str]
+    vote_results: Dict[str, str]
     total_cost: float
-    session_log: list[str]
+    session_log: List[str]
 
 
 class MassOrchestrator:
@@ -38,7 +38,7 @@ class MassOrchestrator:
         self,
         max_duration: float = 30.0,
         check_interval: float = 1.0,
-        stream_callback: Callable[[str, str], None] | None = None,
+        stream_callback: Union[Callable[[str, str], None], None] = None,
     ):
         self.max_duration = max_duration
         self.check_interval = check_interval
@@ -46,21 +46,21 @@ class MassOrchestrator:
 
         # Session state
         self.session_id = str(uuid.uuid4())
-        self.agents: dict[str, MassAgent] = {}
-        self.session_info: SessionInfo | None = None
-        self.session_log: list[str] = []
+        self.agents: Dict[str, MassAgent] = {}
+        self.session_info: Optional[SessionInfo] = None
+        self.session_log: List[str] = []
 
         # Orchestration control
         self.start_time = 0.0
         self.convergence_reached = False
-        self.votes: dict[str, str] = {}  # agent_id -> voted_for
+        self.votes: Dict[str, str] = {}  # agent_id -> voted_for
 
         # Synchronization
         self.update_lock = asyncio.Lock()
 
         # Multi-region display for agent streams
-        self.agent_regions: dict[str, list[str]] = {}
-        self.system_messages: list[str] = []
+        self.agent_regions: Dict[str, List[str]] = {}
+        self.system_messages: List[str] = []
         self.display_enabled = True
 
     def add_agent(self, agent: MassAgent):
@@ -216,7 +216,7 @@ class MassOrchestrator:
             if should_restart:
                 await self._restart_agent(agent, reasons)
 
-    async def _restart_agent(self, agent: MassAgent, reasons: list[str]):
+    async def _restart_agent(self, agent: MassAgent, reasons: List[str]):
         """Restart an agent with instruction addressing all applicable issues."""
         instruction_parts = []
 
@@ -358,7 +358,7 @@ class MassOrchestrator:
 
         await self._log(f"{voter_id} voted for {vote_target}")
 
-    async def get_all_summaries(self) -> dict[str, str]:
+    async def get_all_summaries(self) -> Dict[str, str]:
         """Get all agent summaries (for get_session_info tool)."""
         return {
             aid: agent.working_summary.content for aid, agent in self.agents.items()

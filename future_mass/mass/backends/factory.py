@@ -11,7 +11,7 @@ from .mock_backend import MockBackend
 from .openai_backend import OpenAIBackend
 
 
-def create_backend(model_name: str, api_key: str | None = None) -> LLMBackend:
+def create_backend(model_name: str, api_key: Optional[str] = None) -> LLMBackend:
     """
     Create the appropriate backend based on model name and API availability.
 

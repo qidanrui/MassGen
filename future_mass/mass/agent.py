@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Union, Optional, List, Dict
 
 from .agent_config import AgentConfig
 from .backends.factory import create_backend
@@ -44,14 +44,14 @@ class SessionInfo:
     task: str
     start_time: float
     current_time: float
-    agent_statuses: dict[str, str]
+    agent_statuses: Dict[str, str]
     total_agents: int
     stopped_agents: int
     votes_cast: int
     time_elapsed: float
     estimated_cost: float
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "session_id": self.session_id,
             "task": self.task,
@@ -93,22 +93,22 @@ class MassAgent:
         self.working_summary = WorkingSummary("")
         self.status = AgentStatus.INITIALIZING
         self.has_voted = False
-        self.vote_target: str | None = None
+        self.vote_target: Optional[str] = None
         self.has_declared_no_update = False
 
         # Tool usage tracking for validation and restart logic
         self.has_called_update_summary = False
-        self.work_session_tool_calls: list[
+        self.work_session_tool_calls: List[
             str
         ] = []  # Tools called in current work session
-        self.all_tool_calls: list[str] = []  # All tools called across entire session
+        self.all_tool_calls: List[str] = []  # All tools called across entire session
 
         # Notification queue (queued by default until check_updates called)
-        self.pending_notifications: list[NotificationUpdate] = []
+        self.pending_notifications: List[NotificationUpdate] = []
         self.processed_notification_ids: set = set()
 
         # Session reference (set by orchestrator)
-        self.session_info: SessionInfo | None = None
+        self.session_info: Optional[SessionInfo] = None
         self.orchestrator = None  # Reference to orchestrator for tool calls
 
         # Summary file management
@@ -156,7 +156,7 @@ class MassAgent:
             # No actual change - don't increment version or send notifications
             return f"No change to summary content (current version {self.working_summary.version})"
 
-    async def check_updates(self) -> dict[str, Any]:
+    async def check_updates(self) -> Dict[str, Any]:
         """Get dict of updated summaries from other agents."""
         if not self.pending_notifications:
             return {"updates": [], "message": "No new updates"}
@@ -270,7 +270,7 @@ class MassAgent:
         else:
             return f"Voted for {agent_id}"
 
-    async def get_session_info(self, include_summaries: bool = False) -> dict[str, Any]:
+    async def get_session_info(self, include_summaries: bool = False) -> Dict[str, Any]:
         """Get session context including agent statuses, time, costs."""
         if not self.session_info:
             return {"error": "Session info not available"}
@@ -437,7 +437,7 @@ class MassAgent:
             yield basic_response
 
     async def work_on_task(
-        self, task: str, restart_instruction: str | None = None
+        self, task: str, restart_instruction: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """Work on task - handles both initial work and restarts."""
         # Reset work session state
@@ -634,7 +634,7 @@ class MassAgent:
                 },
             ]
 
-    def _get_provider_tools(self) -> list[str]:
+    def _get_provider_tools(self) -> List[str]:
         """Get provider tools based on configuration."""
         if self.config.provider_tools is None:
             # None means use all supported tools
@@ -647,7 +647,7 @@ class MassAgent:
             supported = self.backend.get_supported_builtin_tools()
             return [tool for tool in self.config.provider_tools if tool in supported]
 
-    def _get_user_tools(self) -> list[dict[str, Any]]:
+    def _get_user_tools(self) -> List[Dict[str, Any]]:
         """Get user-provided tools with collision detection."""
         if not self.config.user_tools:
             return []
@@ -789,7 +789,7 @@ class MassAgent:
         """Queue notification from another agent."""
         self.pending_notifications.append(notification)
 
-    def should_restart(self) -> tuple[bool, list[str]]:
+    def should_restart(self) -> tuple[bool, List[str]]:
         """Check if agent should be restarted and return all applicable reasons."""
         # Only restart stopped agents
         if self.status != AgentStatus.STOPPED:
@@ -816,7 +816,7 @@ class MassAgent:
         """Get current working summary."""
         return self.working_summary
 
-    def get_status_info(self) -> dict[str, Any]:
+    def get_status_info(self) -> Dict[str, Any]:
         """Get current status information."""
         return {
             "agent_id": self.agent_id,
