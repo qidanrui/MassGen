@@ -2,6 +2,7 @@ import os
 import threading
 import time
 import json
+import copy
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -143,13 +144,13 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
 
         # Convert messages to the format expected by OpenAI responses API
         # For now, we'll use the last user message as input
-        input_text = ""
+        input_text = []
         instructions = ""
-        for message in reversed(messages):
-            if message["role"] == "user":
-                input_text = message["content"]
-            if message["role"] == "system":
+        for message in messages:
+            if message.get("role", "") == "system":
                 instructions = message["content"]
+            else:
+                input_text.append(message)
 
         # Make API request with retry logic (use Responses API for all models)
         completion = None
@@ -158,6 +159,11 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
             try:
                 # Create a local copy of model to avoid scoping issues
                 model_name = model
+                
+                print(f"Formatted tools: {json.dumps(formatted_tools, indent=2)}")
+                print("--------------------------------")
+                print(f"Input text: {json.dumps(input_text, indent=2)}")
+                _ = input("Press Enter to continue...")
                 
                 # Use responses API for all models (supports streaming)
                 # Note: Some models like o4-mini don't support temperature parameter
@@ -409,14 +415,44 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
 if __name__ == "__main__":
     initial_messages = [
                 {"role": "system", "content": """
-You are working with other agents to solve a task.
-You can use search and code tools to help you solve the task.
-During your task solving process, you should use the `update_summary` tool to progressively record your working process so that it can be shared with other agents.
-You should also use the `check_updates` tool to check other agents' current progress on the same task to help you find missing information or errors.
-Remember: 
- - This is a collaborative effort. Work together, share insights and find missing information/errors, and build consensus toward the best solution.
- - When you share insights with other agents, make sure you include evidence (like information sources and urls) to support your claims, so that other agents can trust your claims.
- - When you receive updates from other agents, you should also try to verify the information.
+You are Agent 0 - an expert agent equipped with search and code tools working as part of a collaborative team to solve complex tasks.
+
+### Core Workflow
+
+1. Task Execution
+- Use your available tools (search, code analysis, etc.) to investigate and solve the assigned task
+- Apply your expertise to analyze information, identify patterns, and draw insights
+
+2. Progress Documentation
+- Use the `update_summary` tool regularly to record your findings, hypotheses, and progress
+- Document your reasoning process so other agents can understand and build upon your work
+- Include specific evidence such as:
+  - Information sources and URLs
+  - Data analysis or code execution results
+  - Key insights or discoveries
+
+3. Collaboration & Information Sharing
+- When sharing insights: Always provide supporting evidence (sources, URLs, calculations) so other agents can verify and trust your findings
+- When receiving updates: Critically evaluate information from other agents and attempt to verify their claims
+- Look for gaps, inconsistencies, or errors in the collective analysis
+- Build upon each other's work rather than duplicating efforts
+
+4. Solution Validation
+- Continuously verify information accuracy and look for missing pieces
+- Cross-check findings against multiple sources when possible
+- Challenge assumptions and test hypotheses
+
+5. Consensus Building
+- Once you believe a solution has been found (by yourself or another agent), use the `vote` tool to nominate that agent as the representative
+- Only vote when you're confident the solution is accurate and complete
+- Continue working until the team reaches consensus on the best answer
+
+### Key Principles
+- Collaborative mindset: This is a team effort - share knowledge generously and build on others' work
+- Evidence-based reasoning: Always support your claims with verifiable sources and data
+- Quality over speed: Prioritize accuracy and thoroughness over quick answers
+- Continuous verification: Question and verify information, even from trusted team members
+- You are Agent 0. That is your identifier in the team. 
 """
                 },
         {
@@ -425,14 +461,25 @@ Remember:
         }
     ]
 
-    from mock_tools import update_summary, check_updates
+    notification_message = """
+If you have anything that you want to share with other agents, you can use the `update_summary` tool to update the summary.
+The summary should include all necessary information and evidence to support your claims.
+If you believe anyone has found the solution (including yourself), you can use the `vote` tool to vote for them.
+"""
+
+    update_message = """
+Below are the recent updates from other agents:
+{updates}
+"""
+
+    from mock_tools import update_summary, check_updates, vote
     
     tools = ["live_search", "code_execution"]
     tools.append(function_to_json(update_summary))
-    tools.append(function_to_json(check_updates))
+    tools.append(function_to_json(vote))
 
     # Implementation of conversation loop with function calling
-    # Based on OpenAI Responses API documentation for function calling
+    # Using the existing process_message() function
     
     def execute_function_calls(function_calls, tool_mapping):
         """Execute function calls and return formatted outputs for the conversation."""
@@ -486,70 +533,28 @@ Remember:
     tool_mapping = {
         "update_summary": update_summary,
         "check_updates": check_updates,
+        "vote": vote,
     }
     
-    # Use OpenAI client directly for Responses API with proper conversation management
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    
-    # Extract the user input and system instructions from initial_messages
-    user_input = ""
-    system_instructions = ""
-    for message in initial_messages:
-        if message["role"] == "user":
-            user_input = message["content"]
-        elif message["role"] == "system":
-            system_instructions = message["content"]
-    
-    print(f"User input: {user_input}")
-    print(f"System instructions: {system_instructions}")
-    
-    # Prepare tools for Responses API
-    formatted_tools = []
-    for tool in tools:
-        if isinstance(tool, dict):
-            formatted_tools.append(tool)
-        elif callable(tool):
-            formatted_tools.append(function_to_json(tool))
-        elif tool == "live_search":
-            formatted_tools.append({"type": "web_search_preview"})
-        elif tool == "code_execution":
-            formatted_tools.append({"type": "code_interpreter", "container": {"type": "auto"}})
-    
-    print(f"Formatted tools: {json.dumps(formatted_tools, indent=4)}")
+    print(f"Initial messages: {json.dumps(initial_messages, indent=2)}")
+    print(f"Tools: {tools}")
     
     max_iterations = 5
     round = 0
-    previous_response_id = None
-    input_message = ""
+    current_messages = initial_messages.copy()
     all_function_call_pairs = []
+    updates = ""
     
     while round < max_iterations:
         print(f"\n--- Round {round} ---")
         
         try:
-            # Create API request parameters
-            params = {
-                "model": "gpt-4o-mini",  # Default model for this example
-                "tools": formatted_tools if formatted_tools else None,
-                "instructions": system_instructions if system_instructions else None,
-            }
-            
-            if round == 0:
-                # First round - send initial user input
-                params["input"] = user_input
-            else:
-                # Subsequent rounds - use previous_response_id to maintain conversation state
-                params["input"] = input_message  # Empty input for function call responses
-            
-            if previous_response_id:
-                params["previous_response_id"] = previous_response_id
-            
-            # Make the API call
-            response = client.responses.create(**params)
-            previous_response_id = response.id
-                        
-            # Parse the response using the existing parse_completion function
-            result = parse_completion(response, add_citations=True)
+            # Use the existing process_message function instead of manual API calls
+            result = process_message(
+                messages=current_messages,
+                model="gpt-4.1",
+                tools=tools,
+            )
             
             print(f"Round {round} - Message: {result['text']}")
             print(f"Round {round} - Code: {len(result['code'])} blocks")
@@ -557,19 +562,32 @@ Remember:
             print(f"Round {round} - Function calls: {len(result['function_calls'])}")
             _ = input("Press Enter to continue...")
             
-            # If no function calls, we're done
+            # Add assistant response with function calls to conversation
+            if result['text']:
+                current_messages.append({"role": "assistant", "content": result['text']})
+                
+            # If no function calls, we're done or prompt for more actions
             if not result['function_calls']:
-                input_message = "Please remember to update the summary and check other agents' updates by calling the `update_summary` and `check_updates` tools, or continue to solve the task."
+                # Add follow-up prompt
+                followup_message = notification_message + (update_message.format(updates=updates) if updates else "")
+                current_messages.append({"role": "user", "content": followup_message})
+                print(f"Followup input: {followup_message}")
             else:
                 # Execute function calls
                 function_outputs = execute_function_calls(result['function_calls'], tool_mapping)
-                function_call_pairs = zip(result['function_calls'], function_outputs)
-                all_function_call_pairs.extend(function_call_pairs)
-                # rebuild the conversation
-                input_message = build_conversation_with_function_calls(user_input, all_function_call_pairs)
-                previous_response_id = None # reset the conversation history
                 
-            print(f"Followup input: {input_message}")
+                # Add function call results to conversation
+                for function_call, function_output in zip(result['function_calls'], function_outputs):
+                    # Add function call as assistant message
+                    print(f"Function call: {function_call}")
+                    print(f"Function output: {function_output}")
+                    clean_function_call = copy.deepcopy(function_call)
+                    del clean_function_call['id']
+                    current_messages.extend([clean_function_call, function_output])
+                
+                print(f"Executed {len(function_outputs)} function calls")
+            
+            print(f"Current messages: {json.dumps(current_messages, indent=2)}")
             _ = input("Press Enter to continue...")
                 
         except Exception as e:
