@@ -7,6 +7,7 @@ OpenAI, Gemini, and Grok agent implementations.
 
 import os
 import sys
+from typing import Callable
 
 from dotenv import load_dotenv
 
@@ -64,7 +65,7 @@ class OpenAIMassAgent(MassAgent):
         temperature: float = 0.7,
         timeout: float = None,
         stream: bool = False,
-        stream_callback: callable | None = None,
+        stream_callback: Callable | None = None,
         **kwargs,
     ) -> AgentResponse:
         """Process message using OpenAI backend."""
@@ -154,7 +155,7 @@ class GeminiMassAgent(MassAgent):
         temperature: float = 0.7,
         timeout: float = None,
         stream: bool = False,
-        stream_callback: callable | None = None,
+        stream_callback: Callable | None = None,
         **kwargs,
     ) -> AgentResponse:
         """Process message using Gemini backend."""
@@ -238,7 +239,7 @@ class GrokMassAgent(MassAgent):
         temperature: float = 0.7,
         timeout: float = None,
         stream: bool = False,
-        stream_callback: callable | None = None,
+        stream_callback: Callable | None = None,
         **kwargs,
     ) -> AgentResponse:
         """Process message using Grok backend."""

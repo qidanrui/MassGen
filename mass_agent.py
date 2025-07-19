@@ -1,7 +1,7 @@
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 
 @dataclass
@@ -105,7 +105,7 @@ class MassAgent(ABC):
         temperature: float = None,
         timeout: float = None,
         stream: bool = False,
-        stream_callback: callable | None = None,
+        stream_callback: Callable | None = None,
         **kwargs,
     ) -> AgentResponse:
         """
@@ -316,7 +316,7 @@ You have been voted by other agents to present the final answer.
         phase: str = "initial",
         timeout: float = None,
         stream: bool = False,
-        stream_callback: callable | None = None,
+        stream_callback: Callable | None = None,
     ) -> AgentResponse:
         """
         Process a task in a specific workflow phase.

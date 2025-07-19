@@ -12,7 +12,7 @@ import logging
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any
+from typing import Any, Optional
 
 from mass_agent import AgentResponse, MassAgent, TaskInput
 from mass_logging import get_log_manager
