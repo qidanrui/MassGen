@@ -1,0 +1,47 @@
+# Pre-commit configuration for MASS: Multi-Agent Scaling System
+# See https://pre-commit.com for more information
+
+repos:
+  # General file formatting and linting
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '^future_mass/.*'
+      - id: end-of-file-fixer
+        exclude: '^future_mass/.*'
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # Python code formatting with Black (main project only)
+  - repo: https://github.com/psf/black
+    rev: 23.3.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: ['--line-length=120']
+        exclude: '^future_mass/.*'
+
+  # Import sorting with isort (main project only)
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: ['--profile', 'black', '--line-length=120']
+        exclude: '^future_mass/.*'
+
+  # Markdown linting with relaxed rules
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.35.0
+    hooks:
+      - id: markdownlint
+        args: ['--fix', '--config', '.markdownlint.json']
+
+# Global configuration
+default_stages: [pre-commit]
+fail_fast: false

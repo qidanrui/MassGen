@@ -18,36 +18,37 @@ Usage examples:
 """
 
 import argparse
+import atexit
 import json
 import logging
-import sys
 import os
 import signal
-import atexit
-from typing import List, Dict, Any, Optional
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(__file__))
 
+from agents.constants import get_agent_type_from_model, get_available_models
 from mass_agent import TaskInput
+from mass_agents import create_agent
+from mass_logging import cleanup_logging, initialize_logging
 from mass_orchestration import MassOrchestrationSystem
 from mass_workflow import MassWorkflowManager
-from mass_agents import create_agent
-from mass_logging import initialize_logging, cleanup_logging
-from agents.constants import get_agent_type_from_model, get_available_models
 
-def create_agent_configs_from_models(model_names: List[str]) -> List[Dict[str, Any]]:
+
+def create_agent_configs_from_models(model_names: list[str]) -> list[dict[str, Any]]:
     """
     Convert a list of model names to agent configurations.
-    
+
     Args:
         model_names: List of model names (e.g., ["gpt-4o", "gemini-2.5-flash", "grok-4"])
-        
+
     Returns:
         List of agent configuration dictionaries with type and model specified
-        
+
     Raises:
         ValueError: If any model name is invalid
     """
@@ -55,13 +56,10 @@ def create_agent_configs_from_models(model_names: List[str]) -> List[Dict[str, A
     for model_name in model_names:
         try:
             agent_type = get_agent_type_from_model(model_name)
-            agent_configs.append({
-                "type": agent_type,
-                "kwargs": {"model": model_name}
-            })
+            agent_configs.append({"type": agent_type, "kwargs": {"model": model_name}})
         except ValueError as e:
             raise ValueError(f"Invalid model name '{model_name}': {str(e)}")
-    
+
     return agent_configs
 
 # Initialize basic logging
@@ -70,6 +68,7 @@ logger = logging.getLogger(__name__)
 
 # Global reference for cleanup
 _global_mass_system = None
+
 
 def _cleanup_on_exit():
     """Global cleanup function called on exit."""
@@ -80,42 +79,45 @@ def _cleanup_on_exit():
         except Exception as e:
             print(f"Warning: Failed to cleanup agents on exit: {e}")
 
+
 def _signal_handler(signum, frame):
     """Handle termination signals to ensure cleanup."""
     print(f"\nReceived signal {signum}, cleaning up...")
     _cleanup_on_exit()
     os._exit(1)
 
+
 # Register cleanup handlers
 atexit.register(_cleanup_on_exit)
 signal.signal(signal.SIGINT, _signal_handler)
 signal.signal(signal.SIGTERM, _signal_handler)
 
+
 class MassSystem:
     """
     Main MASS system orchestrator.
-    
+
     This class provides a high-level interface for running the complete
     MASS workflow on given tasks with multiple agents.
     """
-    
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+
+    def __init__(self, config: dict[str, Any] | None = None):
         """
         Initialize the MASS system.
-        
+
         Args:
             config: Optional configuration dictionary
         """
         global _global_mass_system
         _global_mass_system = self  # Set global reference for cleanup
-        
+
         self.config = config or {}
-        
+
         # System components
-        self.orchestration_system: Optional[MassOrchestrationSystem] = None
-        self.workflow_manager: Optional[MassWorkflowManager] = None
-        self.agents: List[Any] = []
-        
+        self.orchestration_system: MassOrchestrationSystem | None = None
+        self.workflow_manager: MassWorkflowManager | None = None
+        self.agents: list[Any] = []
+
         # Configuration parameters
         self.max_rounds = self.config.get("max_rounds", 5)
         self.consensus_threshold = self.config.get("consensus_threshold", 1.0)
@@ -125,7 +127,7 @@ class MassSystem:
     def initialize_system(self, agent_configs: List[Dict[str, Any]]):
         """
         Initialize the orchestration system and agents.
-        
+
         Args:
             agent_configs: List of agent configuration dictionaries
         """
@@ -146,8 +148,7 @@ class MassSystem:
         # Create orchestration system
         logger.info("Creating orchestration system...")
         self.orchestration_system = MassOrchestrationSystem(
-            max_rounds=self.max_rounds,
-            consensus_threshold=self.consensus_threshold
+            max_rounds=self.max_rounds, consensus_threshold=self.consensus_threshold
         )
         
         # Create and register agents
@@ -162,17 +163,17 @@ class MassSystem:
                     agent_type=agent_type,
                     agent_id=i,
                     orchestration_system=self.orchestration_system,
-                    **agent_kwargs
+                    **agent_kwargs,
                 )
                 self.orchestration_system.register_agent(agent)
                 self.agents.append(agent)
                 model_name = agent_kwargs.get("model", "default")
                 logger.info(f"✓ Registered agent {i}: {agent_type} ({model_name})")
-                
+
             except Exception as e:
                 logger.error(f"✗ Failed to create agent {i} of type {agent_type}: {str(e)}")
                 raise e
-        
+
         # Create workflow manager
         logger.info("Creating workflow manager...")
         self.workflow_manager = MassWorkflowManager(
@@ -186,7 +187,7 @@ class MassSystem:
         # Connect streaming orchestrator to orchestration system
         if self.workflow_manager.streaming_orchestrator:
             self.orchestration_system.streaming_orchestrator = self.workflow_manager.streaming_orchestrator
-        
+
         logger.info("✓ MASS system initialization completed successfully")
         logger.info("=" * 60)
     
@@ -210,17 +211,17 @@ class MassSystem:
     def run_task(self, task: TaskInput, progress_callback: Optional[callable] = None) -> Dict[str, Any]:
         """
         Run the MASS workflow on a given task.
-        
+
         Args:
             task: TaskInput containing the problem to solve
             progress_callback: Optional callback for progress updates
-            
+
         Returns:
             Dictionary containing the complete workflow results
         """
         if not self.workflow_manager:
             raise ValueError("System not initialized. Call initialize_system() first.")
-        
+
         logger.info("=" * 80)
         logger.info("STARTING MASS WORKFLOW EXECUTION")
         logger.info("=" * 80)
@@ -228,19 +229,20 @@ class MassSystem:
         logger.info(f"  - Task ID: {task.task_id}")
         logger.info(f"  - Question: {task.question[:200]}{'...' if len(task.question) > 200 else ''}")
         logger.info("=" * 80)
-        
+
         # Add default progress callback if none provided
         if progress_callback is None:
             progress_callback = self._default_progress_callback
         
         # Record workflow start time
         import time
+
         workflow_start = time.time()
-        
+
         # Run the complete workflow
         logger.info("🚀 Launching workflow manager...")
         results = self.workflow_manager.run_complete_workflow(task, progress_callback)
-        
+
         # Calculate total execution time
         workflow_duration = time.time() - workflow_start
         
@@ -249,7 +251,7 @@ class MassSystem:
         logger.info("WORKFLOW EXECUTION COMPLETED")
         logger.info("=" * 80)
         logger.info(f"Total workflow duration: {workflow_duration:.2f} seconds")
-        
+
         if results["success"]:
             logger.info("✅ MASS workflow completed successfully")
             if results["final_solution"]:
@@ -259,7 +261,7 @@ class MassSystem:
                 logger.info(f"  - Answer: {final_sol.get('extracted_answer', 'No answer extracted')}")
         else:
             logger.error("❌ MASS workflow failed")
-            error_msg = results.get('error', 'Unknown error')
+            error_msg = results.get("error", "Unknown error")
             logger.error(f"Error details: {error_msg}")
         
         logger.info("=" * 80)
@@ -352,16 +354,17 @@ class MassSystem:
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="MASS (Multi-Agent Scaling System)")
-    
+
     parser.add_argument(
         "--question", "-q",
         type=str,
         required=True,
         help="The question/task to solve"
     )
-    
+
     parser.add_argument(
-        "--agents", "-a",
+        "--agents",
+        "-a",
         type=str,
         required=True,
         help="Comma-separated list of model names (e.g., 'gpt-4o,gemini-2.5-flash,grok-4')"
@@ -377,14 +380,14 @@ def parse_arguments():
         "--max-rounds",
         type=int,
         default=5,
-        help="Maximum collaboration rounds (default: 5)"
+        help="Maximum collaboration rounds (default: 5)",
     )
-    
+
     parser.add_argument(
         "--consensus-threshold",
         type=float,
         default=1.0,
-        help="Consensus threshold (0.0-1.0, default: 1.0 = unanimous)"
+        help="Consensus threshold (0.0-1.0, default: 1.0 = unanimous)",
     )
     
     parser.add_argument(
@@ -394,6 +397,7 @@ def parse_arguments():
     )
     
     return parser.parse_args()
+
 
 def main():
     """Main entry point for command line usage."""
@@ -465,5 +469,6 @@ def main():
     sys.exit(exit_code)
 
 
+
 if __name__ == "__main__":
-    main() 
+    main()
