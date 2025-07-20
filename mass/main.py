@@ -28,7 +28,7 @@ from datetime import datetime
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(__file__))
 
-from .agent import TaskInput
+from .types import TaskInput, ModelConfig
 from .orchestrator import MassOrchestrator
 from .workflow import MassWorkflowManager
 from .agents import create_agent
@@ -43,7 +43,7 @@ def create_agent_configs_from_models(model_names: List[str]) -> List[Dict[str, A
         model_names: List of model names (e.g., ["gpt-4o", "gemini-2.5-flash", "grok-4"])
         
     Returns:
-        List of agent configuration dictionaries with type and model specified
+        List of agent configuration dictionaries with type and model_config specified
         
     Raises:
         ValueError: If any model name is invalid
@@ -52,9 +52,10 @@ def create_agent_configs_from_models(model_names: List[str]) -> List[Dict[str, A
     for model_name in model_names:
         try:
             agent_type = get_agent_type_from_model(model_name)
+            model_config = ModelConfig(model=model_name)
             agent_configs.append({
                 "type": agent_type,
-                "kwargs": {"model": model_name}
+                "model_config": model_config
             })
         except ValueError as e:
             raise ValueError(f"Invalid model name '{model_name}': {str(e)}")
@@ -153,18 +154,18 @@ class MassSystem:
         self.agents = []
         for i, agent_config in enumerate(agent_configs):
             agent_type = agent_config.get("type", "openai")
-            agent_kwargs = agent_config.get("kwargs", {})
+            model_config = agent_config.get("model_config")
             
             try:
                 agent = create_agent(
                     agent_type=agent_type,
                     agent_id=i,
                     orchestrator=self.orchestrator,
-                    **agent_kwargs
+                    model_config=model_config
                 )
                 self.orchestrator.register_agent(agent)
                 self.agents.append(agent)
-                model_name = agent_kwargs.get("model", "default")
+                model_name = model_config.model if model_config else "default"
                 logger.info(f"✓ Registered agent {i}: {agent_type} ({model_name})")
                 
             except Exception as e:

@@ -1,5 +1,5 @@
 """
-MASS Streaming Display System - Simple Working Version
+MASS Streaming Display System
 """
 
 import os

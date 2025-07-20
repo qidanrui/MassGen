@@ -11,6 +11,9 @@ import ast
 import operator
 import math
 
+register_tool("python_interpreter", python_interpreter)
+register_tool("calculator", calculator)
+
 def update_summary(new_content: str):
     """
     Record your working process and final summary report, which can be shared with other agents.

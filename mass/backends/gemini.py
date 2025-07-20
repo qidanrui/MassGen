@@ -11,7 +11,7 @@ import copy
 load_dotenv()
 
 # Import utility functions
-from ..utils import function_to_json, execute_function_calls
+from .util import function_to_json, execute_function_calls
 from ..tools import update_summary, check_updates, vote, calculator, python_interpreter
 
 

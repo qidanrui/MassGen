@@ -1035,42 +1035,32 @@ class MassWorkflowManager:
                         f"🗳️  Agent {agent.agent_id} VOTED for Agent {vote_target}"
                     )
             else:
-                # Agent updated their own solution - extract summary AND final answer
-                final_answer = self._extract_answer(response.text)  # Only in debate phase!
-                agent.update_summary(summary_report, final_answer)
+                # Agent updated their own solution - extract summary
+                agent.update_summary(summary_report)
                 print(f"   📝 Agent {agent.agent_id} updated their solution")
                 print(f"   📊 Updated summary length: {len(summary_report)} characters")
-                if final_answer:
-                    print(f"   🎯 Extracted final answer length: {len(final_answer)} characters")
                 print(f"   🔄 Continuing to work (no vote cast)")
                 logger.debug(f"Updated summary for agent {agent.agent_id} after {phase} phase")
 
                 # Update streaming display for summary update
                 if self.streaming_orchestrator:
-                    answer_info = f" + answer ({len(final_answer)} chars)" if final_answer else ""
                     asyncio.run(self.streaming_orchestrator.stream_agent_output(
-                        agent.agent_id, f"Updated solution ({len(summary_report)} chars{answer_info})\n"
+                        agent.agent_id, f"Updated solution ({len(summary_report)} chars)\n"
                     ))
                 
         elif phase == "presentation":
-            # Phase 4: Extract final summary report and answer (no voting in presentation phase)
-            final_answer = self._extract_answer(response.text)
-            agent.update_summary(summary_report, final_answer)
+            # Phase 4: Extract final summary report (no voting in presentation phase)
+            agent.update_summary(summary_report)
             print(f"   📝 Agent {agent.agent_id} provided final presentation")
             print(f"   📊 Final summary length: {len(summary_report)} characters")
-            if final_answer:
-                print(f"   🎯 Final answer length: {len(final_answer)} characters")
-            else:
-                print(f"   ⚠️  No final answer extracted from presentation")
-            logger.info(f"Agent {agent.agent_id} completed final presentation with summary and answer")
+            logger.info(f"Agent {agent.agent_id} completed final presentation with summary")
 
             # Update streaming display for presentation
             if self.streaming_orchestrator:
-                answer_info = f" + answer ({len(final_answer)} chars)" if final_answer else ""
                 asyncio.run(
                     self.streaming_orchestrator.stream_agent_output(
                         agent.agent_id,
-                        f"🎉 SYSTEM: Final presentation ({len(summary_report)} chars{answer_info})\n",
+                        f"🎉 SYSTEM: Final presentation ({len(summary_report)} chars)\n",
                     )
                 )
                 self.streaming_orchestrator.update_agent_status(agent.agent_id, "completed_presentation")

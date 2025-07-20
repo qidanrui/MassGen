@@ -29,7 +29,6 @@ def parse_completion(response, add_citations=True):
     code = []
     citations = []
     function_calls = []
-    reasoning_items = []
 
     # Process the response output
     for r in response.output:
@@ -78,7 +77,6 @@ def parse_completion(response, add_citations=True):
         "code": code,
         "citations": citations,
         "function_calls": function_calls,
-        "reasoning_items": reasoning_items,
     }
 
 def process_message(messages, model="o4-mini", tools=["live_search", "code_execution"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None, processing_timeout=150, stream=False, stream_callback=None):
@@ -397,7 +395,7 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
         # Thread will be automatically killed when this function returns (daemon thread)
         return {"text": "", "code": [], "citations": [], "function_calls": []}
 
-def multi_turn_tool_use(messages, model="o4-mini", tools=None, tool_mapping=None, max_rounds=5):
+def multi_turn_tool_use(messages, model="o4-mini", tools=["live_search", "code_execution"], tool_mapping=None, max_rounds=5):
     """
     Execute a multi-turn conversation loop with an agent using function calling.
     

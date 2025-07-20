@@ -84,52 +84,52 @@ def get_available_models() -> list:
 
 # Utility functions (originally from util.py)
 def execute_function_calls(function_calls, tool_mapping):
-        """Execute function calls and return formatted outputs for the conversation."""
-        function_outputs = []
-        for function_call in function_calls:
-            try:
-                # Get the function from tool mapping
-                target_function = None
-                function_name = function_call.get('name')
-                
-                # Look up function in tool_mapping
-                if function_name in tool_mapping:
-                    target_function = tool_mapping[function_name]
-                else:
-                    # Handle error case
-                    error_output = {
-                        "type": "function_call_output",
-                        "call_id": function_call.get('call_id'),
-                        "output": f"Error: Function '{function_name}' not found in tool mapping"
-                    }
-                    function_outputs.append(error_output)
-                    continue
-                
-                # Parse arguments and execute function
-                arguments = json.loads(function_call.get('arguments', '{}'))
-                result = target_function(**arguments)
-                
-                # Format the output according to Responses API requirements
-                function_output = {
+    """Execute function calls and return formatted outputs for the conversation."""
+    function_outputs = []
+    for function_call in function_calls:
+        try:
+            # Get the function from tool mapping
+            target_function = None
+            function_name = function_call.get('name')
+            
+            # Look up function in tool_mapping
+            if function_name in tool_mapping:
+                target_function = tool_mapping[function_name]
+            else:
+                # Handle error case
+                error_output = {
                     "type": "function_call_output",
                     "call_id": function_call.get('call_id'),
-                    "output": str(result)
-                }
-                function_outputs.append(function_output)
-                
-                print(f"Executed function: {function_name}({arguments}) -> {result}")
-                
-            except Exception as e:
-                # Handle execution errors
-                error_output = {
-                    "type": "function_call_output", 
-                    "call_id": function_call.get('call_id'),
-                    "output": f"Error executing function: {str(e)}"
+                    "output": f"Error: Function '{function_name}' not found in tool mapping"
                 }
                 function_outputs.append(error_output)
-                print(f"Error executing function {function_name}: {e}")
-                
-        return function_outputs
+                continue
+            
+            # Parse arguments and execute function
+            arguments = json.loads(function_call.get('arguments', '{}'))
+            result = target_function(**arguments)
+            
+            # Format the output according to Responses API requirements
+            function_output = {
+                "type": "function_call_output",
+                "call_id": function_call.get('call_id'),
+                "output": str(result)
+            }
+            function_outputs.append(function_output)
+            
+            # print(f"Executed function: {function_name}({arguments}) -> {result}")
+            
+        except Exception as e:
+            # Handle execution errors
+            error_output = {
+                "type": "function_call_output", 
+                "call_id": function_call.get('call_id'),
+                "output": f"Error executing function: {str(e)}"
+            }
+            function_outputs.append(error_output)
+            # print(f"Error executing function {function_name}: {e}")
+            
+    return function_outputs
 
 
 def function_to_json(func) -> dict:
