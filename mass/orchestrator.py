@@ -33,7 +33,7 @@ class SystemMetrics:
 
 @dataclass
 class SystemState:
-    """Overall state of the MASS orchestration system."""
+    """Overall state of the MASS orchestrator."""
 
     task: Optional[TaskInput] = None
     phase: str = "initial"  # "initial", "collaboration", "debate", "presentation", "completed"
@@ -99,9 +99,9 @@ def extract_answer_from_summary(summary: str) -> Optional[str]:
     return extracted_answers[0]["answer"]
 
 
-class MassOrchestrationSystem:
+class MassOrchestrator:
     """
-    Central orchestration system for managing multiple agents in the MASS framework.
+    Central orchestrator for managing multiple agents in the MASS framework.
 
     This system handles:
     - Agent state management and synchronization
@@ -118,7 +118,7 @@ class MassOrchestrationSystem:
         streaming_orchestrator=None,
     ):
         """
-        Initialize the orchestration system.
+        Initialize the orchestrator.
 
         Args:
             max_rounds: Maximum number of collaboration rounds before fallback to majority vote
@@ -142,7 +142,7 @@ class MassOrchestrationSystem:
 
     def register_agent(self, agent):
         """
-        Register an agent with the orchestration system.
+        Register an agent with the orchestrator.
 
         Args:
             agent: MassAgent instance to register
@@ -150,7 +150,7 @@ class MassOrchestrationSystem:
         with self._lock:
             self.agents[agent.agent_id] = agent
             self.agent_states[agent.agent_id] = agent.state
-            agent.orchestration_system = self
+            agent.orchestrator = self
 
     def start_task(self, task: TaskInput):
         """
@@ -160,7 +160,7 @@ class MassOrchestrationSystem:
             task: TaskInput containing the problem to solve
         """
         with self._lock:
-            logger.info("🎯 ORCHESTRATION SYSTEM: Starting new task")
+            logger.info("🎯 ORCHESTRATOR: Starting new task")
             logger.info(f"   Task ID: {task.task_id}")
             logger.info(f"   Question preview: {task.question}")
             logger.info(f"   Registered agents: {list(self.agents.keys())}")
@@ -677,7 +677,7 @@ class MassOrchestrationSystem:
         )
 
     def _log_event(self, event_type: str, data: Dict[str, Any]):
-        """Log a orchestration system event."""
+        """Log a orchestrator event."""
         self.communication_log.append({"timestamp": time.time(), "event_type": event_type, "data": data})
 
     def get_final_solution(self) -> Union[Dict[str, Any], None]:
@@ -855,4 +855,4 @@ class MassOrchestrationSystem:
             "final_solution": self.get_final_solution() if self.system_state.consensus_reached else None,
         }
 
-        return session_log
+        return session_log 

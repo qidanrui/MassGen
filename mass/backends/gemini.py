@@ -11,8 +11,8 @@ import copy
 load_dotenv()
 
 # Import utility functions
-from .util import function_to_json, execute_function_calls
-from .tools import update_summary, check_updates, vote, calculator, python_interpreter
+from ..utils import function_to_json, execute_function_calls
+from ..tools import update_summary, check_updates, vote, calculator, python_interpreter
 
 
 def parse_completion(completion, add_citations=True):

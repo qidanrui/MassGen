@@ -3,7 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-> 🧠 **Advanced multi-agent orchestration system that emulates Grok Heavy through intelligent collaboration**
+> 🧠 **Advanced multi-agent orchestrator that emulates Grok Heavy through intelligent collaboration**
 
 MASS is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result.
 

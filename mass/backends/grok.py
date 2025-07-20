@@ -11,8 +11,8 @@ from xai_sdk.chat import assistant, system, user, tool
 from xai_sdk.search import SearchParameters
 
 # Import utility functions
-from .util import function_to_json, execute_function_calls
-from .tools import update_summary, check_updates, vote
+from ..utils import function_to_json, execute_function_calls
+from ..tools import update_summary, check_updates, vote
 
 load_dotenv()
 

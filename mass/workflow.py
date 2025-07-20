@@ -15,7 +15,7 @@ from typing import Any, Optional, Union, Dict, List, Callable
 
 from .agent import AgentResponse, MassAgent, TaskInput
 from .logging import get_log_manager
-from .orchestration import MassOrchestrationSystem
+from .orchestrator import MassOrchestrator
 from .streaming_display import create_streaming_display
 
 # Set up logging
@@ -30,7 +30,7 @@ class MassWorkflowManager:
     orchestration between agents, and manages the overall workflow state.
     """
     
-    def __init__(self, orchestration_system: MassOrchestrationSystem, 
+    def __init__(self, orchestrator: MassOrchestrator, 
                  parallel_execution: bool = True,
                  check_update_frequency: float = 3.0,  # 3 seconds default as per README
                  max_collaboration_rounds: int = 5,  # Maximum collaboration rounds
@@ -42,7 +42,7 @@ class MassWorkflowManager:
         Initialize the workflow manager.
 
         Args:
-            orchestration_system: The orchestration system managing agents
+            orchestrator: The orchestrator managing agents
             parallel_execution: Whether to run agents in parallel
             check_update_frequency: How often agents check for updates in seconds (default 3)
             max_collaboration_rounds: Maximum number of collaboration rounds (default 5)
@@ -51,7 +51,7 @@ class MassWorkflowManager:
             max_display_lines: Maximum lines to display per agent (default 40)
             save_logs: Whether to save agent outputs and system messages to log files (default True)
         """
-        self.orchestration_system = orchestration_system
+        self.orchestrator = orchestrator
         self.parallel_execution = parallel_execution
         self.check_update_frequency = check_update_frequency
         self.max_collaboration_rounds = max_collaboration_rounds
@@ -87,10 +87,10 @@ class MassWorkflowManager:
         if phase in self.phase_callbacks:
             self.phase_callbacks[phase].append(callback)
 
-    def _update_orchestration_system_phase(self, new_phase: str):
-        """Update the orchestration system's phase to match the workflow manager's phase."""
-        old_phase = self.orchestration_system.system_state.phase
-        self.orchestration_system.system_state.phase = new_phase
+    def _update_orchestrator_phase(self, new_phase: str):
+        """Update the orchestrator's phase to match the workflow manager's phase."""
+        old_phase = self.orchestrator.system_state.phase
+        self.orchestrator.system_state.phase = new_phase
         logger.info(f"🔄 Phase transition: {old_phase} → {new_phase}")
         print(f"   🔄 System phase updated: {old_phase} → {new_phase}")
 
@@ -114,12 +114,12 @@ class MassWorkflowManager:
         logger.info("STARTING COMPLETE MASS WORKFLOW")
         logger.info("=" * 80)
 
-        # Initialize orchestration system for this task
-        self.orchestration_system.start_task(task)
+        # Initialize orchestrator for this task
+        self.orchestrator.start_task(task)
 
         # Set expected answer if available in task context
         if task.context and "answer" in task.context:
-            self.orchestration_system.set_expected_answer(task.context["answer"])
+            self.orchestrator.set_expected_answer(task.context["answer"])
             logger.info(f"Expected answer set: {task.context['answer']}")
 
         # Phase 1: Initial Processing
@@ -135,11 +135,11 @@ class MassWorkflowManager:
         if log_manager:
             log_manager.log_phase_transition("workflow_start", "initial")
 
-        self.orchestration_system.start_phase_timing("initial")
+        self.orchestrator.start_phase_timing("initial")
         self.current_phase = "initial"
-        self._update_orchestration_system_phase("initial")
+        self._update_orchestrator_phase("initial")
         initial_results = self._run_phase_1_initial_processing(task, progress_callback)
-        self.orchestration_system.end_phase_timing("initial")
+        self.orchestrator.end_phase_timing("initial")
         self.phase_results["initial"] = initial_results
 
         # Execute phase callbacks
@@ -161,11 +161,11 @@ class MassWorkflowManager:
         if log_manager:
             log_manager.log_phase_transition("initial", "collaboration")
 
-        self.orchestration_system.start_phase_timing("collaboration")
+        self.orchestrator.start_phase_timing("collaboration")
         self.current_phase = "collaboration"
-        self._update_orchestration_system_phase("collaboration")
+        self._update_orchestrator_phase("collaboration")
         collaboration_results = self._run_phase_2_collaboration(task, progress_callback)
-        self.orchestration_system.end_phase_timing("collaboration")
+        self.orchestrator.end_phase_timing("collaboration")
         self.phase_results["collaboration"] = collaboration_results
 
         # Execute phase callbacks
@@ -183,11 +183,11 @@ class MassWorkflowManager:
         if log_manager:
             log_manager.log_phase_transition("collaboration", "debate")
 
-        self.orchestration_system.start_phase_timing("debate")
+        self.orchestrator.start_phase_timing("debate")
         self.current_phase = "debate"
-        self._update_orchestration_system_phase("debate")
+        self._update_orchestrator_phase("debate")
         debate_results = self._run_phase_3_debate(task, progress_callback)
-        self.orchestration_system.end_phase_timing("debate")
+        self.orchestrator.end_phase_timing("debate")
         self.phase_results["debate"] = debate_results
 
         # Execute phase callbacks
@@ -195,7 +195,7 @@ class MassWorkflowManager:
             callback(debate_results)
 
         # Phase 4: Final Presentation (only if consensus reached)
-        if self.orchestration_system.system_state.consensus_reached:
+        if self.orchestrator.system_state.consensus_reached:
             print("─" * 60)
             print("🎉 PHASE 4: FINAL PRESENTATION")
             print("─" * 60)
@@ -206,11 +206,11 @@ class MassWorkflowManager:
             if log_manager:
                 log_manager.log_phase_transition("debate", "presentation")
 
-            self.orchestration_system.start_phase_timing("presentation")
+            self.orchestrator.start_phase_timing("presentation")
             self.current_phase = "presentation"
-            self._update_orchestration_system_phase("presentation")
+            self._update_orchestrator_phase("presentation")
             presentation_results = self._run_phase_4_presentation(task, progress_callback)
-            self.orchestration_system.end_phase_timing("presentation")
+            self.orchestrator.end_phase_timing("presentation")
             self.phase_results["presentation"] = presentation_results
 
             # Execute phase callbacks
@@ -222,7 +222,7 @@ class MassWorkflowManager:
             raise RuntimeError("Consensus not reached after debate phase")
 
         # Get final solution - let it fail if consensus wasn't reached
-        final_solution = self.orchestration_system.get_final_solution()
+        final_solution = self.orchestrator.get_final_solution()
 
         # Calculate final metrics
         total_workflow_time = time.time() - workflow_start_time
@@ -233,8 +233,8 @@ class MassWorkflowManager:
             "total_workflow_time": total_workflow_time,
             "final_solution": final_solution,
             "phase_results": self.phase_results,
-            "system_status": self.orchestration_system.get_system_status(),
-            "session_log": self.orchestration_system.export_detailed_session_log(),
+            "system_status": self.orchestrator.get_system_status(),
+            "session_log": self.orchestrator.export_detailed_session_log(),
         }
 
         # Log completion
@@ -260,7 +260,7 @@ class MassWorkflowManager:
         Returns:
             List of results from all agents
         """
-        agents = list(self.orchestration_system.agents.values())
+        agents = list(self.orchestrator.agents.values())
         results = []
 
         if self.parallel_execution:
@@ -342,21 +342,21 @@ class MassWorkflowManager:
             logger.info(f"Collaboration round {round_num + 1}")
 
             # Check agent status at start of round
-            all_agents = list(self.orchestration_system.agents.values())
+            all_agents = list(self.orchestrator.agents.values())
             voted_agents = [
                 agent
                 for agent in all_agents
-                if self.orchestration_system.agent_states[agent.agent_id].status == "voted"
+                if self.orchestrator.agent_states[agent.agent_id].status == "voted"
             ]
             working_agents = [
                 agent
                 for agent in all_agents
-                if self.orchestration_system.agent_states[agent.agent_id].status == "working"
+                if self.orchestrator.agent_states[agent.agent_id].status == "working"
             ]
             failed_agents = [
                 agent
                 for agent in all_agents
-                if self.orchestration_system.agent_states[agent.agent_id].status == "failed"
+                if self.orchestrator.agent_states[agent.agent_id].status == "failed"
             ]
 
             print(f"📊 SYSTEM: Round {round_num + 1} Status:")
@@ -375,7 +375,7 @@ class MassWorkflowManager:
             failed_agents = [
                 agent
                 for agent in all_agents
-                if self.orchestration_system.agent_states[agent.agent_id].status == "failed"
+                if self.orchestrator.agent_states[agent.agent_id].status == "failed"
             ]
             if len(voted_agents) + len(failed_agents) == len(all_agents):
                 logger.info("All agents have either voted or failed - ending collaboration phase")
@@ -384,7 +384,7 @@ class MassWorkflowManager:
                 break
 
             # Exit condition 3: Consensus already reached
-            if self.orchestration_system.system_state.consensus_reached:
+            if self.orchestrator.system_state.consensus_reached:
                 logger.info("Consensus already reached at start of round - ending collaboration phase")
                 print(f"   ✅ EXIT CONDITION: Consensus already reached")
                 print(f"   ➡️  Moving to debate phase")
@@ -415,11 +415,11 @@ class MassWorkflowManager:
                     print(f"   ⏰ Update check at {current_time - phase_start_time:.1f}s")
 
                     # Check for agent reactivation due to new updates
-                    reactivation_candidates = self.orchestration_system.check_for_reactivation()
+                    reactivation_candidates = self.orchestrator.check_for_reactivation()
                     if reactivation_candidates:
                         print(f"   🔄 Reactivating {len(reactivation_candidates)} agents due to new updates:")
                         for agent_id in reactivation_candidates:
-                            self.orchestration_system.reactivate_agent(agent_id)
+                            self.orchestrator.reactivate_agent(agent_id)
                             print(f"      - Agent {agent_id} reactivated")
                             # Remove from processed set so they can be processed again
                             agents_processed_this_round.discard(agent_id)
@@ -429,9 +429,9 @@ class MassWorkflowManager:
                 # Get agents that are still working and haven't been processed this round
                 current_working_agents = [
                     agent
-                    for agent in self.orchestration_system.agents.values()
+                    for agent in self.orchestrator.agents.values()
                     if (
-                        self.orchestration_system.agent_states[agent.agent_id].status == "working"
+                        self.orchestrator.agent_states[agent.agent_id].status == "working"
                         and agent.agent_id not in agents_processed_this_round
                     )
                 ]
@@ -486,7 +486,7 @@ class MassWorkflowManager:
                 results.extend(round_results)
 
                 # Check if consensus is reached after processing agents
-                if self.orchestration_system.system_state.consensus_reached:
+                if self.orchestrator.system_state.consensus_reached:
                     logger.info("Consensus reached during collaboration phase")
                     print(f"   ✅ EXIT CONDITION: Consensus reached during round processing")
                     print(f"   ➡️  Moving to debate phase")
@@ -502,18 +502,18 @@ class MassWorkflowManager:
             # Check final agent status at end of round
             final_voted_agents = [
                 agent
-                for agent in self.orchestration_system.agents.values()
-                if self.orchestration_system.agent_states[agent.agent_id].status == "voted"
+                for agent in self.orchestrator.agents.values()
+                if self.orchestrator.agent_states[agent.agent_id].status == "voted"
             ]
             final_working_agents = [
                 agent
-                for agent in self.orchestration_system.agents.values()
-                if self.orchestration_system.agent_states[agent.agent_id].status == "working"
+                for agent in self.orchestrator.agents.values()
+                if self.orchestrator.agent_states[agent.agent_id].status == "working"
             ]
             final_failed_agents = [
                 agent
-                for agent in self.orchestration_system.agents.values()
-                if self.orchestration_system.agent_states[agent.agent_id].status == "failed"
+                for agent in self.orchestrator.agents.values()
+                if self.orchestrator.agent_states[agent.agent_id].status == "failed"
             ]
 
             print(f"\n📊 End of Round {round_num + 1}:")
@@ -527,7 +527,7 @@ class MassWorkflowManager:
                 progress_callback("collaboration", round_num + 1, self.max_collaboration_rounds)
 
             # Exit condition check at end of round
-            if self.orchestration_system.system_state.consensus_reached:
+            if self.orchestrator.system_state.consensus_reached:
                 logger.info("Consensus reached at end of collaboration round")
                 print(f"   ✅ EXIT CONDITION: Consensus reached at end of round {round_num + 1}")
                 print(f"   ➡️  Moving to debate phase")
@@ -552,18 +552,18 @@ class MassWorkflowManager:
         if round_num == self.max_collaboration_rounds - 1:
             final_voted = [
                 agent
-                for agent in self.orchestration_system.agents.values()
-                if self.orchestration_system.agent_states[agent.agent_id].status == "voted"
+                for agent in self.orchestrator.agents.values()
+                if self.orchestrator.agent_states[agent.agent_id].status == "voted"
             ]
             final_working = [
                 agent
-                for agent in self.orchestration_system.agents.values()
-                if self.orchestration_system.agent_states[agent.agent_id].status == "working"
+                for agent in self.orchestrator.agents.values()
+                if self.orchestrator.agent_states[agent.agent_id].status == "working"
             ]
             final_failed = [
                 agent
-                for agent in self.orchestration_system.agents.values()
-                if self.orchestration_system.agent_states[agent.agent_id].status == "failed"
+                for agent in self.orchestrator.agents.values()
+                if self.orchestrator.agent_states[agent.agent_id].status == "failed"
             ]
             logger.info(f"Maximum collaboration rounds ({self.max_collaboration_rounds}) reached")
             print(f"\n🔄 EXIT CONDITION: Maximum collaboration rounds ({self.max_collaboration_rounds}) reached")
@@ -583,7 +583,7 @@ class MassWorkflowManager:
         results = []
 
         # If consensus is already reached, just return
-        if self.orchestration_system.system_state.consensus_reached:
+        if self.orchestrator.system_state.consensus_reached:
             logger.info("Consensus already reached. Finalizing.")
             if progress_callback:
                 progress_callback("debate", 1, 1)
@@ -599,8 +599,8 @@ class MassWorkflowManager:
         # Run any agents that might need to reconsider their votes
         working_agents = [
             agent
-            for agent in self.orchestration_system.agents.values()
-            if self.orchestration_system.agent_states[agent.agent_id].status == "working"
+            for agent in self.orchestrator.agents.values()
+            if self.orchestrator.agent_states[agent.agent_id].status == "working"
         ]
 
         if working_agents:
@@ -623,7 +623,7 @@ class MassWorkflowManager:
                     progress_callback("debate", i + 1, len(working_agents))
 
                 # Check if consensus reached after each agent
-                if self.orchestration_system.system_state.consensus_reached:
+                if self.orchestrator.system_state.consensus_reached:
                     logger.info("Consensus reached during debate phase")
                     print(f"   ✅ Consensus reached after processing Agent {agent.agent_id}")
 
@@ -649,14 +649,14 @@ class MassWorkflowManager:
         # At this point, consensus is guaranteed to be reached (checked in main workflow)
 
         # Get the winning agent (representative) to present final solution
-        final_solution = self.orchestration_system.get_final_solution()
+        final_solution = self.orchestrator.get_final_solution()
         if not final_solution:
             logger.error("No final solution available despite consensus being reached")
             print("❌ ERROR: No final solution available despite consensus")
             raise RuntimeError("No final solution available despite consensus")
 
         representative_agent_id = final_solution["agent_id"]
-        representative_agent = self.orchestration_system.agents.get(representative_agent_id)
+        representative_agent = self.orchestrator.agents.get(representative_agent_id)
 
         if not representative_agent:
             logger.error(f"Representative agent {representative_agent_id} not found")
@@ -864,11 +864,11 @@ class MassWorkflowManager:
             print(f"⏰ SYSTEM: Agent {agent.agent_id} TIMED OUT after {timeout}s")
             logger.warning(f"Agent {agent.agent_id} timed out after {agent_execution_time:.2f}s")
             
-            # Update orchestration system with execution metrics
+            # Update orchestrator with execution metrics
             if phase == "initial":
                 agent.state.execution_end_time = time.time()
                 total_agent_time = agent.state.execution_time or agent_execution_time
-                self.orchestration_system.record_agent_execution_time(agent.agent_id, total_agent_time)
+                self.orchestrator.record_agent_execution_time(agent.agent_id, total_agent_time)
             
             return response  # Return early for timeout case
         
@@ -876,11 +876,11 @@ class MassWorkflowManager:
         if self.streaming_orchestrator:
             self.streaming_orchestrator.finalize_agent_message(agent.agent_id)
         
-        # Update orchestration system with execution metrics
+        # Update orchestrator with execution metrics
         if phase == "initial":
             agent.state.execution_end_time = time.time()
             total_agent_time = agent.state.execution_time or agent_execution_time
-            self.orchestration_system.record_agent_execution_time(agent.agent_id, total_agent_time)
+            self.orchestrator.record_agent_execution_time(agent.agent_id, total_agent_time)
 
         # Handle post-phase orchestration
         self._handle_post_phase_orchestration(agent, response, phase)
@@ -918,7 +918,7 @@ class MassWorkflowManager:
         # The streaming already happened during the agent execution
         
         # Check if agent is already marked as failed (e.g., due to timeout)
-        if self.orchestration_system.agent_states[agent.agent_id].status == "failed":
+        if self.orchestrator.agent_states[agent.agent_id].status == "failed":
             print(f"⚠️  SYSTEM: Agent {agent.agent_id} already marked as failed - skipping orchestration")
             return  # Exit early for already failed agents
         
@@ -957,10 +957,10 @@ class MassWorkflowManager:
             if (
                 not isinstance(vote_target, int)
                 or vote_target < 0
-                or vote_target >= len(self.orchestration_system.agents)
+                or vote_target >= len(self.orchestrator.agents)
             ):
                 print(
-                    f"   ⚠️  Invalid vote target: {vote_target} - must be an integer between 0 and {len(self.orchestration_system.agents)-1}"
+                    f"   ⚠️  Invalid vote target: {vote_target} - must be an integer between 0 and {len(self.orchestrator.agents)-1}"
                 )
                 vote_target = None
 
@@ -1006,10 +1006,10 @@ class MassWorkflowManager:
             if (
                 not isinstance(vote_target, int)
                 or vote_target < 0
-                or vote_target >= len(self.orchestration_system.agents)
+                or vote_target >= len(self.orchestrator.agents)
             ):
                 print(
-                    f"   ⚠️  Invalid vote target: {vote_target} - must be an integer between 0 and {len(self.orchestration_system.agents)-1}"
+                    f"   ⚠️  Invalid vote target: {vote_target} - must be an integer between 0 and {len(self.orchestrator.agents)-1}"
                 )
                 vote_target = None
 

@@ -39,7 +39,7 @@ class MassLogManager:
     
     This system records all significant events including:
     - Agent state changes (status, summary updates, voting)
-    - Orchestration system events
+    - Orchestrator events
     - Workflow phase transitions
     - System metrics and performance data
     """
@@ -232,12 +232,12 @@ class MassLogManager:
             "new_status": new_status
         })
     
-    def log_system_state_snapshot(self, orchestration_system, phase: str = "unknown"):
+    def log_system_state_snapshot(self, orchestrator, phase: str = "unknown"):
         """
         Log a complete system state snapshot including all agent summaries and voting status.
         
         Args:
-            orchestration_system: The MassOrchestrationSystem instance
+            orchestrator: The MassOrchestrator instance
             phase: Current workflow phase
         """
         
@@ -246,7 +246,7 @@ class MassLogManager:
         all_agent_summaries = {}
         vote_records = []
         
-        for agent_id, agent_state in orchestration_system.agent_states.items():
+        for agent_id, agent_state in orchestrator.agent_states.items():
             # Full agent state information
             agent_states[agent_id] = {
                 "status": agent_state.status,
@@ -274,7 +274,7 @@ class MassLogManager:
             }
         
         # Collect voting information
-        for vote in orchestration_system.votes:
+        for vote in orchestrator.votes:
             vote_records.append({
                 "voter_id": vote.voter_id,
                 "target_id": vote.target_id,
@@ -282,14 +282,14 @@ class MassLogManager:
             })
         
         # Calculate voting status
-        vote_counts = Counter(vote.target_id for vote in orchestration_system.votes)
+        vote_counts = Counter(vote.target_id for vote in orchestrator.votes)
         voting_status = {
             "vote_distribution": dict(vote_counts),
-            "total_votes_cast": len(orchestration_system.votes),
-            "total_agents": len(orchestration_system.agents),
-            "consensus_reached": orchestration_system.system_state.consensus_reached,
-            "winning_agent_id": orchestration_system.system_state.final_solution_agent_id,
-            "votes_needed_for_consensus": max(1, int(len(orchestration_system.agents) * orchestration_system.consensus_threshold))
+            "total_votes_cast": len(orchestrator.votes),
+            "total_agents": len(orchestrator.agents),
+            "consensus_reached": orchestrator.system_state.consensus_reached,
+            "winning_agent_id": orchestrator.system_state.final_solution_agent_id,
+            "votes_needed_for_consensus": max(1, int(len(orchestrator.agents) * orchestrator.consensus_threshold))
         }
         
         # Complete system state snapshot
@@ -299,8 +299,8 @@ class MassLogManager:
             "voting_records": vote_records,
             "voting_status": voting_status,
             "system_phase": phase,
-            "total_rounds": orchestration_system.system_state.total_rounds,
-            "system_runtime": (time.time() - orchestration_system.system_state.start_time) if orchestration_system.system_state.start_time else 0
+            "total_rounds": orchestrator.system_state.total_rounds,
+            "system_runtime": (time.time() - orchestrator.system_state.start_time) if orchestrator.system_state.start_time else 0
         }
         
         # Log the system snapshot
@@ -314,14 +314,14 @@ class MassLogManager:
             "system_state": system_snapshot
         }
         
-        for agent_id in orchestration_system.agents.keys():
+        for agent_id in orchestrator.agents.keys():
             self._write_agent_log(agent_id, system_state_entry)
         
         return system_snapshot
     
     def log_agent_summary_update_with_system_context(self, agent_id: int, summary: str, 
                                                     final_answer: str = "", phase: str = "unknown",
-                                                    orchestration_system=None):
+                                                    orchestrator=None):
         """
         Enhanced version of log_agent_summary_update that includes system context.
         
@@ -330,16 +330,16 @@ class MassLogManager:
             summary: Updated summary content
             final_answer: Final answer if provided
             phase: Current workflow phase
-            orchestration_system: The orchestration system for context
+            orchestrator: The orchestrator for context
         """
         # First log the standard summary update
         self.log_agent_summary_update(agent_id, summary, final_answer, phase)
         
-        # Then log system context if orchestration system is provided
-        if orchestration_system:
+        # Then log system context if orchestrator is provided
+        if orchestrator:
             # Get current state of all other agents for context
             peer_states = {}
-            for other_agent_id, other_state in orchestration_system.agent_states.items():
+            for other_agent_id, other_state in orchestrator.agent_states.items():
                 if other_agent_id != agent_id:
                     peer_states[other_agent_id] = {
                         "status": other_state.status,
@@ -349,12 +349,12 @@ class MassLogManager:
                     }
             
             # Get current voting status
-            vote_counts = Counter(vote.target_id for vote in orchestration_system.votes)
+            vote_counts = Counter(vote.target_id for vote in orchestrator.votes)
             current_voting_status = {
                 "vote_distribution": dict(vote_counts),
-                "total_votes": len(orchestration_system.votes),
-                "agent_voted": orchestration_system.agent_states[agent_id].status == "voted",
-                "agent_vote_target": orchestration_system.agent_states[agent_id].vote_target
+                "total_votes": len(orchestrator.votes),
+                "agent_voted": orchestrator.agent_states[agent_id].status == "voted",
+                "agent_vote_target": orchestrator.agent_states[agent_id].vote_target
             }
             
             # Enhanced log entry with system context
@@ -369,14 +369,14 @@ class MassLogManager:
                 },
                 "peer_agent_states": peer_states,
                 "voting_status": current_voting_status,
-                "system_round": len(orchestration_system.agent_states[agent_id].update_history)
+                "system_round": len(orchestrator.agent_states[agent_id].update_history)
             }
             
             self._write_agent_log(agent_id, enhanced_entry)
     
     def log_voting_event_with_system_context(self, voter_id: int, target_id: int, 
                                            phase: str = "unknown", response_text: str = "",
-                                           orchestration_system=None):
+                                           orchestrator=None):
         """
         Enhanced version of log_voting_event that includes full system voting context.
         
@@ -385,20 +385,20 @@ class MassLogManager:
             target_id: Agent being voted for
             phase: Current workflow phase
             response_text: The full response text that led to this vote
-            orchestration_system: The orchestration system for full context
+            orchestrator: The orchestrator for full context
         """
         # First log the standard voting event
         self.log_voting_event(voter_id, target_id, phase, response_text)
         
-        # Then log enhanced context if orchestration system is provided
-        if orchestration_system:
+        # Then log enhanced context if orchestrator is provided
+        if orchestrator:
             # Get complete voting picture after this vote
-            vote_counts = Counter(vote.target_id for vote in orchestration_system.votes)
+            vote_counts = Counter(vote.target_id for vote in orchestrator.votes)
             
             # Get all agent summaries that are being voted on
             candidate_summaries = {}
             for candidate_id, votes in vote_counts.items():
-                candidate_state = orchestration_system.agent_states[candidate_id]
+                candidate_state = orchestrator.agent_states[candidate_id]
                 candidate_summaries[candidate_id] = {
                     "summary": candidate_state.working_summary,
                     "final_answer": candidate_state.final_answer,
@@ -419,19 +419,19 @@ class MassLogManager:
                 },
                 "complete_voting_state": {
                     "vote_distribution": dict(vote_counts),
-                    "total_votes_cast": len(orchestration_system.votes),
-                    "consensus_reached": orchestration_system.system_state.consensus_reached,
-                    "votes_needed": max(1, int(len(orchestration_system.agents) * orchestration_system.consensus_threshold))
+                    "total_votes_cast": len(orchestrator.votes),
+                    "consensus_reached": orchestrator.system_state.consensus_reached,
+                    "votes_needed": max(1, int(len(orchestrator.agents) * orchestrator.consensus_threshold))
                 },
                 "candidate_summaries": candidate_summaries,
                 "remaining_working_agents": [
-                    aid for aid, state in orchestration_system.agent_states.items()
+                    aid for aid, state in orchestrator.agent_states.items()
                     if state.status == "working"
                 ]
             }
             
             # Write to all agent logs for complete transparency
-            for agent_id in orchestration_system.agents.keys():
+            for agent_id in orchestrator.agents.keys():
                 self._write_agent_log(agent_id, enhanced_voting_entry)
     
     def log_voting_event(self, voter_id: int, target_id: int, phase: str = "unknown", response_text: str = ""):

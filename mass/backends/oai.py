@@ -10,8 +10,8 @@ load_dotenv()
 from openai import OpenAI
 
 # Import utility functions
-from .util import function_to_json, execute_function_calls
-from .tools import update_summary, check_updates, vote
+from ..utils import function_to_json, execute_function_calls
+from ..tools import update_summary, check_updates, vote
 
 
             

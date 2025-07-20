@@ -84,16 +84,16 @@ class MassAgent(ABC):
     the required methods while following the standardized workflow.
     """
 
-    def __init__(self, agent_id: int, orchestration_system=None):
+    def __init__(self, agent_id: int, orchestrator=None):
         """
-        Initialize the agent with an ID and reference to the orchestration system.
+        Initialize the agent with an ID and reference to the orchestrator.
 
         Args:
             agent_id: Unique identifier for this agent
-            orchestration_system: Reference to the MassOrchestrationSystem
+            orchestrator: Reference to the MassOrchestrator
         """
         self.agent_id = agent_id
-        self.orchestration_system = orchestration_system
+        self.orchestrator = orchestrator
         self.state = AgentState(agent_id=agent_id)
 
     @abstractmethod
@@ -143,10 +143,10 @@ class MassAgent(ABC):
             summary_report: Comprehensive progress report including reasoning and findings
             final_answer: The final answer to the question (optional)
         """
-        if self.orchestration_system:
-            self.orchestration_system.update_agent_summary(self.agent_id, summary_report, final_answer)
+        if self.orchestrator:
+            self.orchestrator.update_agent_summary(self.agent_id, summary_report, final_answer)
         else:
-            # Fallback: Update local state only if no orchestration system
+            # Fallback: Update local state only if no orchestrator
             self.state.add_update(summary_report, final_answer)
 
     def check_updates(self) -> Dict[str, Any]:
@@ -157,9 +157,9 @@ class MassAgent(ABC):
         Returns:
             Dictionary containing updates from all agents, including their summaries and states
         """
-        if self.orchestration_system:
+        if self.orchestrator:
             # Get updates (only new ones by default)
-            updates = self.orchestration_system.get_all_updates(exclude_agent_id=self.agent_id, check_new_only=True)
+            updates = self.orchestrator.get_all_updates(exclude_agent_id=self.agent_id, check_new_only=True)
 
             # Mark the other agents' updates we've seen
             if updates.get("agents"):
@@ -169,7 +169,7 @@ class MassAgent(ABC):
                         seen_updates[int(agent_id)] = agent_info["latest_timestamp"]
 
                 if seen_updates:
-                    self.orchestration_system.mark_updates_seen_by_agent(self.agent_id, seen_updates)
+                    self.orchestrator.mark_updates_seen_by_agent(self.agent_id, seen_updates)
 
             return updates
         return {}
@@ -181,9 +181,9 @@ class MassAgent(ABC):
         Returns:
             Dictionary containing all updates from all agents
         """
-        if self.orchestration_system:
+        if self.orchestrator:
             # Get all updates (including previously seen ones)
-            return self.orchestration_system.get_all_updates(exclude_agent_id=self.agent_id, check_new_only=False)
+            return self.orchestrator.get_all_updates(exclude_agent_id=self.agent_id, check_new_only=False)
         return {}
 
     def vote(self, target_agent_id: int, response_text: str = ""):
@@ -194,8 +194,8 @@ class MassAgent(ABC):
             target_agent_id: ID of the voted representative agent
             response_text: The full response text that led to this vote (optional)
         """
-        if self.orchestration_system:
-            self.orchestration_system.cast_vote(self.agent_id, target_agent_id, response_text)
+        if self.orchestrator:
+            self.orchestrator.cast_vote(self.agent_id, target_agent_id, response_text)
         else:
             # Update local state
             self.state.status = "voted"
@@ -209,8 +209,8 @@ class MassAgent(ABC):
         Args:
             reason: Optional reason for the failure
         """
-        if self.orchestration_system:
-            self.orchestration_system.mark_agent_failed(self.agent_id, reason)
+        if self.orchestrator:
+            self.orchestrator.mark_agent_failed(self.agent_id, reason)
         else:
             # Update local state
             self.state.status = "failed"

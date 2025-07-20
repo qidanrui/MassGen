@@ -5,7 +5,7 @@ __version__ = "1.0.0"
 # Import main components for easy access
 from .agent import MassAgent, AgentState, TaskInput, AgentResponse
 from .agents import create_agent
-from .orchestration import MassOrchestrationSystem
+from .orchestrator import MassOrchestrator
 from .workflow import MassWorkflowManager
 from .logging import initialize_logging, cleanup_logging, get_log_manager
 from .streaming_display import create_streaming_display
@@ -17,7 +17,7 @@ __all__ = [
     "TaskInput",
     "AgentResponse",
     "create_agent",
-    "MassOrchestrationSystem",
+    "MassOrchestrator",
     "MassWorkflowManager",
     "initialize_logging",
     "cleanup_logging",

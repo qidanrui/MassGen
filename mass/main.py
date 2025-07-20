@@ -29,11 +29,11 @@ from datetime import datetime
 sys.path.append(os.path.dirname(__file__))
 
 from .agent import TaskInput
-from .orchestration import MassOrchestrationSystem
+from .orchestrator import MassOrchestrator
 from .workflow import MassWorkflowManager
 from .agents import create_agent
 from .logging import initialize_logging, cleanup_logging
-from .backends.constants import get_agent_type_from_model, get_available_models
+from .utils import get_agent_type_from_model, get_available_models
 
 def create_agent_configs_from_models(model_names: List[str]) -> List[Dict[str, Any]]:
     """
@@ -109,7 +109,7 @@ class MassSystem:
         self.config = config or {}
         
         # System components
-        self.orchestration_system: Optional[MassOrchestrationSystem] = None
+        self.orchestrator: Optional[MassOrchestrator] = None
         self.workflow_manager: Optional[MassWorkflowManager] = None
         self.agents: List[Any] = []
         
@@ -122,7 +122,7 @@ class MassSystem:
 
     def initialize_system(self, agent_configs: List[Dict[str, Any]]):
         """
-        Initialize the orchestration system and agents.
+        Initialize the orchestrator and agents.
         
         Args:
             agent_configs: List of agent configuration dictionaries
@@ -141,9 +141,9 @@ class MassSystem:
         self.log_manager = initialize_logging(non_blocking=True)
         logger.info(f"✓ Logging system initialized")
         
-        # Create orchestration system
-        logger.info("Creating orchestration system...")
-        self.orchestration_system = MassOrchestrationSystem(
+        # Create orchestrator
+        logger.info("Creating orchestrator...")
+        self.orchestrator = MassOrchestrator(
             max_rounds=self.max_rounds,
             consensus_threshold=self.consensus_threshold
         )
@@ -159,10 +159,10 @@ class MassSystem:
                 agent = create_agent(
                     agent_type=agent_type,
                     agent_id=i,
-                    orchestration_system=self.orchestration_system,
+                    orchestrator=self.orchestrator,
                     **agent_kwargs
                 )
-                self.orchestration_system.register_agent(agent)
+                self.orchestrator.register_agent(agent)
                 self.agents.append(agent)
                 model_name = agent_kwargs.get("model", "default")
                 logger.info(f"✓ Registered agent {i}: {agent_type} ({model_name})")
@@ -174,7 +174,7 @@ class MassSystem:
         # Create workflow manager
         logger.info("Creating workflow manager...")
         self.workflow_manager = MassWorkflowManager(
-            orchestration_system=self.orchestration_system,
+            orchestrator=self.orchestrator,
             parallel_execution=self.parallel_execution,
             check_update_frequency=self.check_update_frequency,
             streaming_display=True,
@@ -182,12 +182,12 @@ class MassSystem:
             save_logs=self.save_logs
         )
         
-        # Connect streaming orchestrator to orchestration system
+        # Connect streaming orchestrator to orchestrator
         if self.workflow_manager.streaming_orchestrator:
-            self.orchestration_system.streaming_orchestrator = self.workflow_manager.streaming_orchestrator
+            self.orchestrator.streaming_orchestrator = self.workflow_manager.streaming_orchestrator
             
             # Set agent model names in the display
-            for agent_id, agent in self.orchestration_system.agents.items():
+            for agent_id, agent in self.orchestrator.agents.items():
                 if hasattr(agent, 'model'):
                     model_name = agent.model
                     self.workflow_manager.streaming_orchestrator.set_agent_model(agent_id, model_name)

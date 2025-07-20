@@ -192,4 +192,4 @@ def calculator(expression: str) -> float:
         
         
 if __name__ == "__main__":
-    print(calculator("24423 + 312 * log(10)"))
+    print(calculator("24423 + 312 * log(10)")) 

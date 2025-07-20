@@ -16,7 +16,7 @@ import sys
 from typing import List
 
 from mass import MassSystem
-from mass.backends.constants import get_available_models
+from mass.utils import get_available_models
 
 def parse_arguments():
     """Parse command line arguments."""
