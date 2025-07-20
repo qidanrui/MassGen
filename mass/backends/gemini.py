@@ -393,7 +393,6 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
         # Thread will be automatically killed when this function returns (daemon thread)
         return {"text": "", "code": [], "citations": [], "function_calls": []}
 
-
 def multi_turn_tool_use(messages, model="gemini-2.5-flash", tools=None, tool_mapping=None, max_rounds=5):
     """
     Execute a multi-turn conversation loop with an agent using function calling.

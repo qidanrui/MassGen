@@ -67,16 +67,13 @@ class TaskInput:
 @dataclass
 class SystemState:
     """Overall state of the MASS orchestrator.
-    Four phases:
-    - initial: the initial phase where the task is set
-    - collaboration: the phase where the agents collaborate to solve the task (if not all agents have voted)
-    - debate: the phase where the agents debate the solution (if all agents have voted)
-    - consensus: the phase where the agents have reached consensus
+    Simplified phases:
+    - collaboration: agents are working together to solve the task
     - completed: the representative agent has presented the solution and the task is completed
     """
 
     task: Optional[TaskInput] = None
-    phase: str = "initial"  # "initial", "collaboration", "debate", "consensus", "completed"
+    phase: str = "collaboration"  # "collaboration", "completed"
     start_time: Optional[float] = None
     end_time: Optional[float] = None
     consensus_reached: bool = False

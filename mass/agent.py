@@ -326,86 +326,6 @@ class MassAgent(ABC):
             }
         ]
 
-    def _build_update_message(self) -> str:
-        """
-        Build the information message of all recent updates
-        
-        Example:
-        **Agent 1 [1726752000]:**
-        I have found the solution to the task.
-        **Agent 2 [1726752100]:**
-        I have found the solution to the task.
-        **Agent 3 [1726752200]:**
-        I have found the solution to the task.
-        """
-        updates = self.check_updates()
-        # Build the information message of all recent updates
-        update_message = ""
-        if updates:
-            for agent_id, agent_updates in updates.items():
-                for update in agent_updates:
-                    update_message += f"**Agent {agent_id} [{update.timestamp}]:**\n{update.summary}\n\n"
-        return update_message
-    
-    def _build_vote_message(self) -> str:
-        """
-        Build the information message of all votes
-        
-        Example:
-        **Agent 1 vote for Agent 2**
-        Reason: I believe Agent 2 has found the correct solution.
-        
-        **Agent 2 vote for Agent 1**
-        Reason: I believe Agent 1 has found the correct solution.
-        
-        **Agent 3 vote for Agent 1**
-        Reason: I believe Agent 1 has found the correct solution.
-        """
-        votes = self.orchestrator.votes
-        vote_message = ""
-        if votes:
-            for vote in votes:
-                vote_message += f"**Agent {vote.voter_id} vote for Agent {vote.target_id}**\n"
-                if vote.reason:
-                    vote_message += f"Reason: "
-        return vote_message
-        
-    def get_instruction_based_on_status(self, status: str) -> List[Dict[str, str]]:
-        """
-        Build the messages for the agent based on the status:
-        - system: The system instruction for the agent
-        - notification: The notification message for the agent
-        - debate: The message for the agent to debate the solution
-        - presentation: The message for the agent to present the solution, including the options to vote for
-        """
-        assert status in ["system", "notification", "debate", "presentation"], "Invalid status"
-        
-        if status == "system":
-            peer_agents = [agent.agent_id for agent in self.orchestrator.agents if agent.agent_id != self.agent_id]
-            system_instruction = SYSTEM_INSTRUCTION.format(agent_id=self.agent_id, 
-                        peer_agents=", ".join([str(agent) for agent in peer_agents]))
-            return system_instruction
-        
-        elif status == "notification":
-            # check if there are updates from other agents
-            update_message = self._build_update_message()
-            if update_message:
-                return PROMPT_UPDATE_NOTIFICATION + UPDATE_NOTIFICATION.format(updates=update_message)
-            else:
-                return PROMPT_UPDATE_NOTIFICATION
-            
-        elif status == "presentation":
-            # Build the information message of all votes
-            vote_message = self._build_vote_message()
-            return PRESENTATION_NOTIFICATION.format(options=vote_message)
-        
-        elif status == "debate":
-            # Build the information message of all votes
-            vote_message = self._build_vote_message()
-            return DEBATE_NOTIFICATION.format(options=vote_message)
-        
-        return messages
-        
     def _get_available_tools(self) -> List[Dict[str, Any]]:
         """Return the tool schema for the tools that are available to this agent."""
         # System tools (always available), JSON schema
@@ -440,8 +360,8 @@ class MassAgent(ABC):
             # This is the representative agent presenting the final answer
             self.orchestrator.capture_final_response(response_text)
          
-    def _execute_function_calls(self, function_calls: List[Dict], messages: List[Dict]):
-        """Execute function calls and add results to conversation."""
+    def _execute_function_calls(self, function_calls: List[Dict]):
+        """Execute function calls and return function outputs."""
         from .tools import register_tool
         function_outputs = []
         
@@ -450,7 +370,7 @@ class MassAgent(ABC):
             func_args = func_call.get("arguments", {})
             func_call_id = func_call.get("call_id")
             
-                         try:
+            try:
                 if func_name == "update_summary":
                     result = self.update_summary(func_args.get("new_content", ""))
                 elif func_name == "vote":
@@ -482,13 +402,22 @@ class MassAgent(ABC):
                 function_outputs.append(error_output)
                 # print(f"Error executing function {function_name}: {e}")
                 
-                 return function_outputs
+        return function_outputs
       
     @abstractmethod
-    def work_on_task(self, task: TaskInput):
+    def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]], restart_instruction: Optional[str] = None) -> List[Dict[str, str]]:
         """
-        Work on the task.
+        Work on the task with conversation continuation.
         
+        Args:
+            task: The task to work on
+            messages: Current conversation history
+            restart_instruction: Optional instruction for restarting work (e.g., updates from other agents)
+            
+        Returns:
+            Updated conversation history including agent's work
+            
         This method should be implemented by concrete agent classes.
+        The agent continues the conversation until it votes or reaches max rounds.
         """
         pass
