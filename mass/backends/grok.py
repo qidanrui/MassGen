@@ -11,8 +11,8 @@ from xai_sdk.chat import assistant, system, user, tool
 from xai_sdk.search import SearchParameters
 
 # Import utility functions
-from util import function_to_json, execute_function_calls
-from tools import update_summary, check_updates, vote
+from .util import function_to_json, execute_function_calls
+from .tools import update_summary, check_updates, vote
 
 load_dotenv()
 
@@ -132,13 +132,18 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
 
         # Handle backward compatibility for old tools=["live_search"] format
         enable_search = False
-        filtered_tools = tools  # Use a different variable to avoid shadowing
+        custom_tools = []
         
         if tools and isinstance(tools, list) and len(tools) > 0:
-            if "live_search" in tools:
-                enable_search = True
-                # Filter out live_search from tools as it's handled separately
-                filtered_tools = [tool for tool in tools if tool != "live_search"]
+            for tool in tools:
+                if tool == "live_search":
+                    enable_search = True
+                elif isinstance(tool, str):
+                    # Skip unexpected strings to avoid API errors
+                    continue
+                else:
+                    # This should be a proper tool object
+                    custom_tools.append(tool)
 
         # Handle search parameters
         search_parameters = None
@@ -150,8 +155,8 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
 
         # Prepare tools for the API call
         api_tools = None
-        if filtered_tools and isinstance(filtered_tools, list) and len(filtered_tools) > 0:
-            api_tools = filtered_tools
+        if custom_tools and isinstance(custom_tools, list) and len(custom_tools) > 0:
+            api_tools = custom_tools
 
         def make_grok_request(stream=False):
             # Build chat creation parameters
@@ -362,7 +367,16 @@ def multi_turn_tool_use(messages, model="grok-3", tools=None, tool_mapping=None,
         List of messages representing the full conversation
     """
     
-
+    # Separate search enablement from actual tool objects
+    enable_search = False
+    actual_tools = []
+    
+    if tools and isinstance(tools, list):
+        for tool in tools:
+            if tool == "live_search":
+                enable_search = True
+            else:
+                actual_tools.append(tool)
 
     round = 0
     current_messages = messages.copy()
@@ -371,11 +385,15 @@ def multi_turn_tool_use(messages, model="grok-3", tools=None, tool_mapping=None,
         print(f"\n--- Round {round} ---")
         
         try:
-            # Use the existing process_message function
+            # Call process_message with search enablement and tool objects
+            tools_for_call = actual_tools.copy()
+            if enable_search:
+                tools_for_call.insert(0, "live_search")  # Add live_search to enable search
+                
             result = process_message(
                 messages=current_messages,
                 model=model,
-                tools=tools,
+                tools=tools_for_call,
             )
             
             # Add assistant response to conversation
@@ -480,17 +498,14 @@ Below are the recent updates from other agents:
 {updates}
 """
 
-    # Built-in tools (native Grok features)
-    built_in_tools = ["live_search"]
-    
     # Custom functions (converted to X.AI tool format)
     customized_functions = [
         grok_function_to_tool(update_summary), 
         grok_function_to_tool(vote)
     ]
     
-    # Combine all tools
-    tools = built_in_tools + customized_functions
+    # Include live_search string - it will be filtered out in process_message and used to enable search
+    tools = ["live_search"] + customized_functions
 
     # Create tool mapping from the provided tools
     tool_mapping = {

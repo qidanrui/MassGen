@@ -159,8 +159,9 @@ This project is evolving toward the **advanced MASS architecture** found in `fut
 
 - [x] Fix Grok Fake Stream
 - [x] (optional) Convert Gemini from Request to API
-- [ ] Add function call feature to backends
-- [ ] The backends should support both their built-in tools (if exists) and provided custom tools
+- [x] Add function call feature to backends
+- [x] The backends should support both their built-in tools (if exists) and provided custom tools
+- [ ] Re-design the Agent Class, with the running config (temperaute, top_p) intialized, and add a work_on_task function
 - [ ] Change the workflow from system maintained to agent maintain
 - [ ] (optional) Add Claude and Fireworks backend
 - [ ] (optional) Add more tools (DuckDuckGo Search, and calculators)

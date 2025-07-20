@@ -10,8 +10,8 @@ load_dotenv()
 from openai import OpenAI
 
 # Import utility functions
-from util import function_to_json, execute_function_calls
-from tools import update_summary, check_updates, vote
+from .util import function_to_json, execute_function_calls
+from .tools import update_summary, check_updates, vote
 
 
             
@@ -538,7 +538,7 @@ Below are the recent updates from other agents:
     iteration = 0
     updates = ""
     while iteration < 3:
-        current_messages = multi_turn_tool_use(current_messages, model="o4-mini", tools=tools, tool_mapping=tool_mapping, max_rounds=5)
+        current_messages = multi_turn_tool_use(current_messages, model="gpt-4o-mini", tools=tools, tool_mapping=tool_mapping, max_rounds=5)
         print(f"Result: {json.dumps(current_messages, indent=2)}")
         iteration += 1
         print(f"Iteration {iteration} completed")

@@ -11,8 +11,8 @@ import copy
 load_dotenv()
 
 # Import utility functions
-from util import function_to_json, execute_function_calls
-from tools import update_summary, check_updates, vote, calculator, python_interpreter
+from .util import function_to_json, execute_function_calls
+from .tools import update_summary, check_updates, vote, calculator, python_interpreter
 
 
 def parse_completion(completion, add_citations=True):
@@ -318,19 +318,12 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                                     
                                     elif hasattr(part, 'function_call'):
                                         # Handle function calls
-                                        function_name = getattr(part.function_call, 'name', 'unknown')
-                                        try:
-                                            if function_name == 'google_search':
-                                                # Extract search query if available
-                                                if hasattr(part.function_call, 'args') and 'query' in part.function_call.args:
-                                                    search_query = part.function_call.args['query']
-                                                    stream_callback(f"[SEARCH] Searching for: {search_query}")
-                                                else:
-                                                    stream_callback("[SEARCH] Performing Google search")
-                                            else:
+                                        if part.function_call:
+                                            function_name = getattr(part.function_call, 'name', 'unknown')
+                                            try:
                                                 stream_callback(f"[FUNCTION] Calling {function_name}")
-                                        except Exception as e:
-                                            print(f"Stream callback error: {e}")
+                                            except Exception as e:
+                                                print(f"Stream callback error: {e}")
                                     
                                     elif hasattr(part, 'function_response'):
                                         try:
