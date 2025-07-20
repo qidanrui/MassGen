@@ -84,27 +84,58 @@ class MassAgent(ABC):
     the required methods while following the standardized workflow.
     """
 
-    def __init__(self, agent_id: int, orchestrator=None):
+    def __init__(
+        self, 
+        agent_id: int, 
+        orchestrator=None,
+        model: str = None,
+        tools: List[str] = None,
+        max_retries: int = 3,
+        max_tokens: int = None,
+        temperature: float = 0.7,
+        top_p: float = None,
+        processing_timeout: float = None,
+        stream: bool = False,
+        stream_callback: Optional[Callable] = None,
+        **kwargs
+    ):
         """
-        Initialize the agent with an ID and reference to the orchestrator.
+        Initialize the agent with configuration parameters.
 
         Args:
             agent_id: Unique identifier for this agent
             orchestrator: Reference to the MassOrchestrator
+            model: LLM model to use
+            tools: List of tools available to the agent
+            max_retries: Maximum number of retry attempts
+            max_tokens: Maximum tokens for LLM responses
+            temperature: Sampling temperature for the LLM
+            top_p: Top-p sampling parameter
+            processing_timeout: Timeout for processing requests
+            stream: Whether to stream responses
+            stream_callback: Optional callback function for streaming chunks
+            **kwargs: Additional parameters specific to the agent implementation
         """
         self.agent_id = agent_id
         self.orchestrator = orchestrator
         self.state = AgentState(agent_id=agent_id)
+        
+        # Store configuration parameters
+        self.model = model
+        self.tools = tools if tools is not None else self._get_available_tools()
+        self.max_retries = max_retries
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.top_p = top_p
+        self.processing_timeout = processing_timeout
+        self.stream = stream
+        self.stream_callback = stream_callback
+        self.kwargs = kwargs
 
     @abstractmethod
     def process_message(
         self,
         messages: List[Dict[str, str]],
-        tools: List[str] = None,
-        temperature: float = None,
-        timeout: float = None,
-        stream: bool = False,
-        stream_callback: Optional[Callable] = None,
         **kwargs,
     ) -> AgentResponse:
         """
@@ -112,15 +143,12 @@ class MassAgent(ABC):
 
         This method should handle the actual LLM interaction using the agent's
         specific backend (OpenAI, Gemini, Grok, etc.) and return a standardized response.
+        All configuration parameters are now stored as instance variables and should
+        be accessed via self.model, self.tools, self.temperature, etc.
 
         Args:
             messages: List of messages in OpenAI format
-            tools: List of tools available to the agent
-            temperature: Sampling temperature for the LLM
-            timeout: Timeout for processing
-            stream: Whether to stream the response
-            stream_callback: Optional callback function for streaming chunks
-            **kwargs: Additional parameters specific to the agent implementation
+            **kwargs: Additional parameters that override instance configuration
 
         Returns:
             AgentResponse containing the agent's response text, code, citations, etc.
@@ -314,7 +342,7 @@ You have been voted by other agents to present the final answer.
         task: TaskInput,
         phase: str = "initial",
         timeout: float = None,
-        stream: bool = False,
+        stream: bool = None,
         stream_callback: Optional[Callable] = None,
     ) -> AgentResponse:
         """
@@ -324,9 +352,9 @@ You have been voted by other agents to present the final answer.
         Args:
             task: The task to process
             phase: The workflow phase ("initial", "collaboration", "debate", "presentation")
-            timeout: Maximum time to spend processing (in seconds)
-            stream: Whether to stream the response
-            stream_callback: Optional callback function for streaming chunks
+            timeout: Maximum time to spend processing (in seconds) - overrides instance setting
+            stream: Whether to stream the response - overrides instance setting
+            stream_callback: Optional callback function for streaming chunks - overrides instance setting
 
         Returns:
             AgentResponse containing the agent's response
@@ -419,17 +447,17 @@ You have been voted by other agents to present the final answer.
             },
         ]
 
-        # Get available tools (only live_search and code_execution)
-        tools = self._get_available_tools()
-
         # Process the message using the agent's specific implementation
-        response = self.process_message(
-            messages,
-            tools=tools,
-            timeout=timeout,
-            stream=stream,
-            stream_callback=stream_callback,
-        )
+        # Use instance configuration but allow overrides from parameters
+        override_kwargs = {}
+        if timeout is not None:
+            override_kwargs["processing_timeout"] = timeout
+        if stream is not None:
+            override_kwargs["stream"] = stream
+        if stream_callback is not None:
+            override_kwargs["stream_callback"] = stream_callback
+            
+        response = self.process_message(messages, **override_kwargs)
 
         return response
 
