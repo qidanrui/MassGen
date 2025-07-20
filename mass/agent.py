@@ -235,40 +235,6 @@ class MassAgent(ABC):
         self.orchestrator.cast_vote(self.agent_id, target_agent_id, response_text)
         return f"Your vote for Agent {target_agent_id} has been cast."
     
-    def check_updates(self, latest_only: bool = True) -> Dict[str, Any]:
-        """
-        Check for updates from other agents working on the same task.
-        Tracks which updates have been seen to avoid processing duplicates.
-
-        Args:
-            latest_only: If True, only return the latest update for each agent. Otherwise, return all updates since the last check.
-
-        Returns:
-            Dictionary containing updates from all agents, including their summaries and states
-        """
-        updates = {}
-        
-        if self.orchestrator:
-            # Get updates (only new ones by default)
-            session_info = self.orchestrator.get_session_info()
-            agent_states = session_info["agent_states"]
-
-            for agent_id, state in agent_states.items():
-                if agent_id != self.agent_id:
-                    last_seen = self.state.seen_updates_timestamps.get(agent_id, 0.0)
-                    for update in state.update_history:
-                        if update.timestamp > last_seen:
-                            updates[agent_id].append(update)
-
-                    if latest_only:
-                        # keep only the latest update for this agent
-                        updates[agent_id] = updates[agent_id][-1] 
-                    
-                    # record the last seen timestamp for this agent
-                    self.state.seen_updates_timestamps[agent_id] = updates[agent_id][-1].timestamp
-
-        return updates
-
     def mark_failed(self, reason: str = ""):
         """
         Mark this agent as failed.
@@ -347,18 +313,6 @@ class MassAgent(ABC):
                 custom_tools.append(tool_schema)
         
                  return system_tools + built_in_tools + custom_tools
-         
-    def _check_if_final_presentation(self, response_text: str):
-        """
-        Check if this is the final presentation and capture it.
-        Called when the representative agent responds during consensus phase.
-        """
-        if (self.orchestrator and 
-            self.orchestrator.system_state.phase == "consensus" and
-            self.orchestrator.system_state.representative_agent_id == self.agent_id):
-            
-            # This is the representative agent presenting the final answer
-            self.orchestrator.capture_final_response(response_text)
          
     def _execute_function_calls(self, function_calls: List[Dict]):
         """Execute function calls and return function outputs."""

@@ -57,8 +57,8 @@ def parse_completion(completion, add_citations=True):
                     })
                 # Debug: log unhandled part types
                 else:
-                    part_type = type(part).__name__ if hasattr(type(part), '__name__') else str(type(part))
-                    print(f"[DEBUG] Unhandled part type: {part_type}, attributes: {[attr for attr in dir(part) if not attr.startswith('_')]}")
+                    # Unhandled part type - skip in production
+                    pass
 
     # Extract citations if available
     if add_citations and hasattr(completion, 'candidates') and completion.candidates:

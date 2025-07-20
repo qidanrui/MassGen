@@ -12,7 +12,6 @@ import operator
 import math
 
 # Model mappings and constants
-# TODO: add more models, like Claude, etc.
 MODEL_MAPPINGS = {
     "openai": [
         # GPT-4 variants
@@ -48,33 +47,33 @@ MODEL_MAPPINGS = {
         "grok-3-fast",
         "grok-3",
         "grok-4",
-    ],
+    ]
 }
 
 
-def get_agent_type_from_model(model_name: str) -> str:
+def get_agent_type_from_model(model: str) -> str:
     """
-    Get the agent type from a model name.
-
+    Determine the agent type based on the model name.
+    
     Args:
-        model_name: The specific model name (e.g., "gpt-4o", "gemini-2.5-flash")
-
+        model: The model name (e.g., "gpt-4", "gemini-pro", "grok-1")
+        
     Returns:
-        The agent type ("openai", "gemini", "grok")
-
-    Raises:
-        ValueError: If the model name is not found
+        Agent type string ("openai", "gemini", "grok")
     """
-    for agent_type, models in MODEL_MAPPINGS.items():
-        if model_name in models:
-            return agent_type
-
-    # Create a flat list of all available models for error message
-    all_models = []
-    for models in MODEL_MAPPINGS.values():
-        all_models.extend(models)
-
-    raise ValueError(f"Unknown model '{model_name}'. Available models: {', '.join(all_models)}")
+    if not model:
+        return "openai"  # Default to OpenAI
+    
+    model_lower = model.lower()
+    
+    if any(keyword in model_lower for keyword in ["gpt", "openai"]):
+        return "openai"
+    elif any(keyword in model_lower for keyword in ["gemini", "bard"]):
+        return "gemini"
+    elif any(keyword in model_lower for keyword in ["grok"]):
+        return "grok"
+    else:
+        return "openai"  # Default fallback
 
 
 def get_available_models() -> list:

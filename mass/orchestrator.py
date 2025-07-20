@@ -10,6 +10,7 @@ import asyncio
 
 from .types import SystemState, AgentState, TaskInput, VoteRecord
 from .logging import get_log_manager
+from .agent import UPDATE_NOTIFICATION, PRESENTATION_NOTIFICATION, DEBATE_NOTIFICATION, PROMPT_UPDATE_NOTIFICATION
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -180,7 +181,6 @@ class MassOrchestrator:
         """
         with self._lock:
             logger.info(f"🗳️ VOTING: Agent {voter_id} casting vote")
-            logger.debug(f"   Vote details: {voter_id} → {target_id}")
 
             print(f"🗳️  VOTE: Agent {voter_id} → Agent {target_id} ({self.system_state.phase})")
             if response_text:
@@ -212,7 +212,6 @@ class MassOrchestrator:
             self.agent_states[voter_id].status = "voted"
             self.agent_states[voter_id].vote_target = target_id
             self.agent_states[voter_id].execution_end_time = time.time()
-            logger.debug(f"   Agent {voter_id} status updated to 'voted'")
 
             # Log to the comprehensive logging system
             if self.log_manager:
@@ -267,13 +266,31 @@ class MassOrchestrator:
             return consensus_reached
             
     def _check_consensus(self) -> bool:
-        """Check if consensus has been reached based on current votes."""
+        """
+        Check if consensus has been reached based on current votes.
+        Improved to handle edge cases and ensure proper consensus calculation.
+        """
         with self._lock:
             total_agents = len(self.agents)
             failed_agents_count = len([s for s in self.agent_states.values() if s.status == "failed"])
             votable_agents_count = total_agents - failed_agents_count
             
+            # Edge case: no votable agents
             if votable_agents_count == 0:
+                logger.warning("⚠️ No votable agents available for consensus")
+                return False
+            
+            # Edge case: only one votable agent
+            if votable_agents_count == 1:
+                working_agents = [aid for aid, state in self.agent_states.items() 
+                                if state.status == "working"]
+                if not working_agents:  # The single agent has voted
+                    # Find the single votable agent
+                    votable_agent = [aid for aid, state in self.agent_states.items() 
+                                   if state.status != "failed"][0]
+                    logger.info(f"🎯 Single agent consensus: Agent {votable_agent}")
+                    self._reach_consensus(votable_agent)
+                    return True
                 return False
                 
             vote_counts = Counter(vote.target_id for vote in self.votes)
@@ -281,6 +298,14 @@ class MassOrchestrator:
             
             if vote_counts and vote_counts.most_common(1)[0][1] >= votes_needed:
                 winning_agent_id = vote_counts.most_common(1)[0][0]
+                winning_votes = vote_counts.most_common(1)[0][1]
+                
+                # Ensure the winning agent is still votable (not failed)
+                if self.agent_states[winning_agent_id].status == "failed":
+                    logger.warning(f"⚠️ Winning agent {winning_agent_id} has failed - recalculating")
+                    return False
+                    
+                logger.info(f"✅ Consensus reached: Agent {winning_agent_id} with {winning_votes}/{votable_agents_count} votes")
                 self._reach_consensus(winning_agent_id)
                 return True
                 
@@ -296,7 +321,6 @@ class MassOrchestrator:
         """
         with self._lock:
             logger.info(f"💥 AGENT FAILURE: Agent {agent_id} marked as failed")
-            logger.debug(f"   Failure reason: {reason}")
 
             print(f"      💥 MARK_FAILED: Agent {agent_id}")
             print(f"      📊 Current phase: {self.system_state.phase}")
@@ -309,18 +333,15 @@ class MassOrchestrator:
             old_status = self.agent_states[agent_id].status
             self.agent_states[agent_id].status = "failed"
             self.agent_states[agent_id].execution_end_time = time.time()
-            logger.debug(f"   Agent {agent_id} status updated to 'failed'")
 
             # Log to the comprehensive logging system
             if self.log_manager:
-                print(f"      📝 Logging failure event via log_manager")
                 self.log_manager.log_agent_status_change(
                     agent_id=agent_id,
                     old_status=old_status,
                     new_status="failed",
                     phase=self.system_state.phase,
                 )
-                print(f"      ✅ Failure event logged successfully")
 
             # Log the failure event
             self._log_event(
@@ -494,7 +515,6 @@ class MassOrchestrator:
             self.final_response = None
 
             # Reset all agent states
-            logger.debug("   Resetting all agent states...")
             for agent_id, agent in self.agents.items():
                 agent.state = AgentState(agent_id=agent_id)
                 self.agent_states[agent_id] = agent.state
@@ -503,12 +523,10 @@ class MassOrchestrator:
                     {"role": "system", "content": self._get_system_instruction(agent_id)},
                     {"role": "user", "content": task.question}
                 ]
-                logger.debug(f"   - Agent {agent_id} state reset")
 
             # Clear previous session data
             self.votes.clear()
             self.communication_log.clear()
-            logger.debug(f"   Cleared previous session data")
 
             self._log_event("task_started", {"task_id": task.task_id, "question": task.question})
             logger.info("✅ Task initialization completed successfully")
@@ -559,11 +577,12 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
 
     def _run_simplified_workflow(self, task: TaskInput) -> Dict[str, Any]:
         """
-        Run the simplified MASS workflow:
+        Run the simplified MASS workflow with dynamic agent restart support:
         1. All agents work in parallel
-        2. When all have voted, check consensus
-        3. If no consensus, restart all for debate
-        4. If consensus, representative presents final answer
+        2. Agents restart when others share updates (if they had voted)
+        3. When all have voted, check consensus
+        4. If no consensus, restart all for debate
+        5. If consensus, representative presents final answer
         """
         logger.info("🚀 Starting simplified MASS workflow")
         
@@ -578,9 +597,9 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
                 self._force_consensus_by_timeout()
                 break
             
-            # Run all agents in parallel
+            # Run all agents with dynamic restart support
             logger.info(f"📢 Starting collaboration round {debate_rounds + 1}")
-            self._run_all_agents_parallel(task)
+            self._run_all_agents_with_dynamic_restart(task)
             
             # Check if all votable agents have voted
             if self._all_agents_voted():
@@ -607,26 +626,61 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
                 
         return self._finalize_session()
 
-    def _run_all_agents_parallel(self, task: TaskInput):
-        """Run all agents in parallel until they vote or fail."""
-        with ThreadPoolExecutor(max_workers=len(self.agents)) as executor:
-            # Submit all agent tasks
-            futures = []
+    def _run_all_agents_with_dynamic_restart(self, task: TaskInput):
+        """
+        Run all agents in parallel with support for dynamic restarts.
+        Unlike the original method, this handles agents restarting mid-execution.
+        """
+        active_futures = {}
+        executor = ThreadPoolExecutor(max_workers=len(self.agents))
+        
+        try:
+            # Start all working agents
             for agent_id in self.agents.keys():
                 if self.agent_states[agent_id].status not in ["failed"]:
-                    # Reset status to working
-                    self.agent_states[agent_id].status = "working"
-                    self.agent_states[agent_id].execution_start_time = time.time()
-                    
-                    future = executor.submit(self._run_single_agent, agent_id, task)
-                    futures.append(future)
+                    self._start_agent_if_working(agent_id, task, executor, active_futures)
             
-            # Wait for all agents to complete (vote or fail)
-            for future in futures:
-                try:
-                    future.result()
-                except Exception as e:
-                    logger.error(f"❌ Agent task failed: {e}")
+            # Monitor agents and handle restarts
+            while active_futures and not self._all_agents_voted():
+                completed_futures = []
+                
+                # Check for completed agents
+                for agent_id, future in list(active_futures.items()):
+                    if future.done():
+                        completed_futures.append(agent_id)
+                        try:
+                            future.result()  # Get result and handle exceptions
+                        except Exception as e:
+                            logger.error(f"❌ Agent {agent_id} failed: {e}")
+                            self.mark_agent_failed(agent_id, str(e))
+                
+                # Remove completed futures
+                for agent_id in completed_futures:
+                    del active_futures[agent_id]
+                
+                # Check for agents that need to restart (status changed back to "working")
+                for agent_id in self.agents.keys():
+                    if (agent_id not in active_futures and 
+                        self.agent_states[agent_id].status == "working"):
+                        self._start_agent_if_working(agent_id, task, executor, active_futures)
+                
+                time.sleep(0.1)  # Small delay to prevent busy waiting
+                
+        finally:
+            # Cancel any remaining futures
+            for future in active_futures.values():
+                future.cancel()
+            executor.shutdown(wait=True)
+
+    def _start_agent_if_working(self, agent_id: int, task: TaskInput, executor: ThreadPoolExecutor, active_futures: Dict):
+        """Start an agent if it's in working status and not already running."""
+        if (self.agent_states[agent_id].status == "working" and 
+            agent_id not in active_futures):
+            
+            self.agent_states[agent_id].execution_start_time = time.time()
+            future = executor.submit(self._run_single_agent, agent_id, task)
+            active_futures[agent_id] = future
+            logger.info(f"🤖 Agent {agent_id} started/restarted")
 
     def _run_single_agent(self, agent_id: int, task: TaskInput):
         """Run a single agent's work_on_task method."""
@@ -652,7 +706,10 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
             self.mark_agent_failed(agent_id, str(e))
 
     def _get_restart_instruction(self, agent_id: int) -> Optional[str]:
-        """Get restart instruction based on updates from other agents."""
+        """
+        Get restart instruction based on updates from other agents.
+        Uses proper notification templates for different scenarios.
+        """
         agent_state = self.agent_states[agent_id]
         
         # Get updates from other agents since this agent last saw them
@@ -662,7 +719,9 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
                 last_seen = agent_state.seen_updates_timestamps.get(other_id, 0)
                 for update in other_state.update_history:
                     if update.timestamp > last_seen:
-                        unseen_updates.append(f"Agent {other_id}: {update.summary}")
+                        # Format: "Agent X (status): summary_preview"
+                        preview = update.summary[:200] + "..." if len(update.summary) > 200 else update.summary
+                        unseen_updates.append(f"Agent {other_id} ({update.status}): {preview}")
         
         if unseen_updates:
             # Mark updates as seen
@@ -670,8 +729,10 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
                 if other_id != agent_id and other_state.update_history:
                     latest_timestamp = max(update.timestamp for update in other_state.update_history)
                     agent_state.seen_updates_timestamps[other_id] = latest_timestamp
-            
-            return f"[NOTIFICATION] Recent updates from other agents:\n" + "\n".join(unseen_updates)
+        
+            # Use UPDATE_NOTIFICATION template
+            updates_text = "\n".join(unseen_updates)
+            return UPDATE_NOTIFICATION.format(updates=updates_text)
         
         return None
 
@@ -685,22 +746,40 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
         return len(voted_agents) == len(votable_agents) and len(votable_agents) > 0
 
     def _restart_all_agents_for_debate(self):
-        """Restart all agents for debate by resetting their status and clearing votes."""
+        """
+        Restart all agents for debate by resetting their status and providing debate instructions.
+        Each agent gets the DEBATE_NOTIFICATION with current vote information.
+        """
         logger.info("🔄 Restarting all agents for debate")
         
         with self._lock:
+            # Get debate instruction before clearing votes
+            debate_instruction = self._get_debate_instruction()
+            
             # Clear all votes
             self.votes.clear()
             
-            # Reset agent statuses (but keep their conversation history)
+            # Reset agent statuses and add debate instruction to conversation
             for agent_id, state in self.agent_states.items():
                 if state.status not in ["failed"]:
                     state.status = "working"
                     state.vote_target = None
-                    logger.debug(f"   Agent {agent_id} reset for debate")
+                    
+                    # Add debate notification to conversation history
+                    if state.chat_history:
+                        state.chat_history.append({
+                            "role": "user", 
+                            "content": debate_instruction
+                        })
+            
+            # Update system phase
+            self.system_state.phase = "collaboration"
 
     def _run_final_presentation(self, task: TaskInput):
-        """Run the final presentation by the representative agent."""
+        """
+        Run the final presentation by the representative agent.
+        The representative agent receives PRESENTATION_NOTIFICATION with vote information.
+        """
         representative_id = self.system_state.representative_agent_id
         if not representative_id:
             logger.error("No representative agent selected")
@@ -712,13 +791,18 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
             agent = self.agents[representative_id]
             agent_state = self.agent_states[representative_id]
             
+            # Get presentation instruction using the template
+            presentation_instruction = self._get_presentation_instruction()
+            
             # Add presentation instruction to conversation
-            presentation_msg = self._get_presentation_instruction()
             current_messages = agent_state.chat_history.copy()
-            current_messages.append({"role": "user", "content": presentation_msg})
+            current_messages.append({"role": "user", "content": presentation_instruction})
             
             # Agent presents final answer
             updated_messages = agent.work_on_task(task, current_messages, None)
+            
+            # Update conversation history
+            agent_state.chat_history = updated_messages
             
             # Extract final response from the last assistant message
             for msg in reversed(updated_messages):
@@ -729,18 +813,54 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
             self.system_state.phase = "completed"
             self.system_state.end_time = time.time()
             
+            logger.info(f"✅ Final presentation completed by Agent {representative_id}")
+            
         except Exception as e:
             logger.error(f"❌ Final presentation failed: {e}")
             self.final_response = f"Error in final presentation: {str(e)}"
 
     def _get_presentation_instruction(self) -> str:
-        """Get instruction for final presentation."""
+        """
+        Get instruction for final presentation using PRESENTATION_NOTIFICATION template.
+        """
         vote_info = self._get_voting_status()
-        return f"""You have been selected as the representative agent to present the final solution.
+        vote_distribution = vote_info['vote_distribution']
+        
+        # Format vote information for display
+        options_text = []
+        for agent_id, vote_count in vote_distribution.items():
+            agent_summary = self.agent_states[agent_id].working_summary
+            summary_preview = agent_summary[:150] + "..." if len(agent_summary) > 150 else agent_summary
+            options_text.append(f"Agent {agent_id}: {vote_count} votes - {summary_preview}")
+        
+        options_formatted = "\n".join(options_text) if options_text else "No votes cast yet"
+        
+        return PRESENTATION_NOTIFICATION.format(options=options_formatted)
 
-Vote distribution: {vote_info['vote_distribution']}
+    def _get_debate_instruction(self) -> str:
+        """
+        Get instruction for debate phase using DEBATE_NOTIFICATION template.
+        """
+        vote_info = self._get_voting_status()
+        vote_distribution = vote_info['vote_distribution']
+        
+        # Format vote information for debate
+        options_text = []
+        for agent_id, vote_count in vote_distribution.items():
+            agent_summary = self.agent_states[agent_id].working_summary
+            summary_preview = agent_summary[:150] + "..." if len(agent_summary) > 150 else agent_summary
+            options_text.append(f"Agent {agent_id}: {vote_count} votes - {summary_preview}")
+        
+        options_formatted = "\n".join(options_text) if options_text else "No votes cast yet"
+        
+        return DEBATE_NOTIFICATION.format(options=options_formatted)
 
-Please incorporate all useful information from the team to present the final answer clearly and comprehensively."""
+    def _get_general_prompt_instruction(self) -> str:
+        """
+        Get general prompt instruction using PROMPT_UPDATE_NOTIFICATION template.
+        This is used when agents need a general nudge to continue working or update.
+        """
+        return PROMPT_UPDATE_NOTIFICATION
 
     # Old complex methods removed - replaced by simplified workflow above
              
@@ -811,13 +931,36 @@ Please incorporate all useful information from the team to present the final ans
     def notify_summary_update(self, agent_id: int, summary: str):
         """
         Called when an agent updates their summary.
-        In the simplified system, this just updates the summary - 
-        agents will see updates when they restart naturally.
+        This should restart all voted agents who haven't seen this update yet.
         """
         logger.info(f"📢 Agent {agent_id} updated summary")
         
         # Update the summary in agent state
         self.update_agent_summary(agent_id, summary)
+        
+        # CRITICAL FIX: Restart voted agents when any agent shares new updates
+        with self._lock:
+            restarted_agents = []
+            current_time = time.time()
+            
+            for other_agent_id, state in self.agent_states.items():
+                if (other_agent_id != agent_id and 
+                    state.status == "voted"):
+                    
+                    # Restart the voted agent
+                    state.status = "working"
+                    state.vote_target = None
+                    state.execution_start_time = time.time()
+                    restarted_agents.append(other_agent_id)
+                    
+                    logger.info(f"🔄 Agent {other_agent_id} restarted due to update from Agent {agent_id}")
+            
+            if restarted_agents:
+                # Remove votes from restarted agents
+                self.votes = [v for v in self.votes if v.voter_id not in restarted_agents]
+                logger.info(f"🗳️ Removed votes from restarted agents: {restarted_agents}")
+                
+            return restarted_agents
                     
     def cleanup(self):
         """
@@ -826,9 +969,51 @@ Please incorporate all useful information from the team to present the final ans
         logger.info("🧹 Cleaning up orchestrator resources")
         self._stop_event.set()
         
-        # Wait for all threads to finish
-        for thread in self._agent_threads.values():
-            if thread.is_alive():
-                thread.join(timeout=5)
-                
+        # No longer using _agent_threads since we use ThreadPoolExecutor in workflow methods
+        # The executor is properly shut down in _run_all_agents_with_dynamic_restart
         logger.info("✅ Orchestrator cleanup completed")
+
+def send_notification_to_agent(self, agent_id: int, notification_type: str, **kwargs) -> Optional[str]:
+    """
+    Send a specific type of notification to an agent.
+    
+    Args:
+        agent_id: Target agent ID
+        notification_type: Type of notification ("update", "debate", "presentation", "prompt")
+        **kwargs: Additional parameters for notification templates
+        
+    Returns:
+        The notification message sent, or None if invalid type
+    """
+    logger.info(f"📨 Sending {notification_type} notification to Agent {agent_id}")
+    
+    notification_generators = {
+        "update": lambda: self._get_restart_instruction(agent_id),
+        "debate": lambda: self._get_debate_instruction(),
+        "presentation": lambda: self._get_presentation_instruction(),
+        "prompt": lambda: self._get_general_prompt_instruction()
+    }
+    
+    if notification_type not in notification_generators:
+        logger.error(f"❌ Unknown notification type: {notification_type}")
+        return None
+    
+    try:
+        notification_message = notification_generators[notification_type]()
+        
+        if notification_message:
+            # Add to agent's conversation history
+            agent_state = self.agent_states.get(agent_id)
+            if agent_state and agent_state.chat_history:
+                agent_state.chat_history.append({
+                    "role": "user",
+                    "content": notification_message
+                })
+                
+            return notification_message
+        else:
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to generate {notification_type} notification for Agent {agent_id}: {e}")
+        return None

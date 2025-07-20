@@ -420,13 +420,6 @@ def multi_turn_tool_use(messages, model="o4-mini", tools=["live_search", "code_e
                 tools=tools,
             )
             
-            # Debugging
-            # print(f"Round {round} - Message: {result['text']}")
-            # print(f"Round {round} - Code: {len(result['code'])} blocks")
-            # print(f"Round {round} - Citations: {len(result['citations'])}")
-            # print(f"Round {round} - Function calls: {len(result['function_calls'])}")
-            # _ = input("Press Enter to continue...")
-            
             # Post-process the result
             # Add assistant response with function calls to conversation
             if result['text']:
