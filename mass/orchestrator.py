@@ -5,6 +5,8 @@ import time
 from collections import Counter
 from datetime import datetime
 from typing import Any, Optional, Union, Dict, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
 
 from .types import SystemState, AgentState, TaskInput, VoteRecord
 from .logging import get_log_manager
@@ -48,14 +50,19 @@ class MassOrchestrator:
         self.max_duration = max_duration
         self.consensus_threshold = consensus_threshold
         self.streaming_orchestrator = streaming_orchestrator
-        self._lock = threading.Lock()
 
-        # Get reference to logging system
-        self.log_manager = get_log_manager()
+        # Thread management
+        self._lock = threading.RLock()
+        self._agent_threads: Dict[int, threading.Thread] = {}
+        self._stop_event = threading.Event()
+        self._agent_restart_events: Dict[int, threading.Event] = {}
+        
+        # Communication and logging
         self.communication_log: List[Dict[str, Any]] = []
-
-        # Final response
-        self.final_response: Optional[Dict[str, Any]] = None
+        self.final_response: Optional[str] = None
+        
+        # Initialize log manager
+        self.log_manager = get_log_manager()
 
     def register_agent(self, agent):
         """
@@ -260,6 +267,26 @@ class MassOrchestrator:
                 print(f"      🎉 CONSENSUS REACHED!")
 
             return consensus_reached
+            
+    def _check_consensus(self) -> bool:
+        """Check if consensus has been reached based on current votes."""
+        with self._lock:
+            total_agents = len(self.agents)
+            failed_agents_count = len([s for s in self.agent_states.values() if s.status == "failed"])
+            votable_agents_count = total_agents - failed_agents_count
+            
+            if votable_agents_count == 0:
+                return False
+                
+            vote_counts = Counter(vote.target_id for vote in self.votes)
+            votes_needed = max(1, int(votable_agents_count * self.consensus_threshold))
+            
+            if vote_counts and vote_counts.most_common(1)[0][1] >= votes_needed:
+                winning_agent_id = vote_counts.most_common(1)[0][0]
+                self._reach_consensus(winning_agent_id)
+                return True
+                
+            return False
 
     def mark_agent_failed(self, agent_id: int, reason: str = ""):
         """
@@ -409,7 +436,6 @@ class MassOrchestrator:
                 "context": self.system_state.task.context if self.system_state.task else None,
             },
             "system_configuration": {
-                "max_rounds": self.max_rounds,
                 "max_duration": self.max_duration,
                 "consensus_threshold": self.consensus_threshold,
                 "agents": [agent.model for agent in self.agents.values()],
@@ -461,7 +487,6 @@ class MassOrchestrator:
             logger.info(f"   Task ID: {task.task_id}")
             logger.info(f"   Question preview: {task.question}")
             logger.info(f"   Registered agents: {list(self.agents.keys())}")
-            logger.info(f"   Max rounds: {self.max_rounds}")
             logger.info(f"   Max duration: {self.max_duration}")
             logger.info(f"   Consensus threshold: {self.consensus_threshold}")
 
@@ -486,5 +511,262 @@ class MassOrchestrator:
             self._log_event("task_started", {"task_id": task.task_id, "question": task.question})
             logger.info("✅ Task initialization completed successfully")
             
-        # TODO: Run all agents' work_on_task function asynchronously
-        pass
+        # Start parallel agent execution
+        return self._run_agents_parallel(task)
+
+    def _run_agents_parallel(self, task: TaskInput) -> Dict[str, Any]:
+        """
+        Run all agents in parallel and coordinate their workflow.
+        
+        Returns:
+            Dict containing the final answer and session information
+        """
+        logger.info("🚀 Starting parallel agent execution")
+        
+        # Initialize restart events for all agents
+        for agent_id in self.agents.keys():
+            self._agent_restart_events[agent_id] = threading.Event()
+        
+        # Start all agent threads
+        with ThreadPoolExecutor(max_workers=len(self.agents)) as executor:
+            # Submit agent tasks
+            future_to_agent = {
+                executor.submit(self._run_agent_loop, agent_id, task): agent_id 
+                for agent_id in self.agents.keys()
+            }
+            
+            # Monitor agents and handle coordination
+            try:
+                self._coordinate_agents(future_to_agent, executor)
+                
+                # Wait for all agents to complete or timeout
+                timeout_time = time.time() + self.max_duration
+                for future in as_completed(future_to_agent, timeout=self.max_duration):
+                    agent_id = future_to_agent[future]
+                    try:
+                        result = future.result()
+                        logger.info(f"✅ Agent {agent_id} completed successfully")
+                    except Exception as e:
+                        logger.error(f"❌ Agent {agent_id} failed: {e}")
+                        self.mark_agent_failed(agent_id, str(e))
+                        
+                    # Check if we should stop (consensus reached or timeout)
+                    if self.system_state.consensus_reached or time.time() > timeout_time:
+                        break
+                        
+            except Exception as e:
+                logger.error(f"❌ Coordination failed: {e}")
+                self._stop_event.set()
+                
+        # Generate final response
+        return self._finalize_session()
+        
+    def _run_agent_loop(self, agent_id: int, task: TaskInput):
+        """
+        Run a single agent's work loop with restart capability.
+        """
+        agent = self.agents[agent_id]
+        restart_event = self._agent_restart_events[agent_id]
+        
+        logger.info(f"🤖 Agent {agent_id} starting work loop")
+        
+        try:
+            while not self._stop_event.is_set():
+                # Update agent status to working
+                with self._lock:
+                    self.agent_states[agent_id].status = "working"
+                    self.agent_states[agent_id].execution_start_time = time.time()
+                
+                # Run agent's work
+                logger.debug(f"   Agent {agent_id} starting work_on_task")
+                agent.work_on_task(task)
+                
+                # Check if agent voted or failed
+                if self.agent_states[agent_id].status in ["voted", "failed"]:
+                    logger.info(f"   Agent {agent_id} finished with status: {self.agent_states[agent_id].status}")
+                    break
+                    
+                # Check if consensus reached and this agent is representative
+                if (self.system_state.consensus_reached and 
+                    self.system_state.representative_agent_id == agent_id):
+                    logger.info(f"   Agent {agent_id} selected as representative")
+                    self._present_final_answer(agent_id, task)
+                    break
+                    
+                # Wait for restart notification or timeout
+                if restart_event.wait(timeout=30):  # 30 second timeout
+                    restart_event.clear()
+                    logger.info(f"   Agent {agent_id} restarting due to notification")
+                    continue
+                else:
+                    # Timeout - check system status
+                    if self.system_state.phase == "debate":
+                        logger.info(f"   Agent {agent_id} entering debate phase")
+                        continue
+                    elif self.system_state.consensus_reached:
+                        break
+                        
+        except Exception as e:
+            logger.error(f"❌ Agent {agent_id} encountered error: {e}")
+            self.mark_agent_failed(agent_id, str(e))
+            
+    def _coordinate_agents(self, future_to_agent: Dict, executor: ThreadPoolExecutor):
+        """
+        Monitor agent progress and handle phase transitions.
+        """
+        logger.info("🎛️ Starting agent coordination")
+        
+        while not self._stop_event.is_set() and not self.system_state.consensus_reached:
+            time.sleep(1)  # Check every second
+            
+            # Update system status based on current agent states
+            self._update_system_status()
+            
+            # Handle phase transitions
+            if self.system_state.phase == "debate":
+                logger.info("🗣️ Entering debate phase - notifying all agents")
+                self._notify_all_agents("debate")
+                
+            elif self.system_state.consensus_reached:
+                logger.info("🎉 Consensus reached - stopping coordination")
+                break
+                
+            # Check timeout
+            if (self.system_state.start_time and 
+                time.time() - self.system_state.start_time > self.max_duration):
+                logger.warning("⏰ Maximum duration reached - forcing consensus")
+                self._force_consensus_by_timeout()
+                break
+                
+    def _notify_all_agents(self, reason: str):
+        """
+        Notify all agents to restart (except failed ones).
+        """
+        with self._lock:
+            for agent_id, state in self.agent_states.items():
+                if state.status not in ["failed"]:
+                    logger.debug(f"   Notifying Agent {agent_id} to restart ({reason})")
+                    self._agent_restart_events[agent_id].set()
+                    
+    def _present_final_answer(self, agent_id: int, task: TaskInput):
+        """
+        Set up the final answer presentation phase.
+        The representative agent's work_on_task loop will handle the actual presentation.
+        """
+        logger.info(f"🎯 Agent {agent_id} entering final presentation phase")
+        
+                 # The agent's work_on_task loop will see the "consensus" phase and 
+         # representative_agent_id, then call get_instruction_based_on_status("presentation")
+         # This reuses all existing infrastructure instead of a separate method!
+         
+    def capture_final_response(self, response_text: str):
+        """
+        Capture the final response from the representative agent and complete the session.
+        """
+        with self._lock:
+            self.final_response = response_text
+            self.system_state.phase = "completed"
+            self.system_state.end_time = time.time()
+            
+            logger.info("✅ Final answer captured successfully")
+            logger.info(f"   Response length: {len(response_text)} characters")
+            
+            # Stop all other agents
+            self._stop_event.set()
+             
+    def _force_consensus_by_timeout(self):
+        """
+        Force consensus selection when maximum duration is reached.
+        """
+        logger.warning("⏰ Forcing consensus due to timeout")
+        
+        with self._lock:
+            # Find agent with most votes, or earliest voter in case of tie
+            vote_counts = Counter(vote.target_id for vote in self.votes)
+            
+            if vote_counts:
+                # Select agent with most votes
+                winning_agent_id = vote_counts.most_common(1)[0][0]
+                logger.info(f"   Selected Agent {winning_agent_id} with {vote_counts[winning_agent_id]} votes")
+            else:
+                # No votes - select first working agent
+                working_agents = [aid for aid, state in self.agent_states.items() 
+                                if state.status == "working"]
+                winning_agent_id = working_agents[0] if working_agents else list(self.agents.keys())[0]
+                logger.info(f"   No votes - selected Agent {winning_agent_id} as fallback")
+                
+            self._reach_consensus(winning_agent_id)
+            
+    def _finalize_session(self) -> Dict[str, Any]:
+        """
+        Finalize the session and return comprehensive results.
+        """
+        logger.info("🏁 Finalizing session")
+        
+        with self._lock:
+            if not self.system_state.end_time:
+                self.system_state.end_time = time.time()
+                
+            session_duration = (self.system_state.end_time - self.system_state.start_time 
+                               if self.system_state.start_time else 0)
+            
+            # Prepare final results
+            result = {
+                "answer": self.final_response or "No final answer generated",
+                "consensus_reached": self.system_state.consensus_reached,
+                "representative_agent_id": self.system_state.representative_agent_id,
+                "session_duration": session_duration,
+                "agent_summary": {
+                    agent_id: {
+                        "status": state.status,
+                        "updates_count": len(state.update_history),
+                        "vote_target": state.vote_target,
+                        "execution_time": state.execution_time
+                    }
+                    for agent_id, state in self.agent_states.items()
+                },
+                "voting_results": {
+                    "votes": [{"voter": v.voter_id, "target": v.target_id} for v in self.votes],
+                    "distribution": dict(Counter(v.target_id for v in self.votes))
+                },
+                "system_logs": self.export_detailed_session_log()
+            }
+            
+            logger.info(f"✅ Session completed in {session_duration:.2f} seconds")
+            logger.info(f"   Consensus: {result['consensus_reached']}")
+            logger.info(f"   Representative: Agent {result['representative_agent_id']}")
+            
+            return result
+            
+    def notify_summary_update(self, agent_id: int, summary: str):
+        """
+        Called when an agent updates their summary - notifies other agents to restart.
+        This is the key method that triggers the collaboration mechanism.
+        """
+        logger.info(f"📢 Agent {agent_id} updated summary - notifying other agents")
+        
+        # Update the summary in agent state
+        self.update_agent_summary(agent_id, summary)
+        
+        # Notify all other agents to restart (except the one who updated)
+        with self._lock:
+            for other_agent_id, state in self.agent_states.items():
+                if (other_agent_id != agent_id and 
+                    state.status not in ["failed", "completed"] and
+                    other_agent_id in self._agent_restart_events):
+                    logger.debug(f"   Notifying Agent {other_agent_id} of summary update")
+                    self._agent_restart_events[other_agent_id].set()
+                    
+    def cleanup(self):
+        """
+        Clean up resources and stop all agents.
+        """
+        logger.info("🧹 Cleaning up orchestrator resources")
+        self._stop_event.set()
+        
+        # Wait for all threads to finish
+        for thread in self._agent_threads.values():
+            if thread.is_alive():
+                thread.join(timeout=5)
+                
+        logger.info("✅ Orchestrator cleanup completed")

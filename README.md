@@ -26,6 +26,7 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 | **⚡ Parallel Processing** | Multiple agents tackle problems simultaneously |
 | **👥 Intelligence Sharing** | Agents share and learn from each other's work |
 | **🔄 Consensus Building** | Natural convergence through collaborative refinement |
+| **🔄 Mulit-Region Display** | Display all agents' running process in different regions |
 
 ---
 
@@ -101,7 +102,7 @@ Create a `.env` file in the `agents/` directory with your API keys:
 
 ```bash
 # Copy example configuration
-cp agents/.env.example agents/.env
+cp mass/backends/.env.example mass/backends/.env
 
 # Edit agents/.env with your API keys
 OPENAI_API_KEY=sk-your-openai-key-here
@@ -113,7 +114,7 @@ GEMINI_API_KEY=your-gemini-key-here
 
 ```bash
 # Run simple multi-agent example
-python mass_main.py --config example_config.json
+python cli.py --config example_config.json
 
 # Or run with custom task
 python cli.py --question "2312312 * (142342 + 222552) = ?" --agents o4-mini,gemini-2.5-flash,grok-4
@@ -122,6 +123,7 @@ python cli.py --question "2312312 * (142342 + 222552) = ?" --agents o4-mini,gemi
 ### 4. 📊 View Results
 
 The system will show real-time collaboration between agents and present the final converged solution.
+The display
 
 ---
 

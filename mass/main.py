@@ -1,486 +1,242 @@
 #!/usr/bin/env python3
 """
-MASS (Multi-Agent Scaling System) - Main Entry Point
+MASS (Multi-Agent Scaling System) - Simple Main Interface
 
-This module provides the main interface for running the MASS system on given tasks.
-It handles system initialization, agent setup, and workflow execution.
+This module provides a clean, easy-to-use interface for running the MASS system.
+Just specify your agents, model configs, and user question - the orchestrator handles everything!
 
 Usage examples:
-    # Simple usage - just provide a question and models
+    # Simple usage with model names
+    from mass import run_mass_agents
+    result = run_mass_agents("What is 2+2?", ["gpt-4o", "gemini-2.5-flash"])
+    print(result["answer"])
+    
+    # Advanced usage with custom configs  
     from mass import MassSystem
     system = MassSystem()
-    result = system.run_mass_agents("What is 2+2?", ["gpt-4o", "gemini-2.5-flash"])
-    print(result["answer"])
-    print(result["summary"])
+    result = system.run("Complex question here", agent_configs=[...])
 """
 
-import argparse
-import json
-import logging
 import sys
 import os
-import signal
-import atexit
+import logging
 from typing import List, Dict, Any, Optional, Union
 from pathlib import Path
-from datetime import datetime
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(__file__))
 
 from .types import TaskInput, ModelConfig
-from .orchestrator import MassOrchestrator
-from .workflow import MassWorkflowManager
+from .orchestrator import MassOrchestrator  
 from .agents import create_agent
-from .logging import initialize_logging, cleanup_logging
-from .utils import get_agent_type_from_model, get_available_models
+from .streaming_display import create_streaming_display
+from .utils import get_agent_type_from_model
 
-def create_agent_configs_from_models(model_names: List[str]) -> List[Dict[str, Any]]:
-    """
-    Convert a list of model names to agent configurations.
-    
-    Args:
-        model_names: List of model names (e.g., ["gpt-4o", "gemini-2.5-flash", "grok-4"])
-        
-    Returns:
-        List of agent configuration dictionaries with type and model_config specified
-        
-    Raises:
-        ValueError: If any model name is invalid
-    """
-    agent_configs = []
-    for model_name in model_names:
-        try:
-            agent_type = get_agent_type_from_model(model_name)
-            model_config = ModelConfig(model=model_name)
-            agent_configs.append({
-                "type": agent_type,
-                "model_config": model_config
-            })
-        except ValueError as e:
-            raise ValueError(f"Invalid model name '{model_name}': {str(e)}")
-    
-    return agent_configs
-
-# Initialize basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Initialize logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Global reference for cleanup
-_global_mass_system = None
-
-def _cleanup_on_exit():
-    """Global cleanup function called on exit."""
-    global _global_mass_system
-    if _global_mass_system:
-        try:
-            _global_mass_system.cleanup_agents()
-        except Exception as e:
-            print(f"Warning: Failed to cleanup agents on exit: {e}")
-
-def _signal_handler(signum, frame):
-    """Handle termination signals to ensure cleanup."""
-    print(f"\nReceived signal {signum}, cleaning up...")
-    _cleanup_on_exit()
-    os._exit(1)
-
-# Register cleanup handlers
-atexit.register(_cleanup_on_exit)
-signal.signal(signal.SIGINT, _signal_handler)
-signal.signal(signal.SIGTERM, _signal_handler)
 
 class MassSystem:
     """
-    Main MASS system orchestrator.
+    Simple MASS system interface.
     
-    This class provides a high-level interface for running the complete
-    MASS workflow on given tasks with multiple agents.
+    Just specify agents and questions - the orchestrator handles all the complexity!
     """
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, 
+                 max_duration: int = 600,
+                 consensus_threshold: float = 1.0,
+                 streaming_display: bool = True):
         """
         Initialize the MASS system.
         
         Args:
-            config: Optional configuration dictionary
+            max_duration: Maximum duration in seconds (default: 10 minutes)
+            consensus_threshold: Consensus threshold (default: 1.0 = unanimous)  
+            streaming_display: Whether to show real-time progress (default: True)
         """
-        global _global_mass_system
-        _global_mass_system = self  # Set global reference for cleanup
+        self.max_duration = max_duration
+        self.consensus_threshold = consensus_threshold
+        self.streaming_display = streaming_display
         
-        self.config = config or {}
-        
-        # System components
-        self.orchestrator: Optional[MassOrchestrator] = None
-        self.workflow_manager: Optional[MassWorkflowManager] = None
-        self.agents: List[Any] = []
-        
-        # Configuration parameters
-        self.max_rounds = self.config.get("max_rounds", 5)
-        self.consensus_threshold = self.config.get("consensus_threshold", 1.0)
-        self.parallel_execution = self.config.get("parallel_execution", True)
-        self.check_update_frequency = self.config.get("check_update_frequency", 3)
-        self.save_logs = self.config.get("save_logs", True)  # Whether to save logs to files
-
-    def initialize_system(self, agent_configs: List[Dict[str, Any]]):
+    def run(self, 
+            question: str,
+            models: Optional[List[str]] = None,
+            agent_configs: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
-        Initialize the orchestrator and agents.
+        Run MASS agents on a question and return the final answer.
         
         Args:
-            agent_configs: List of agent configuration dictionaries
+            question: The question to solve
+            models: List of model names (e.g., ["gpt-4o", "gemini-2.5-flash"])  
+            agent_configs: Advanced agent configurations (optional)
+            
+        Returns:
+            Dict containing:
+            - answer: The final answer string
+            - consensus_reached: Whether consensus was reached
+            - agent_summary: Summary of each agent's work
+            - session_duration: How long it took
+            - voting_results: Voting details
+            
+        Examples:
+            # Simple usage
+            result = system.run("What is 2+2?", ["gpt-4o", "claude-3"])
+            
+            # Advanced usage  
+            configs = [
+                {"type": "openai", "model_config": ModelConfig(model="gpt-4o", tools=["python_interpreter"])},
+                {"type": "gemini", "model_config": ModelConfig(model="gemini-2.5-flash")}
+            ]
+            result = system.run("Complex question", agent_configs=configs)
         """
-        logger.info("=" * 60)
-        logger.info("INITIALIZING MASS SYSTEM")
-        logger.info("=" * 60)
-        logger.info(f"Configuration:")
-        logger.info(f"  - Max rounds: {self.max_rounds}")
-        logger.info(f"  - Consensus threshold: {self.consensus_threshold}")
-        logger.info(f"  - Parallel execution: {self.parallel_execution}")
-        logger.info(f"  - Agent count: {len(agent_configs)}")
         
-        # Initialize logging system
-        logger.info("Initializing logging system...")
-        self.log_manager = initialize_logging(non_blocking=True)
-        logger.info(f"✓ Logging system initialized")
+        # Create task input
+        task = TaskInput(question=question)
+        
+        # Convert models to agent configs if provided
+        if models and not agent_configs:
+            agent_configs = self._convert_models_to_configs(models)
+        elif not models and not agent_configs:
+            raise ValueError("Must provide either 'models' list or 'agent_configs'")
+        
+        # Create streaming display
+        streaming_orchestrator = create_streaming_display(
+            display_type="terminal",
+            display_enabled=self.streaming_display
+        ) if self.streaming_display else None
         
         # Create orchestrator
-        logger.info("Creating orchestrator...")
-        self.orchestrator = MassOrchestrator(
-            max_rounds=self.max_rounds,
-            consensus_threshold=self.consensus_threshold
+        orchestrator = MassOrchestrator(
+            max_duration=self.max_duration,
+            consensus_threshold=self.consensus_threshold,
+            streaming_orchestrator=streaming_orchestrator
         )
         
-        # Create and register agents
-        logger.info("Creating and registering agents...")
-        self.agents = []
-        for i, agent_config in enumerate(agent_configs):
-            agent_type = agent_config.get("type", "openai")
-            model_config = agent_config.get("model_config")
+        # Register agents
+        for i, config in enumerate(agent_configs):
+            agent_id = i + 1
+            agent_type = config["type"]
+            model_config = config.get("model_config", ModelConfig())
             
-            try:
-                agent = create_agent(
-                    agent_type=agent_type,
-                    agent_id=i,
-                    orchestrator=self.orchestrator,
-                    model_config=model_config
-                )
-                self.orchestrator.register_agent(agent)
-                self.agents.append(agent)
-                model_name = model_config.model if model_config else "default"
-                logger.info(f"✓ Registered agent {i}: {agent_type} ({model_name})")
-                
-            except Exception as e:
-                logger.error(f"✗ Failed to create agent {i} of type {agent_type}: {str(e)}")
-                raise e
-        
-        # Create workflow manager
-        logger.info("Creating workflow manager...")
-        self.workflow_manager = MassWorkflowManager(
-            orchestrator=self.orchestrator,
-            parallel_execution=self.parallel_execution,
-            check_update_frequency=self.check_update_frequency,
-            streaming_display=True,
-            stream_callback=None,
-            save_logs=self.save_logs
-        )
-        
-        # Connect streaming orchestrator to orchestrator
-        if self.workflow_manager.streaming_orchestrator:
-            self.orchestrator.streaming_orchestrator = self.workflow_manager.streaming_orchestrator
+            agent = create_agent(
+                agent_type=agent_type,
+                agent_id=agent_id, 
+                orchestrator=orchestrator,
+                model_config=model_config
+            )
             
-            # Set agent model names in the display
-            for agent_id, agent in self.orchestrator.agents.items():
-                if hasattr(agent, 'model'):
-                    model_name = agent.model
-                    self.workflow_manager.streaming_orchestrator.set_agent_model(agent_id, model_name)
-        
-        logger.info("✓ MASS system initialization completed successfully")
-        logger.info("=" * 60)
-    
-    def cleanup_agents(self):
-        """Clean up all agent resources to prevent hanging processes."""
-        if hasattr(self, 'agents') and self.agents:
-            logger.info("Cleaning up agent resources...")
-            for agent in self.agents:
-                if hasattr(agent, 'cleanup'):
-                    try:
-                        agent.cleanup()
-                        logger.debug(f"✓ Cleaned up Agent {agent.agent_id}")
-                    except Exception as e:
-                        logger.warning(f"Warning: Failed to cleanup Agent {agent.agent_id}: {e}")
-            logger.info("✓ Agent cleanup completed")
-    
-    def _default_progress_callback(self, phase: str, current: int, total: int):
-        """Default progress callback that logs progress."""
-        logger.info(f"Phase {phase}: {current}/{total} completed")
-    
-    def run_task(self, task: TaskInput, progress_callback: Optional[callable] = None) -> Dict[str, Any]:
-        """
-        Run the MASS workflow on a given task.
-        
-        Args:
-            task: TaskInput containing the problem to solve
-            progress_callback: Optional callback for progress updates
+            orchestrator.register_agent(agent)
             
-        Returns:
-            Dictionary containing the complete workflow results
-        """
-        if not self.workflow_manager:
-            raise ValueError("System not initialized. Call initialize_system() first.")
+        logger.info(f"🚀 Starting MASS with {len(agent_configs)} agents")
+        logger.info(f"   Question: {question}")
+        logger.info(f"   Models: {[cfg.get('model_config', {}).model for cfg in agent_configs]}")
         
-        logger.info("=" * 80)
-        logger.info("STARTING MASS WORKFLOW EXECUTION")
-        logger.info("=" * 80)
-        logger.info(f"Task Details:")
-        logger.info(f"  - Task ID: {task.task_id}")
-        logger.info(f"  - Question: {task.question[:200]}{'...' if len(task.question) > 200 else ''}")
-        logger.info("=" * 80)
-        
-        # Add default progress callback if none provided
-        if progress_callback is None:
-            progress_callback = self._default_progress_callback
-        
-        # Record workflow start time
-        import time
-        workflow_start = time.time()
-        
-        # Run the complete workflow
-        logger.info("🚀 Launching workflow manager...")
-        results = self.workflow_manager.run_complete_workflow(task, progress_callback)
-        
-        # Calculate total execution time
-        workflow_duration = time.time() - workflow_start
-        
-        # Log results summary
-        logger.info("=" * 80)
-        logger.info("WORKFLOW EXECUTION COMPLETED")
-        logger.info("=" * 80)
-        logger.info(f"Total workflow duration: {workflow_duration:.2f} seconds")
-        
-        if results["success"]:
-            logger.info("✅ MASS workflow completed successfully")
-            if results["final_solution"]:
-                final_sol = results["final_solution"]
-                logger.info(f"🏆 Final solution details:")
-                logger.info(f"  - Winning agent: {final_sol['agent_id']}")
-                logger.info(f"  - Answer: {final_sol.get('extracted_answer', 'No answer extracted')}")
-        else:
-            logger.error("❌ MASS workflow failed")
-            error_msg = results.get('error', 'Unknown error')
-            logger.error(f"Error details: {error_msg}")
-        
-        logger.info("=" * 80)
-        return results
-    
-    def run_mass_agents(self, question: str, model_names: List[str]) -> Dict[str, Any]:
-        """
-        Simple interface to run MASS system with just a question and model names.
-        
-        Args:
-            question: The question/task to solve
-            model_names: List of model names to use (e.g., ["gpt-4o", "gemini-2.5-flash"])
-            
-        Returns:
-            Dictionary containing:
-            - success: bool indicating if workflow succeeded
-            - answer: extracted answer from winning agent (or None)
-            - summary: full summary from winning agent (or None)
-            - agent_id: ID of the winning agent (or None)
-            - error: error message if failed (or None)
-        """
+        # Start the task and get results
         try:
+            result = orchestrator.start_task(task)
+            logger.info("✅ MASS completed successfully")
+            return result
             
-            if os.path.exists(question):
-                if question.endswith(".json"):
-                    # load it as a json file
-                    with open(question, 'r', encoding='utf-8') as f:
-                        task_data = json.load(f)
-                    question = task_data.get("question", "")
-                    context = task_data.get("context", {})
-                    task_id = task_data.get("task_id", f"simple_task_{int(datetime.now().timestamp())}")
-                elif question.endswith(".txt"):
-                    # load it as a txt file
-                    with open(question, 'r', encoding='utf-8') as f:
-                        question = f.read()
-                    context = {}
-                    task_id = f"simple_task_{int(datetime.now().timestamp())}"
-                else:
-                    raise ValueError(f"Unsupported file type: {question}")
-                
-                # Create task input from loaded data
-                task = TaskInput(
-                    question=question,
-                    context=context,
-                    task_id=task_id
-                )
-            else:
-                # Create simple task input
-                task = TaskInput(
-                    question=question,
-                    context={},
-                    task_id=f"simple_task_{int(datetime.now().timestamp())}"
-                )
-            
-            # Create agent configurations
-            agent_configs = create_agent_configs_from_models(model_names)
-            
-            # Initialize system
-            self.initialize_system(agent_configs)
-            
-            # Run the workflow
-            results = self.run_task(task)
-            
-            # Extract simple results
-            if results["success"] and results.get("final_solution"):
-                final_solution = results["final_solution"]
-                return {
-                    "success": True,
-                    "answer": final_solution.get("extracted_answer"),
-                    "summary": final_solution.get("solution"),
-                    "agent_id": final_solution.get("agent_id"),
-                    "error": None
-                }
-            else:
-                return {
-                    "success": False,
-                    "answer": None,
-                    "summary": None,
-                    "agent_id": None,
-                    "error": results.get("error", "Unknown error occurred")
-                }
-                
         except Exception as e:
-            logger.error(f"Error in run_mass_agents: {str(e)}")
-            return {
-                "success": False,
-                "answer": None,
-                "summary": None,
-                "agent_id": None,
-                "error": str(e)
-            }
+            logger.error(f"❌ MASS failed: {e}")
+            raise
         finally:
-            # Always cleanup
-            try:
-                self.cleanup_agents()
-                if hasattr(self, 'log_manager') and self.log_manager:
-                    cleanup_logging()
-            except Exception as e:
-                logger.warning(f"Warning: Failed to cleanup resources: {e}")
-
-def parse_arguments():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="MASS (Multi-Agent Scaling System)")
-    
-    parser.add_argument(
-        "--question", "-q",
-        type=str,
-        required=True,
-        help="The question/task to solve"
-    )
-    
-    parser.add_argument(
-        "--agents", "-a",
-        type=str,
-        required=True,
-        help="Comma-separated list of model names (e.g., 'gpt-4o,gemini-2.5-flash,grok-4')"
-    )
-    
-    parser.add_argument(
-        "--output", "-o",
-        type=str,
-        help="Path to output file for results"
-    )
-    
-    parser.add_argument(
-        "--max-rounds",
-        type=int,
-        default=5,
-        help="Maximum collaboration rounds (default: 5)"
-    )
-    
-    parser.add_argument(
-        "--consensus-threshold",
-        type=float,
-        default=1.0,
-        help="Consensus threshold (0.0-1.0, default: 1.0 = unanimous)"
-    )
-    
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose logging"
-    )
-    
-    return parser.parse_args()
-
-def main():
-    """Main entry point for command line usage."""
-    args = parse_arguments()
-    
-    # Set up logging
-    log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    logger.info("MASS System Starting")
-    
-    # Parse model names
-    model_names = [model.strip() for model in args.agents.split(",")]
-    
-    # Validate model names
-    try:
-        available_models = get_available_models()
-        for model_name in model_names:
-            if model_name not in available_models:
-                logger.error(f"Invalid model name: {model_name}")
-                logger.error(f"Available models: {', '.join(available_models)}")
-                sys.exit(1)
-    except Exception as e:
-        logger.error(f"Error validating model names: {str(e)}")
-        sys.exit(1)
-    
-    # Create configuration
-    config = {
-        "max_rounds": args.max_rounds,
-        "consensus_threshold": args.consensus_threshold,
-    }
-    
-    # Create and run MASS system
-    mass_system = MassSystem(config=config)
-    result = mass_system.run_mass_agents(args.question, model_names)
-    
-    # Print results
-    print("\n" + "="*60)
-    print("MASS EXECUTION COMPLETED")
-    print("="*60)
-    
-    if result["success"]:
-        print(f"✅ Workflow completed successfully")
-        print(f"🏆 Winning Agent: {result['agent_id']}")
-        
-        if result["answer"]:
-            print(f"\n📝 FINAL ANSWER:")
-            print(f"{result['answer']}")
-        else:
-            print(f"\n❌ No answer could be extracted")
+            # Cleanup
+            orchestrator.cleanup()
             
-        if result["summary"]:
-            print(f"\n📄 FULL SUMMARY:")
-            print(f"{result['summary']}")
+    def _convert_models_to_configs(self, models: List[str]) -> List[Dict[str, Any]]:
+        """Convert model names to agent configurations."""
+        configs = []
+        for model in models:
+            agent_type = get_agent_type_from_model(model)
+            model_config = ModelConfig(
+                model=model,
+                tools=["python_interpreter", "calculator"]  # Default tools
+            )
+            configs.append({
+                "type": agent_type,
+                "model_config": model_config
+            })
+        return configs
+
+
+def run_mass_agents(question: str, 
+                   models: List[str],
+                   max_duration: int = 600,
+                   consensus_threshold: float = 1.0,
+                   streaming_display: bool = True) -> Dict[str, Any]:
+    """
+    Simple function to run MASS agents on a question.
+    
+    This is the easiest way to use MASS - just provide a question and model names!
+    
+    Args:
+        question: The question to solve
+        models: List of model names (e.g., ["gpt-4o", "gemini-2.5-flash", "grok-4"])
+        max_duration: Maximum duration in seconds (default: 10 minutes)
+        consensus_threshold: Consensus threshold (default: 1.0 = unanimous)
+        streaming_display: Whether to show real-time progress (default: True)
         
-    else:
-        print(f"❌ Workflow failed: {result['error']}")
+    Returns:
+        Dict containing the answer and detailed results
+        
+    Examples:
+        # Simple math question
+        result = run_mass_agents("What is 15 * 23?", ["gpt-4o", "gemini-2.5-flash"])
+        print(result["answer"])
+        
+        # Complex analysis
+        result = run_mass_agents(
+            "Analyze the pros and cons of renewable energy", 
+            ["gpt-4o", "claude-3", "gemini-2.5-flash"]
+        )
+        print(result["answer"])
+    """
+    system = MassSystem(
+        max_duration=max_duration,
+        consensus_threshold=consensus_threshold, 
+        streaming_display=streaming_display
+    )
     
-    # Save results if requested
-    if args.output:
-        try:
-            with open(args.output, 'w', encoding='utf-8') as f:
-                json.dump(result, f, indent=2, ensure_ascii=False)
-            print(f"\n📁 Results saved to: {args.output}")
-        except Exception as e:
-            logger.error(f"Failed to save results: {str(e)}")
-    
-    # Exit with appropriate code
-    exit_code = 0 if result["success"] else 1
-    sys.exit(exit_code)
+    return system.run(question=question, models=models)
 
 
 if __name__ == "__main__":
-    main() 
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Run MASS agents on a question")
+    parser.add_argument("question", help="Question to solve")
+    parser.add_argument("--models", nargs="+", required=True, 
+                       help="Model names (e.g., gpt-4o gemini-2.5-flash)")
+    parser.add_argument("--max-duration", type=int, default=600,
+                       help="Max duration in seconds (default: 600)")
+    parser.add_argument("--consensus", type=float, default=1.0,
+                       help="Consensus threshold (default: 1.0)")
+    parser.add_argument("--no-display", action="store_true",
+                       help="Disable streaming display")
+    
+    args = parser.parse_args()
+    
+    try:
+        result = run_mass_agents(
+            question=args.question,
+            models=args.models,
+            max_duration=args.max_duration,
+            consensus_threshold=args.consensus,
+            streaming_display=not args.no_display
+        )
+        
+        print("\n" + "="*60)
+        print("🎯 FINAL ANSWER:")
+        print("="*60)
+        print(result["answer"])
+        print("\n" + "="*60)
+        print(f"✅ Consensus: {result['consensus_reached']}")
+        print(f"⏱️  Duration: {result['session_duration']:.1f}s")
+        print(f"🗳️  Votes: {result['voting_results']['distribution']}")
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1) 

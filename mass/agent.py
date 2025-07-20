@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from .types import TaskInput, AgentState, AgentResponse, ModelConfig
-from .utils import get_agent_type_from_model
+from .utils import get_agent_type_from_model, function_to_json
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Union, Optional, List, Dict
 from backends import oai, gemini, grok
@@ -192,7 +192,7 @@ class MassAgent(ABC):
         }
         
         try:
-            result = process_message_impl(
+            result = self.process_message_impl(
                 messages=messages,
                 tools=tools,
                 **config
@@ -213,15 +213,15 @@ class MassAgent(ABC):
                 function_calls=[],
             )
 
-    def update_summary(self, summary_report: str):
+    def update_summary(self, new_content: str):
         """
         Record your work on the task: your analysis, approach, solution, and reasoning. Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents.
 
         Args:
-            summary_report: Comprehensive progress report
+            new_content: Comprehensive progress report
         """
-        # Use the orchestrator to update the summary, for the logging and coordination
-        self.orchestrator.update_agent_summary(self.agent_id, summary_report)
+        # Use the orchestrator to update the summary and notify other agents to restart
+        self.orchestrator.notify_summary_update(self.agent_id, new_content)
         return f"Your summary report has been updated and shared with other agents."
     
     def vote(self, target_agent_id: int, response_text: str = ""):
@@ -329,6 +329,14 @@ class MassAgent(ABC):
     def _build_update_message(self) -> str:
         """
         Build the information message of all recent updates
+        
+        Example:
+        **Agent 1 [1726752000]:**
+        I have found the solution to the task.
+        **Agent 2 [1726752100]:**
+        I have found the solution to the task.
+        **Agent 3 [1726752200]:**
+        I have found the solution to the task.
         """
         updates = self.check_updates()
         # Build the information message of all recent updates
@@ -342,15 +350,24 @@ class MassAgent(ABC):
     def _build_vote_message(self) -> str:
         """
         Build the information message of all votes
+        
+        Example:
+        **Agent 1 vote for Agent 2**
+        Reason: I believe Agent 2 has found the correct solution.
+        
+        **Agent 2 vote for Agent 1**
+        Reason: I believe Agent 1 has found the correct solution.
+        
+        **Agent 3 vote for Agent 1**
+        Reason: I believe Agent 1 has found the correct solution.
         """
         votes = self.orchestrator.votes
         vote_message = ""
-        votes = self.orchestrator.votes
         if votes:
             for vote in votes:
                 vote_message += f"**Agent {vote.voter_id} vote for Agent {vote.target_id}**\n"
-                if
-                vote_message += f"Reason: {vote.reason}\n\n"
+                if vote.reason:
+                    vote_message += f"Reason: "
         return vote_message
         
     def get_instruction_based_on_status(self, status: str) -> List[Dict[str, str]]:
@@ -362,6 +379,7 @@ class MassAgent(ABC):
         - presentation: The message for the agent to present the solution, including the options to vote for
         """
         assert status in ["system", "notification", "debate", "presentation"], "Invalid status"
+        
         if status == "system":
             peer_agents = [agent.agent_id for agent in self.orchestrator.agents if agent.agent_id != self.agent_id]
             system_instruction = SYSTEM_INSTRUCTION.format(agent_id=self.agent_id, 
@@ -387,7 +405,85 @@ class MassAgent(ABC):
             return DEBATE_NOTIFICATION.format(options=vote_message)
         
         return messages
-    
+        
+    def _get_available_tools(self) -> List[Dict[str, Any]]:
+        """Return the tool schema for the tools that are available to this agent."""
+        # System tools (always available), JSON schema
+        system_tools = self._get_system_tools()
+        
+        # Built-in tools from model config, string name only
+        built_in_tools = []
+        if self.tools:
+            for tool in self.tools:
+                if tool in ["live_search", "code_execution"]:
+                    built_in_tools.append(tool)
+        
+        # Register tools from the global registry, JSON schema
+        custom_tools = []
+        from .tools import register_tool
+        for tool_name, tool_func in register_tool.items():
+            if tool_name in self.tools:
+                tool_schema = function_to_json(tool_func)
+                custom_tools.append(tool_schema)
+        
+                 return system_tools + built_in_tools + custom_tools
+         
+    def _check_if_final_presentation(self, response_text: str):
+        """
+        Check if this is the final presentation and capture it.
+        Called when the representative agent responds during consensus phase.
+        """
+        if (self.orchestrator and 
+            self.orchestrator.system_state.phase == "consensus" and
+            self.orchestrator.system_state.representative_agent_id == self.agent_id):
+            
+            # This is the representative agent presenting the final answer
+            self.orchestrator.capture_final_response(response_text)
+         
+    def _execute_function_calls(self, function_calls: List[Dict], messages: List[Dict]):
+        """Execute function calls and add results to conversation."""
+        from .tools import register_tool
+        function_outputs = []
+        
+        for func_call in function_calls:
+            func_name = func_call.get("name")
+            func_args = func_call.get("arguments", {})
+            func_call_id = func_call.get("call_id")
+            
+                         try:
+                if func_name == "update_summary":
+                    result = self.update_summary(func_args.get("new_content", ""))
+                elif func_name == "vote":
+                    result = self.vote(func_args.get("agent_id", func_args.get("target_agent_id")), "")
+                elif func_name in register_tool:
+                    result = register_tool[func_name](**func_args)
+                else:
+                    result = {
+                        "type": "function_call_output",
+                        "call_id": func_call_id,
+                        "output": f"Error: Function '{func_name}' not found in tool mapping"
+                    }
+                    
+                # Add function call and result to messages
+                function_output = {
+                    "type": "function_call_output",
+                    "call_id": func_call_id,
+                    "output": str(result)
+                }
+                function_outputs.append(function_output)
+                
+            except Exception as e:
+                # Handle execution errors
+                error_output = {
+                    "type": "function_call_output", 
+                    "call_id": func_call_id,
+                    "output": f"Error executing function: {str(e)}"
+                }
+                function_outputs.append(error_output)
+                # print(f"Error executing function {function_name}: {e}")
+                
+                 return function_outputs
+      
     @abstractmethod
     def work_on_task(self, task: TaskInput):
         """
@@ -395,3 +491,4 @@ class MassAgent(ABC):
         
         This method should be implemented by concrete agent classes.
         """
+        pass
