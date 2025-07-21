@@ -28,16 +28,15 @@ def parse_completion(response, add_citations=True):
     function_calls = []
     reasoning_items = []
 
-    if add_citations and hasattr(response, "citations") and response.citations:
-        citations = []
+    if hasattr(response, "citations") and response.citations:
         for citation in response.citations:
             citations.append({"url": citation, "title": "", "start_index": -1, "end_index": -1})
 
-        if citations:
-            citation_content = []
-            for idx, citation in enumerate(citations):
-                citation_content.append(f"[{idx}]({citation['url']})")
-            text = text + "\n\n" + "\n".join(citation_content)
+    if citations and add_citations:
+        citation_content = []
+        for idx, citation in enumerate(citations):
+            citation_content.append(f"[{idx}]({citation['url']})")
+        text = text + "\n\nReferences:\n" + "\n".join(citation_content)
     
     # Check if response has tool_calls directly (some SDK formats)
     if hasattr(response, "tool_calls") and response.tool_calls:

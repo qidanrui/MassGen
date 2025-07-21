@@ -909,7 +909,7 @@ class MassOrchestrator:
                         # Format: "Agent X (status): summary"
                         unseen_updates_from_this_agent.append(f"**Agent {other_id} ({update.status}):** {update.summary}\n\n")
                 # Include only the latest update from each agent or all updates
-                if latest_only:
+                if latest_only and unseen_updates_from_this_agent:
                     unseen_updates.append(unseen_updates_from_this_agent[-1])
                 else:
                     unseen_updates.extend(unseen_updates_from_this_agent)

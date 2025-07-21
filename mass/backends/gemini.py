@@ -17,6 +17,43 @@ from mass.tools import (mock_update_summary as update_summary,
                         mock_vote as vote)
 from mass.types import AgentResponse
 
+def add_citations_to_response(response):
+    text = response.text
+    
+    # Check if grounding_metadata exists
+    if not hasattr(response, 'candidates') or not response.candidates:
+        return text
+    
+    candidate = response.candidates[0]
+    if not hasattr(candidate, 'grounding_metadata') or not candidate.grounding_metadata:
+        return text
+    
+    grounding_metadata = candidate.grounding_metadata
+    
+    # Check if grounding_supports and grounding_chunks exist and are not None
+    supports = getattr(grounding_metadata, 'grounding_supports', None)
+    chunks = getattr(grounding_metadata, 'grounding_chunks', None)
+    
+    if not supports or not chunks:
+        return text
+
+    # Sort supports by end_index in descending order to avoid shifting issues when inserting.
+    sorted_supports = sorted(supports, key=lambda s: s.segment.end_index, reverse=True)
+
+    for support in sorted_supports:
+        end_index = support.segment.end_index
+        if support.grounding_chunk_indices:
+            # Create citation string like [1](link1)[2](link2)
+            citation_links = []
+            for i in support.grounding_chunk_indices:
+                if i < len(chunks):
+                    uri = chunks[i].web.uri
+                    citation_links.append(f"[{i + 1}]({uri})")
+
+            citation_string = ", ".join(citation_links)
+            text = text[:end_index] + citation_string + text[end_index:]
+
+    return text
 
 def parse_completion(completion, add_citations=True):
     """Parse the completion response from Gemini API using the official SDK."""
@@ -100,22 +137,11 @@ def parse_completion(completion, add_citations=True):
                     pass
 
     # Add citations to text if available and requested
-    if add_citations and citations and text:
-        # For Gemini, we don't have specific start/end indices, so we append citations at the end
-        citation_links = []
-        for idx, citation in enumerate(citations):
-            if citation["url"]:
-                citation_links.append(f"[{idx + 1}]({citation['url']})")
-
-        if citation_links:
-            citation_string = ", ".join(citation_links)
-            # Find a good place to insert citations (at the end for now)
-            # In the future, we could use more sophisticated placement logic
-            if text.endswith('.') or text.endswith('!') or text.endswith('?'):
-                end_index = len(text)
-                if citation_links:
-                    citation_string = ", ".join(citation_links)
-                    text = text[:end_index] + citation_string + text[end_index:]
+    if add_citations:
+        try:
+            text = add_citations_to_response(completion)
+        except Exception as e:
+            print(f"[GEMINI] Error adding citations to text: {e}")
 
     return AgentResponse(
         text=text,

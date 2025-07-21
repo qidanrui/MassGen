@@ -24,3 +24,11 @@ TODO:
 - Check work_on_task function for each agent (add notification)
 - Fix the bug for gemini tool conflict
 - logging file figured out (folder, log.txt)
+
+Display and loggings:
+- where are all the information stored?
+- Multi-region display:
+ - add border (上下左右) to every region
+ - region border should always be strict (but now it is not)
+ - for each region (agents and system), display their useful state information in real-time, like phase, status, vote_target, please refer to mass/types.py for useful agent and system state.
+ - in the bottom part where we display system events. Can you also add an emoji indicate the agent status change? Like before: Agent 2: working → voted, add an emoji

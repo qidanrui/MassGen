@@ -67,13 +67,18 @@ def parse_completion(response, add_citations=True):
 
     # Add citations to text if available
     if add_citations and citations:
-        # Sort citations by end_index in descending order to avoid shifting issues when inserting
-        sorted_citations = sorted(citations, key=lambda c: c["end_index"], reverse=True)
+        try:
+            new_text = text
+            # Sort citations by end_index in descending order to avoid shifting issues when inserting
+            sorted_citations = sorted(citations, key=lambda c: c["end_index"], reverse=True)
 
-        for idx, citation in enumerate(sorted_citations):
-            end_index = citation["end_index"]
-            citation_link = f"[{len(citations) - idx}]({citation['url']})"
-            text = text[:end_index] + citation_link + text[end_index:]
+            for idx, citation in enumerate(sorted_citations):
+                end_index = citation["end_index"]
+                citation_link = f"[{len(citations) - idx}]({citation['url']})"
+                new_text = new_text[:end_index] + citation_link + new_text[end_index:]
+            text = new_text
+        except Exception as e:
+            print(f"[OAI] Error adding citations to text: {e}")
                     
     return AgentResponse(
         text=text,
