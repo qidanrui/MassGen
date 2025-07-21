@@ -108,6 +108,8 @@ class MassOrchestrator:
 
             old_summary_length = len(self.agent_states[agent_id].working_summary)
             self.agent_states[agent_id].add_update(summary)
+            
+
 
             preview = summary[:100] + "..." if len(summary) > 100 else summary
             print(f"📝 Agent {agent_id} summary updated ({old_summary_length} → {len(summary)} chars)")
@@ -258,6 +260,7 @@ class MassOrchestrator:
             # Update streaming display
             if self.streaming_orchestrator:
                 self.streaming_orchestrator.update_agent_status(voter_id, "voted")
+                self.streaming_orchestrator.update_agent_vote_target(voter_id, target_id)
                 vote_counts = self._get_current_vote_counts()
                 self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
                 vote_msg = f"🗳️ Agent {voter_id} voted for Agent {target_id}"
@@ -770,6 +773,11 @@ class MassOrchestrator:
             
             # Update conversation state
             self.agent_states[agent_id].chat_history = updated_messages
+            self.agent_states[agent_id].chat_round = agent.state.chat_round
+            
+            # Update streaming display with chat round
+            if self.streaming_orchestrator:
+                self.streaming_orchestrator.update_agent_chat_round(agent_id, agent.state.chat_round)
             
             logger.info(f"✅ Agent {agent_id} completed work with status: {self.agent_states[agent_id].status}")
             

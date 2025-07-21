@@ -136,7 +136,7 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
         search_parameters = None
         if enable_search:
             search_parameters = SearchParameters(
-                mode="on",
+                mode="auto",
                 return_citations=True,
             )
 
