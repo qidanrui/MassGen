@@ -1,242 +1,313 @@
 #!/usr/bin/env python3
 """
-MASS (Multi-Agent Scaling System) - Simple Main Interface
+MASS (Multi-Agent Scaling System) - Programmatic Interface
 
-This module provides a clean, easy-to-use interface for running the MASS system.
-Just specify your agents, model configs, and user question - the orchestrator handles everything!
+This module provides programmatic interfaces for running the MASS system.
+For command-line usage, use: python cli.py
 
-Usage examples:
-    # Simple usage with model names
+Programmatic usage examples:
+    # Using YAML configuration
+    from mass import run_mass_with_config, load_config_from_yaml
+    config = load_config_from_yaml("config.yaml")
+    result = run_mass_with_config("Your question here", config)
+    
+    # Using simple model list
     from mass import run_mass_agents
     result = run_mass_agents("What is 2+2?", ["gpt-4o", "gemini-2.5-flash"])
-    print(result["answer"])
     
-    # Advanced usage with custom configs  
-    from mass import MassSystem
-    system = MassSystem()
-    result = system.run("Complex question here", agent_configs=[...])
+    # Using configuration objects
+    from mass import MassSystem, create_config_from_models
+    config = create_config_from_models(["gpt-4o", "grok-3"])
+    system = MassSystem(config)
+    result = system.run("Complex question here")
 """
 
 import sys
 import os
 import logging
+import time
 from typing import List, Dict, Any, Optional, Union
 from pathlib import Path
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(__file__))
 
-from .types import TaskInput, ModelConfig
+from .types import TaskInput, MassConfig
+from .config import create_config_from_models
 from .orchestrator import MassOrchestrator  
 from .agents import create_agent
 from .streaming_display import create_streaming_display
-from .utils import get_agent_type_from_model
+from .logging import MassLogManager
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
+def _run_single_agent_simple(question: str, config: MassConfig) -> Dict[str, Any]:
+    """
+    Simple single-agent processing that bypasses the multi-agent orchestration system.
+    
+    Args:
+        question: The question to solve
+        config: MassConfig object with exactly one agent
+        
+    Returns:
+        Dict containing the answer and detailed results
+    """
+    start_time = time.time()
+    agent_config = config.agents[0]
+    
+    logger.info(f"🤖 Running single agent mode with {agent_config.model_config.model}")
+    logger.info(f"   Question: {question}")
+    
+    try:
+        # Create the single agent without orchestrator (None)
+        agent = create_agent(
+            agent_type=agent_config.agent_type,
+            agent_id=agent_config.agent_id,
+            orchestrator=None,  # No orchestrator needed for single agent
+            model_config=agent_config.model_config,
+            stream_callback=None  # Simple mode without streaming
+        )
+        
+        # Create simple conversation format
+        messages = [
+            {
+                "role": "system", 
+                "content": f"You are an expert agent equipped with tools to solve complex tasks. Please provide a comprehensive answer to the user's question."
+            },
+            {
+                "role": "user", 
+                "content": question
+            }
+        ]
+        
+        # Get available tools from agent configuration
+        tools = agent_config.model_config.tools if agent_config.model_config.tools else []
+        
+        # Call process_message directly
+        result = agent.process_message(messages=messages, tools=tools)
+        
+        # Calculate duration
+        session_duration = time.time() - start_time
+        
+        # Format response to match multi-agent system format
+        response = {
+            "answer": result.text if result.text else "No response generated",
+            "consensus_reached": True,  # Trivially true for single agent
+            "session_duration": session_duration,
+            "voting_results": {
+                "representative_agent_id": agent_config.agent_id,
+                "distribution": {agent_config.agent_id: 1},  # Single agent votes for itself
+                "total_votes": 1
+            },
+            "agent_count": 1,
+            "model_used": agent_config.model_config.model,
+            "citations": result.citations if hasattr(result, 'citations') else [],
+            "code": result.code if hasattr(result, 'code') else [],
+            "single_agent_mode": True
+        }
+        
+        logger.info(f"✅ Single agent completed in {session_duration:.1f}s")
+        return response
+        
+    except Exception as e:
+        session_duration = time.time() - start_time
+        logger.error(f"❌ Single agent failed: {e}")
+        
+        # Return error response in same format
+        return {
+            "answer": f"Error in single agent processing: {str(e)}",
+            "consensus_reached": False,
+            "session_duration": session_duration,
+            "voting_results": {
+                "representative_agent_id": None,
+                "distribution": {},
+                "total_votes": 0
+            },
+            "agent_count": 1,
+            "model_used": agent_config.model_config.model,
+            "citations": [],
+            "code": [],
+            "single_agent_mode": True,
+            "error": str(e)
+        }
+
+
+def run_mass_with_config(question: str, config: MassConfig) -> Dict[str, Any]:
+    """
+    Run MASS system with a complete configuration object.
+    
+    Args:
+        question: The question to solve
+        config: Complete MassConfig object
+        
+    Returns:
+        Dict containing the answer and detailed results
+    """
+    # Validate configuration
+    config.validate()
+    
+    # Check for single agent case
+    if len(config.agents) == 1:
+        logger.info("🔄 Single agent detected - using simple processing mode")
+        return _run_single_agent_simple(question, config)
+    
+    # Continue with multi-agent orchestration for multiple agents
+    logger.info("🔄 Multiple agents detected - using multi-agent orchestration")
+    
+    # Create task input
+    task = TaskInput(question=question)
+    
+    # Create streaming display
+    streaming_orchestrator = None
+    if config.streaming_display.display_enabled:
+        streaming_orchestrator = create_streaming_display(
+            display_enabled=config.streaming_display.display_enabled,
+            max_lines=config.streaming_display.max_lines,
+            save_logs=config.streaming_display.save_logs,
+            stream_callback=config.streaming_display.stream_callback
+        )
+    
+    # Create log manager
+    log_manager = MassLogManager(
+        log_dir=config.logging.log_dir,
+        session_id=config.logging.session_id,
+        non_blocking=config.logging.non_blocking
+    )
+    
+    # Create orchestrator with full configuration
+    orchestrator = MassOrchestrator(
+        max_duration=config.orchestrator.max_duration,
+        consensus_threshold=config.orchestrator.consensus_threshold,
+        max_debate_rounds=config.orchestrator.max_debate_rounds,
+        status_check_interval=config.orchestrator.status_check_interval,
+        thread_pool_timeout=config.orchestrator.thread_pool_timeout,
+        streaming_orchestrator=streaming_orchestrator
+    )
+    
+    # Set log manager
+    orchestrator.log_manager = log_manager
+    
+    # Register agents
+    for agent_config in config.agents:
+        # Create stream callback that connects agent to streaming display
+        stream_callback = None
+        if streaming_orchestrator:
+            # Create a proper closure that captures the agent_id
+            def create_stream_callback(agent_id):
+                def callback(content):
+                    streaming_orchestrator.stream_output(agent_id, content)
+                return callback
+            stream_callback = create_stream_callback(agent_config.agent_id)
+        
+        agent = create_agent(
+            agent_type=agent_config.agent_type,
+            agent_id=agent_config.agent_id,
+            orchestrator=orchestrator,
+            model_config=agent_config.model_config,
+            stream_callback=stream_callback
+        )
+        orchestrator.register_agent(agent)
+    
+    logger.info(f"🚀 Starting MASS with {len(config.agents)} agents")
+    logger.info(f"   Question: {question}")
+    logger.info(f"   Models: {[agent.model_config.model for agent in config.agents]}")
+    logger.info(f"   Max duration: {config.orchestrator.max_duration}s")
+    logger.info(f"   Consensus threshold: {config.orchestrator.consensus_threshold}")
+    
+    # Start the task and get results
+    try:
+        result = orchestrator.start_task(task)
+        logger.info("✅ MASS completed successfully")
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ MASS failed: {e}")
+        raise
+    finally:
+        # Cleanup
+        orchestrator.cleanup()
+
+
 class MassSystem:
     """
-    Simple MASS system interface.
-    
-    Just specify agents and questions - the orchestrator handles all the complexity!
+    Enhanced MASS system interface with configuration support.
     """
     
-    def __init__(self, 
-                 max_duration: int = 600,
-                 consensus_threshold: float = 1.0,
-                 streaming_display: bool = True):
+    def __init__(self, config: MassConfig):
         """
         Initialize the MASS system.
         
         Args:
-            max_duration: Maximum duration in seconds (default: 10 minutes)
-            consensus_threshold: Consensus threshold (default: 1.0 = unanimous)  
-            streaming_display: Whether to show real-time progress (default: True)
+            config: MassConfig object with complete configuration.
         """
-        self.max_duration = max_duration
-        self.consensus_threshold = consensus_threshold
-        self.streaming_display = streaming_display
+        self.config = config
         
-    def run(self, 
-            question: str,
-            models: Optional[List[str]] = None,
-            agent_configs: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    def run(self, question: str) -> Dict[str, Any]:
         """
-        Run MASS agents on a question and return the final answer.
+        Run MASS system on a question using the configured setup.
         
         Args:
             question: The question to solve
-            models: List of model names (e.g., ["gpt-4o", "gemini-2.5-flash"])  
-            agent_configs: Advanced agent configurations (optional)
             
         Returns:
-            Dict containing:
-            - answer: The final answer string
-            - consensus_reached: Whether consensus was reached
-            - agent_summary: Summary of each agent's work
-            - session_duration: How long it took
-            - voting_results: Voting details
-            
-        Examples:
-            # Simple usage
-            result = system.run("What is 2+2?", ["gpt-4o", "claude-3"])
-            
-            # Advanced usage  
-            configs = [
-                {"type": "openai", "model_config": ModelConfig(model="gpt-4o", tools=["python_interpreter"])},
-                {"type": "gemini", "model_config": ModelConfig(model="gemini-2.5-flash")}
-            ]
-            result = system.run("Complex question", agent_configs=configs)
+            Dict containing the answer and detailed results
         """
+        return run_mass_with_config(question, self.config)
+    
+    def update_config(self, **kwargs) -> None:
+        """
+        Update configuration parameters.
         
-        # Create task input
-        task = TaskInput(question=question)
-        
-        # Convert models to agent configs if provided
-        if models and not agent_configs:
-            agent_configs = self._convert_models_to_configs(models)
-        elif not models and not agent_configs:
-            raise ValueError("Must provide either 'models' list or 'agent_configs'")
-        
-        # Create streaming display
-        streaming_orchestrator = create_streaming_display(
-            display_type="terminal",
-            display_enabled=self.streaming_display
-        ) if self.streaming_display else None
-        
-        # Create orchestrator
-        orchestrator = MassOrchestrator(
-            max_duration=self.max_duration,
-            consensus_threshold=self.consensus_threshold,
-            streaming_orchestrator=streaming_orchestrator
-        )
-        
-        # Register agents
-        for i, config in enumerate(agent_configs):
-            agent_id = i + 1
-            agent_type = config["type"]
-            model_config = config.get("model_config", ModelConfig())
+        Args:
+            **kwargs: Configuration parameters to update
+        """
+        # Update orchestrator config
+        if 'max_duration' in kwargs:
+            self.config.orchestrator.max_duration = kwargs['max_duration']
+        if 'consensus_threshold' in kwargs:
+            self.config.orchestrator.consensus_threshold = kwargs['consensus_threshold']
+        if 'max_debate_rounds' in kwargs:
+            self.config.orchestrator.max_debate_rounds = kwargs['max_debate_rounds']
             
-            agent = create_agent(
-                agent_type=agent_type,
-                agent_id=agent_id, 
-                orchestrator=orchestrator,
-                model_config=model_config
-            )
-            
-            orchestrator.register_agent(agent)
-            
-        logger.info(f"🚀 Starting MASS with {len(agent_configs)} agents")
-        logger.info(f"   Question: {question}")
-        logger.info(f"   Models: {[cfg.get('model_config', {}).model for cfg in agent_configs]}")
-        
-        # Start the task and get results
-        try:
-            result = orchestrator.start_task(task)
-            logger.info("✅ MASS completed successfully")
-            return result
-            
-        except Exception as e:
-            logger.error(f"❌ MASS failed: {e}")
-            raise
-        finally:
-            # Cleanup
-            orchestrator.cleanup()
-            
-    def _convert_models_to_configs(self, models: List[str]) -> List[Dict[str, Any]]:
-        """Convert model names to agent configurations."""
-        configs = []
-        for model in models:
-            agent_type = get_agent_type_from_model(model)
-            model_config = ModelConfig(
-                model=model,
-                tools=["python_interpreter", "calculator"]  # Default tools
-            )
-            configs.append({
-                "type": agent_type,
-                "model_config": model_config
-            })
-        return configs
+        # Validate updated configuration
+        self.config.validate()
 
 
 def run_mass_agents(question: str, 
                    models: List[str],
                    max_duration: int = 600,
                    consensus_threshold: float = 1.0,
-                   streaming_display: bool = True) -> Dict[str, Any]:
+                   streaming_display: bool = True,
+                   **kwargs) -> Dict[str, Any]:
     """
-    Simple function to run MASS agents on a question.
-    
-    This is the easiest way to use MASS - just provide a question and model names!
+    Simple function to run MASS agents on a question (backward compatibility).
     
     Args:
         question: The question to solve
-        models: List of model names (e.g., ["gpt-4o", "gemini-2.5-flash", "grok-4"])
-        max_duration: Maximum duration in seconds (default: 10 minutes)
-        consensus_threshold: Consensus threshold (default: 1.0 = unanimous)
-        streaming_display: Whether to show real-time progress (default: True)
+        models: List of model names (e.g., ["gpt-4o", "gemini-2.5-flash"])
+        max_duration: Maximum duration in seconds
+        consensus_threshold: Consensus threshold
+        streaming_display: Whether to show real-time progress
+        **kwargs: Additional configuration parameters
         
     Returns:
         Dict containing the answer and detailed results
-        
-    Examples:
-        # Simple math question
-        result = run_mass_agents("What is 15 * 23?", ["gpt-4o", "gemini-2.5-flash"])
-        print(result["answer"])
-        
-        # Complex analysis
-        result = run_mass_agents(
-            "Analyze the pros and cons of renewable energy", 
-            ["gpt-4o", "claude-3", "gemini-2.5-flash"]
-        )
-        print(result["answer"])
     """
-    system = MassSystem(
-        max_duration=max_duration,
-        consensus_threshold=consensus_threshold, 
-        streaming_display=streaming_display
+    # Create configuration from models
+    config = create_config_from_models(
+        models=models,
+        orchestrator_config={
+            "max_duration": max_duration,
+            "consensus_threshold": consensus_threshold,
+            **{k: v for k, v in kwargs.items() if k in ['max_debate_rounds', 'status_check_interval']}
+        },
+        streaming_config={
+            "display_enabled": streaming_display,
+            **{k: v for k, v in kwargs.items() if k in ['max_lines', 'save_logs']}
+        }
     )
     
-    return system.run(question=question, models=models)
-
-
-if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Run MASS agents on a question")
-    parser.add_argument("question", help="Question to solve")
-    parser.add_argument("--models", nargs="+", required=True, 
-                       help="Model names (e.g., gpt-4o gemini-2.5-flash)")
-    parser.add_argument("--max-duration", type=int, default=600,
-                       help="Max duration in seconds (default: 600)")
-    parser.add_argument("--consensus", type=float, default=1.0,
-                       help="Consensus threshold (default: 1.0)")
-    parser.add_argument("--no-display", action="store_true",
-                       help="Disable streaming display")
-    
-    args = parser.parse_args()
-    
-    try:
-        result = run_mass_agents(
-            question=args.question,
-            models=args.models,
-            max_duration=args.max_duration,
-            consensus_threshold=args.consensus,
-            streaming_display=not args.no_display
-        )
-        
-        print("\n" + "="*60)
-        print("🎯 FINAL ANSWER:")
-        print("="*60)
-        print(result["answer"])
-        print("\n" + "="*60)
-        print(f"✅ Consensus: {result['consensus_reached']}")
-        print(f"⏱️  Duration: {result['session_duration']:.1f}s")
-        print(f"🗳️  Votes: {result['voting_results']['distribution']}")
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        sys.exit(1) 
+    return run_mass_with_config(question, config) 

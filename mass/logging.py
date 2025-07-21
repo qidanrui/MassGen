@@ -23,10 +23,11 @@ class MassLogManager:
     """
     Comprehensive logging system for the MASS framework.
     
-    This system records all significant events including:
-    - Agent state changes (status, summary updates, voting)
-    - Orchestrator events
-    - Workflow phase transitions
+    Records all significant events including:
+    - Agent state changes (working, voted, failed)
+    - Summary updates and notifications  
+    - Voting events and consensus decisions
+    - Phase transitions (collaboration, debate, consensus)
     - System metrics and performance data
     """
     
@@ -37,7 +38,7 @@ class MassLogManager:
         Args:
             log_dir: Directory to save log files
             session_id: Unique identifier for this session
-            non_blocking: If True, disable file logging to prevent any hanging issues
+            non_blocking: If True, disable file logging to prevent hanging issues
         """
         self.log_dir = Path(log_dir)
         self.session_id = session_id or self._generate_session_id()
@@ -70,10 +71,20 @@ class MassLogManager:
         self.log_entries: List[LogEntry] = []
         self.agent_logs: Dict[int, List[LogEntry]] = {}
         
+        # MASS-specific event counters
+        self.event_counters = {
+            "summary_updates": 0,
+            "votes_cast": 0,
+            "consensus_reached": 0,
+            "debates_started": 0,
+            "agent_restarts": 0,
+            "notifications_sent": 0
+        }
+        
         # Thread lock for concurrent access
         self._lock = threading.Lock()
         
-        # Initialize basic logging
+        # Initialize logging
         self._setup_logging()
         
         # Log session start
@@ -298,62 +309,89 @@ class MassLogManager:
     
     def log_voting_event(self, voter_id: int, target_id: int, phase: str = "unknown", response_text: str = ""):
         """
-        Log voting event.
+        Log a voting event with detailed information.
         
         Args:
-            voter_id: Agent casting the vote
-            target_id: Agent being voted for
+            voter_id: ID of the agent casting the vote
+            target_id: ID of the agent being voted for
             phase: Current workflow phase
-            response_text: The full response text that led to this vote (optional)
+            response_text: Full response text that led to the vote
         """
-        print(f"        🗳️  LOG_VOTING_EVENT: {voter_id} → {target_id} (phase: {phase})")
-        if response_text:
-            print(f"        📝 Including response text ({len(response_text)} chars)")
-        
+        with self._lock:
+            self.event_counters["votes_cast"] += 1
+            
         data = {
             "voter_id": voter_id,
             "target_id": target_id,
-            "vote_action": f"Agent {voter_id} -> Agent {target_id}"
+            "response_text_length": len(response_text),
+            "total_votes_cast": self.event_counters["votes_cast"]
         }
         
-        self.log_event("voting", voter_id, phase, data)
-        print(f"        📝 General voting event logged")
+        self.log_event("voting_event", voter_id, phase, data)
         
         # Log to both voter and target agent files
-        vote_data = {
+        vote_entry = {
             "timestamp": time.time(),
             "event": "vote_cast",
             "phase": phase,
             "voter_id": voter_id,
-            "target_id": target_id
+            "target_id": target_id,
+            "response_text": response_text[:500] + "..." if len(response_text) > 500 else response_text
         }
-        
-        # Add response text if provided
-        if response_text:
-            vote_data["response_text"] = response_text
-            vote_data["response_length"] = len(response_text)
-        
-        print(f"        📁 Writing to voter agent log: agent_{voter_id}.jsonl")
-        self._write_agent_log(voter_id, vote_data)
-        
-        vote_received_data = {
-            **vote_data,
-            "event": "vote_received"
-        }
-        print(f"        📁 Writing to target agent log: agent_{target_id}.jsonl")
-        self._write_agent_log(target_id, vote_received_data)
-        
-        print(f"        ✅ All voting logs written successfully")
+        self._write_agent_log(voter_id, vote_entry)
+        if target_id != voter_id:
+            vote_received_entry = {
+                "timestamp": time.time(),
+                "event": "vote_received",
+                "phase": phase,
+                "from_agent": voter_id,
+                "reason_preview": response_text[:200] + "..." if len(response_text) > 200 else response_text
+            }
+            self._write_agent_log(target_id, vote_received_entry)
     
-    def log_phase_transition(self, old_phase: str, new_phase: str, 
-                            additional_data: Optional[Dict[str, Any]] = None):
+    def log_consensus_reached(self, winning_agent_id: int, vote_distribution: Dict[int, int], 
+                             is_fallback: bool = False, phase: str = "unknown"):
         """
-        Log workflow phase transition.
+        Log when consensus is reached.
+        
+        Args:
+            winning_agent_id: ID of the winning agent
+            vote_distribution: Dictionary of agent_id -> vote_count
+            is_fallback: Whether this was a fallback consensus (timeout)
+            phase: Current workflow phase
+        """
+        with self._lock:
+            self.event_counters["consensus_reached"] += 1
+            
+        data = {
+            "winning_agent_id": winning_agent_id,
+            "vote_distribution": vote_distribution,
+            "is_fallback": is_fallback,
+            "total_consensus_events": self.event_counters["consensus_reached"]
+        }
+        
+        self.log_event("consensus_reached", winning_agent_id, phase, data)
+        
+        # Log to all agent files
+        consensus_entry = {
+            "timestamp": time.time(),
+            "event": "consensus_reached",
+            "phase": phase,
+            "winning_agent_id": winning_agent_id,
+            "vote_distribution": vote_distribution,
+            "is_fallback": is_fallback
+        }
+        for agent_id in vote_distribution.keys():
+            self._write_agent_log(agent_id, consensus_entry)
+    
+    def log_phase_transition(self, old_phase: str, new_phase: str, additional_data: Dict[str, Any] = None):
+        """
+        Log system phase transitions.
         
         Args:
             old_phase: Previous phase
             new_phase: New phase
-            additional_data: Additional transition data
+            additional_data: Additional context data
         """
         data = {
             "old_phase": old_phase,
@@ -364,25 +402,81 @@ class MassLogManager:
         
         self.log_event("phase_transition", phase=new_phase, data=data)
     
-    def log_consensus_reached(self, winning_agent_id: int, vote_distribution: Dict[int, int],
-                             is_fallback: bool = False, phase: str = "unknown"):
+    def log_notification_sent(self, agent_id: int, notification_type: str, content_preview: str, phase: str = "unknown"):
         """
-        Log consensus achievement.
+        Log when a notification is sent to an agent.
         
         Args:
-            winning_agent_id: Agent selected by consensus
-            vote_distribution: Final vote counts
-            is_fallback: Whether this was a fallback consensus
-            phase: Current workflow phase when consensus was reached
+            agent_id: Target agent ID
+            notification_type: Type of notification (update, debate, presentation, prompt)
+            content_preview: Preview of notification content
+            phase: Current workflow phase
         """
+        with self._lock:
+            self.event_counters["notifications_sent"] += 1
+            
         data = {
-            "winning_agent_id": winning_agent_id,
-            "vote_distribution": vote_distribution,
-            "is_fallback": is_fallback,
-            "consensus_type": "fallback" if is_fallback else "majority"
+            "notification_type": notification_type,
+            "content_preview": content_preview[:200] + "..." if len(content_preview) > 200 else content_preview,
+            "content_length": len(content_preview),
+            "total_notifications_sent": self.event_counters["notifications_sent"]
         }
         
-        self.log_event("consensus_reached", phase=phase, data=data)
+        self.log_event("notification_sent", agent_id, phase, data)
+        
+        # Log to agent file
+        notification_entry = {
+            "timestamp": time.time(),
+            "event": "notification_received",
+            "phase": phase,
+            "notification_type": notification_type,
+            "content": content_preview
+        }
+        self._write_agent_log(agent_id, notification_entry)
+    
+    def log_agent_restart(self, agent_id: int, reason: str, phase: str = "unknown"):
+        """
+        Log when an agent is restarted.
+        
+        Args:
+            agent_id: ID of the restarted agent
+            reason: Reason for restart
+            phase: Current workflow phase
+        """
+        with self._lock:
+            self.event_counters["agent_restarts"] += 1
+            
+        data = {
+            "restart_reason": reason,
+            "total_restarts": self.event_counters["agent_restarts"]
+        }
+        
+        self.log_event("agent_restart", agent_id, phase, data)
+        
+        # Log to agent file
+        restart_entry = {
+            "timestamp": time.time(),
+            "event": "agent_restarted",
+            "phase": phase,
+            "reason": reason
+        }
+        self._write_agent_log(agent_id, restart_entry)
+    
+    def log_debate_started(self, phase: str = "unknown"):
+        """
+        Log when a debate phase starts.
+        
+        Args:
+            phase: Current workflow phase
+        """
+        with self._lock:
+            self.event_counters["debates_started"] += 1
+            
+        data = {
+            "total_debates": self.event_counters["debates_started"]
+        }
+        
+        self.log_event("debate_started", phase=phase, data=data)
     
     def log_task_completion(self, final_solution: Dict[str, Any]):
         """
@@ -490,6 +584,29 @@ class MassLogManager:
             "end_timestamp": time.time(),
             "total_events_logged": len(self.log_entries)
         })
+
+    def get_session_statistics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive session statistics.
+        
+        Returns:
+            Dictionary containing session metrics and statistics
+        """
+        with self._lock:
+            total_events = len(self.log_entries)
+            agent_event_counts = {}
+            
+            for agent_id, logs in self.agent_logs.items():
+                agent_event_counts[agent_id] = len(logs)
+                
+            return {
+                "session_id": self.session_id,
+                "total_events": total_events,
+                "event_counters": self.event_counters.copy(),
+                "agent_event_counts": agent_event_counts,
+                "total_agents": len(self.agent_logs),
+                "session_duration": time.time() - (self.log_entries[0].timestamp if self.log_entries else time.time())
+            }
 
 
 # Global log manager instance

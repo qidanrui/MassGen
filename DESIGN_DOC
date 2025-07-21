@@ -1,5 +1,22 @@
 ## 🏗️ Architecture
 
+### Single Agent vs Multi-Agent Processing
+
+The MASS system now supports both single-agent and multi-agent scenarios:
+
+**Single Agent Mode:**
+- When only one agent is configured, the system automatically detects this and bypasses the full multi-agent orchestration
+- Simply calls `process_message` directly on the single agent with the question
+- Returns the response immediately without voting, consensus, or debate mechanisms
+- Provides faster, simpler processing for straightforward tasks
+- Still supports all agent tools and capabilities (search, code execution, etc.)
+
+**Multi-Agent Mode:**
+- When multiple agents are configured, the full MASS orchestration system is used
+- Agents work asynchronously, share summaries, vote for representatives, and reach consensus through debate
+
+### Multi-Agent Architecture (Multiple Agents)
+
 Each agent works asynchronously. They maintain their own working summary and continuously update it until convergence. Agents can read other agents' working summaries but cannot write to them. They receive notifications when another agent updates their working summary.
 
 Each agent runs its own loop, using available tools to solve the task and sharing/receiving summaries with other agents. They can vote for a representative agent to present the final answer.

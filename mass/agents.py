@@ -82,7 +82,7 @@ class OpenAIMassAgent(MassAgent):
                 if result.function_calls:
                     function_outputs = self._execute_function_calls(result.function_calls)
                     # Add function call results to conversation
-                    for function_call, function_output in zip(result['function_calls'], function_outputs):
+                    for function_call, function_output in zip(result.function_calls, function_outputs):
                         # [OpenAI] Remove id to avoid the requirements of related reasoning items
                         clean_function_call = copy.deepcopy(function_call)
                         del clean_function_call['id'] 
@@ -177,7 +177,7 @@ class GeminiMassAgent(OpenAIMassAgent):
                 if result.function_calls:
                     function_outputs = self._execute_function_calls(result.function_calls)
                     # Add function call results to conversation (Gemini format)
-                    for function_call, function_output in zip(result['function_calls'], function_outputs):
+                    for function_call, function_output in zip(result.function_calls, function_outputs):
                         # Add function call result as user message
                         working_messages.append({
                             "role": "user",
@@ -186,21 +186,27 @@ class GeminiMassAgent(OpenAIMassAgent):
                                 f"The return is:\n{function_output['output']}"
                             )
                         })
+                    
+                    # Important: Increment round after processing function calls
+                    curr_round += 1
+                    
+                    # Check if agent voted or failed after function calls
+                    if self.state.status in ["voted", "failed"]:
+                        print(f"🔄 Agent {self.agent_id} stopping work loop - status changed to {self.state.status}")
+                        break
                 else:
                     # No function calls - check if we should continue or stop
                     if self.state.status == "voted":
                         # Agent has voted, exit the work loop
+                        print(f"🔄 Agent {self.agent_id} stopping work loop - already voted")
                         break
                     else:
-                        # Continue working
+                        # Continue working - increment round to prevent infinite loop
                         curr_round += 1
+                        # Add a small pause to prevent rapid cycling
+                        if curr_round >= self.max_rounds - 2:
+                            print(f"⚠️ Agent {self.agent_id} approaching max rounds ({curr_round}/{self.max_rounds})")
                         continue
-                        
-                curr_round += 1
-                
-                # Check if agent voted or failed
-                if self.state.status in ["voted", "failed"]:
-                    break
                 
             except Exception as e:
                 print(f"❌ Agent {self.agent_id} error in round {curr_round}: {e}")
@@ -208,6 +214,7 @@ class GeminiMassAgent(OpenAIMassAgent):
                     self.orchestrator.mark_agent_failed(self.agent_id, str(e))
                 break
         
+        print(f"🏁 Agent {self.agent_id} finished work loop after {curr_round} rounds with status: {self.state.status}")
         return working_messages
 
 
@@ -275,7 +282,7 @@ class GrokMassAgent(OpenAIMassAgent):
                 if result.function_calls:
                     function_outputs = self._execute_function_calls(result.function_calls)
                     # Add function call results to conversation
-                    for function_call, function_output in zip(result['function_calls'], function_outputs):
+                    for function_call, function_output in zip(result.function_calls, function_outputs):
                         # Add function call result as user message
                         working_messages.append({
                             "role": "user",

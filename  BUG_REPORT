@@ -1,0 +1,10 @@
+OpenAI:
+- chat history keep adding assistant message, without adding user MESSAGES
+- No function call executed
+
+Grok:
+- chat history has new user messages, but not in correct order
+- function call executed
+
+Gemini:
+- Tool swap not finished

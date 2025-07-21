@@ -52,7 +52,7 @@ class ModelConfig:
     temperature: Optional[float] = None
     top_p: Optional[float] = None
     processing_timeout: Optional[float] = 150 # seconds
-    stream: bool = False # whether to stream the response
+    stream: bool = True # whether to stream the response
 
 
 @dataclass
@@ -154,4 +154,75 @@ class LogEntry:
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return asdict(self) 
+        return asdict(self)
+
+
+@dataclass 
+class StreamingDisplayConfig:
+    """Configuration for streaming display system."""
+    
+    display_enabled: bool = True
+    max_lines: int = 40
+    save_logs: bool = True
+    stream_callback: Optional[Any] = None  # Callable, but avoid circular imports
+
+
+@dataclass
+class LoggingConfig:
+    """Configuration for logging system."""
+    
+    log_dir: str = "logs"
+    session_id: Optional[str] = None
+    non_blocking: bool = False
+
+
+@dataclass
+class OrchestratorConfig:
+    """Configuration for MASS orchestrator."""
+    
+    max_duration: int = 600
+    consensus_threshold: float = 1.0
+    max_debate_rounds: int = 3
+    status_check_interval: float = 1.0
+    thread_pool_timeout: int = 5
+
+
+@dataclass
+class AgentConfig:
+    """Complete configuration for a single agent."""
+    
+    agent_id: int
+    agent_type: str  # "openai", "gemini", "grok"
+    model_config: ModelConfig
+    
+    def __post_init__(self):
+        """Validate agent configuration."""
+        if self.agent_type not in ["openai", "gemini", "grok"]:
+            raise ValueError(f"Invalid agent_type: {self.agent_type}. Must be one of: openai, gemini, grok")
+
+
+@dataclass
+class MassConfig:
+    """Complete MASS system configuration."""
+    
+    orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
+    agents: List[AgentConfig] = field(default_factory=list)
+    streaming_display: StreamingDisplayConfig = field(default_factory=StreamingDisplayConfig)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
+    task: Optional[Dict[str, Any]] = None  # Task-specific configuration
+    
+    def validate(self) -> bool:
+        """Validate the complete configuration."""
+        if not self.agents:
+            raise ValueError("At least one agent must be configured")
+        
+        # Check for duplicate agent IDs
+        agent_ids = [agent.agent_id for agent in self.agents]
+        if len(agent_ids) != len(set(agent_ids)):
+            raise ValueError("Agent IDs must be unique")
+        
+        # Validate consensus threshold
+        if not 0.0 <= self.orchestrator.consensus_threshold <= 1.0:
+            raise ValueError("Consensus threshold must be between 0.0 and 1.0")
+        
+        return True 

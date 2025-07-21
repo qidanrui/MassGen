@@ -98,32 +98,52 @@ pip install -r requirements.txt
 
 ### 2. 🔐 API Configuration
 
-Create a `.env` file in the `agents/` directory with your API keys:
+Create a `.env` file in the `mass/backends/` directory with your API keys:
 
 ```bash
 # Copy example configuration
 cp mass/backends/.env.example mass/backends/.env
 
-# Edit agents/.env with your API keys
+# Edit with your API keys
 OPENAI_API_KEY=sk-your-openai-key-here
 XAI_API_KEY=xai-your-xai-key-here
 GEMINI_API_KEY=your-gemini-key-here
 ```
 
-### 3. 🏃 Run Example
+### 3. 🏃 Run MASS
 
+#### Simple Usage
 ```bash
-# Run simple multi-agent example
-python cli.py --config example_config.json
+# Run with specific models
+python cli.py --models gpt-4o gemini-2.5-flash "What is 2+2?"
 
-# Or run with custom task
-python cli.py --question "2312312 * (142342 + 222552) = ?" --agents o4-mini,gemini-2.5-flash,grok-4
+# Mathematical calculation
+python cli.py --models gpt-4o gemini-2.5-flash "2312312 * (142342 + 222552) = ?"
+```
+
+#### Configuration File Usage
+```bash
+# Use existing configuration file
+python cli.py --config examples/production.yaml "Complex analysis question"
+
+# Override specific parameters
+python cli.py --config examples/production.yaml "Question" --max-duration 1200 --consensus 0.8
+```
+
+#### Parameter Overrides
+```bash
+# Customize execution parameters
+python cli.py --models gpt-4o gemini-2.5-flash "Question" \
+  --max-duration 1200 \
+  --consensus 0.8 \
+  --max-debates 5 \
+  --no-display \
+  --no-logs
 ```
 
 ### 4. 📊 View Results
 
-The system will show real-time collaboration between agents and present the final converged solution.
-The display
+The system shows real-time collaboration between agents in a multi-region display and presents the final converged solution with consensus details.
 
 ---
 

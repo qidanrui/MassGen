@@ -7,12 +7,15 @@ import copy
 
 from dotenv import load_dotenv
 from xai_sdk import Client
-from xai_sdk.chat import assistant, system, user, tool
+from xai_sdk.chat import assistant, system, user, tool as xai_tool_func
 from xai_sdk.search import SearchParameters
 
-# Import utility functions
-from ..utils import function_to_json, execute_function_calls
-from ..tools import update_summary, check_updates, vote
+# Import utility functions and tools  
+from mass.utils import function_to_json, execute_function_calls
+from mass.tools import (mock_update_summary as update_summary, 
+                        mock_check_updates as check_updates, 
+                        mock_vote as vote)
+from mass.types import AgentResponse
 
 load_dotenv()
 
@@ -46,33 +49,36 @@ def parse_completion(response, add_citations=True):
                     "arguments": tool_call.function.arguments
                 })
             elif hasattr(tool_call, 'name') and hasattr(tool_call, 'arguments'):
-                # Direct name/arguments structure
+                # Direct structure: tool_call.name, tool_call.arguments
                 function_calls.append({
                     "name": tool_call.name,
                     "arguments": tool_call.arguments
                 })
-    
-    # Check if response has choices with messages containing tool_calls (standard OpenAI format)
-    elif hasattr(response, 'choices') and response.choices:
-        for choice in response.choices:
-            if hasattr(choice, 'message') and hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
-                for tool_call in choice.message.tool_calls:
-                    if hasattr(tool_call, 'function'):
-                        function_calls.append({
-                            "name": tool_call.function.name,
-                            "arguments": tool_call.function.arguments
-                        })
-                    elif hasattr(tool_call, 'name') and hasattr(tool_call, 'arguments'):
-                        function_calls.append({
-                            "name": tool_call.name,
-                            "arguments": tool_call.arguments
-                        })
 
-    return {"text": text, 
-            "code": code, 
-            "citations": citations, 
-            "function_calls": function_calls,
-            "reasoning_items": reasoning_items}
+    # DEBUGGING
+    with open("grok_output.txt", "a") as f:
+        import time  # Local import to ensure availability in threading context
+        inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Grok Parsed Response:\n"
+        inference_log += "#### Text:\n"
+        inference_log += text
+        inference_log += "\n\n"
+        inference_log += "#### Code:\n"
+        inference_log += json.dumps(code, indent=2)
+        inference_log += "\n\n"
+        inference_log += "#### Citations:\n"
+        inference_log += json.dumps(citations, indent=2)
+        inference_log += "\n\n"
+        inference_log += "#### Function Calls:\n"
+        inference_log += json.dumps(function_calls, indent=2)
+        inference_log += "\n\n"
+        f.write(inference_log)
+        
+    return AgentResponse(
+        text=text,
+        code=code,
+        citations=citations,
+        function_calls=function_calls
+    )
 
 def process_message(messages, model="grok-4", tools=None, max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, processing_timeout=150, stream=False, stream_callback=None):
     """
@@ -147,16 +153,36 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
 
         # Handle search parameters
         search_parameters = None
-        if enable_search:
-            search_parameters = SearchParameters(
-                mode="on",
-                return_citations=True,
-            )
+        # if enable_search:
+        #     search_parameters = SearchParameters(
+        #         mode="on",
+        #         return_citations=True,
+        #     )
 
         # Prepare tools for the API call
         api_tools = None
         if custom_tools and isinstance(custom_tools, list) and len(custom_tools) > 0:
-            api_tools = custom_tools
+            # Convert OpenAI format tools to X.AI SDK format for the API call
+            api_tools = []
+            for custom_tool in custom_tools:
+                if isinstance(custom_tool, dict) and custom_tool.get('type') == 'function':
+                    # Check if it's the OpenAI nested format or the direct format from function_to_json
+                    if 'function' in custom_tool:
+                        # OpenAI format: {"type": "function", "function": {...}}
+                        func_def = custom_tool['function']
+                    else:
+                        # Direct format from function_to_json: {"type": "function", "name": ..., "description": ...}
+                        func_def = custom_tool
+                    
+                    xai_tool = xai_tool_func(
+                        name=func_def['name'],
+                        description=func_def['description'],
+                        parameters=func_def['parameters']
+                    )
+                    api_tools.append(xai_tool)
+                else:
+                    # If it's already in X.AI format, use as-is
+                    api_tools.append(custom_tool)
 
         def make_grok_request(stream=False):
             # Build chat creation parameters
@@ -187,6 +213,14 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                     chat.append(user(content))
                 elif role == "assistant":
                     chat.append(assistant(content))
+                    
+            # DEBUGGING
+            with open("grok_input.txt", "a") as f:
+                import time  # Local import to ensure availability in threading context
+                inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Grok API Request:\n\n"
+                inference_log += f"Messages: {json.dumps(messages, indent=2)}\n"
+                inference_log += "\n\n"
+                f.write(inference_log)
 
             if stream:
                 return chat.stream()
@@ -203,11 +237,12 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
             except Exception as e:
                 print(f"Error on attempt {retry + 1}: {e}")
                 retry += 1
+                import time  # Local import to ensure availability in threading context
                 time.sleep(1.5)
 
         if completion is None:
             print(f"Failed to get completion after {max_retries} retries, returning empty response")
-            return {"text": "", "code": [], "citations": [], "function_calls": []}
+            return AgentResponse(text="", code=[], citations=[], function_calls=[])
 
         if stream and stream_callback is not None:
             text = ""
@@ -242,7 +277,7 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                             # Show search indicator after first few thinking chunks
                             if thinking_count == 3 and not has_shown_search_indicator and search_parameters:
                                 try:
-                                    stream_callback("[REASONING] Thinking...")
+                                    stream_callback("\n🧠 Thinking...\n")
                                 except Exception as e:
                                     print(f"Stream callback error: {e}")
                                 has_shown_search_indicator = True
@@ -304,7 +339,7 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                         # Notify about found sources if we had search enabled
                         if citations and enable_search and stream_callback is not None:
                             try:
-                                stream_callback(f"\n\n[SEARCH] Found {len(citations)} web sources")
+                                stream_callback(f"\n\n🔍 Found {len(citations)} web sources\n")
                             except Exception as e:
                                 print(f"Stream callback error: {e}")
 
@@ -315,12 +350,12 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                 result = parse_completion(completion, add_citations=True)
                 return result
 
-            result = {
-                "text": text,
-                "code": code,
-                "citations": citations,
-                "function_calls": function_calls,
-            }
+            result = AgentResponse(
+                text=text,
+                code=code,
+                citations=citations,
+                function_calls=function_calls
+            )
         else:
             result = parse_completion(completion, add_citations=True)
 
@@ -333,12 +368,12 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
             result_container["result"] = do_inference()
         except Exception as e:
             print(f"Error in thread worker: {e}")
-            result_container["result"] = {
-                "text": "",
-                "code": [],
-                "citations": [],
-                "function_calls": [],
-            }
+            result_container["result"] = AgentResponse(
+                text="",
+                code=[],
+                citations=[],
+                function_calls=[]
+            )
         finally:
             result_container["completed"] = True
 
@@ -350,7 +385,7 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
         return result_container["result"]
     else:
         print(f"⏰ SYSTEM: Processing timed out after {processing_timeout} seconds")
-        return {"text": "", "code": [], "citations": [], "function_calls": []}
+        return AgentResponse(text="", code=[], citations=[], function_calls=[])
 
 def multi_turn_tool_use(messages, model="grok-3", tools=None, tool_mapping=None, max_rounds=5):
     """
@@ -368,16 +403,6 @@ def multi_turn_tool_use(messages, model="grok-3", tools=None, tool_mapping=None,
     """
     
     # Separate search enablement from actual tool objects
-    enable_search = False
-    actual_tools = []
-    
-    if tools and isinstance(tools, list):
-        for tool in tools:
-            if tool == "live_search":
-                enable_search = True
-            else:
-                actual_tools.append(tool)
-
     round = 0
     current_messages = messages.copy()
     
@@ -386,29 +411,25 @@ def multi_turn_tool_use(messages, model="grok-3", tools=None, tool_mapping=None,
         
         try:
             # Call process_message with search enablement and tool objects
-            tools_for_call = actual_tools.copy()
-            if enable_search:
-                tools_for_call.insert(0, "live_search")  # Add live_search to enable search
-                
             result = process_message(
                 messages=current_messages,
                 model=model,
-                tools=tools_for_call,
+                tools=tools,
             )
             
             # Add assistant response to conversation
-            if result['text']:
-                current_messages.append({"role": "assistant", "content": result['text']})
+            if result.text:
+                current_messages.append({"role": "assistant", "content": result.text})
                 
             # If no function calls, we're done
-            if not result['function_calls']:
+            if not result.function_calls:
                 break
             else:
                 # Execute function calls and add them back to the conversation
-                function_outputs = execute_function_calls(result['function_calls'], tool_mapping)
+                function_outputs = execute_function_calls(result.function_calls, tool_mapping)
                 
                 # Add function call results to conversation
-                for function_call, function_output in zip(result['function_calls'], function_outputs):
+                for function_call, function_output in zip(result.function_calls, function_outputs):
                     # Add function call result as user message
                     current_messages.append({
                         "role": "user",
@@ -430,14 +451,9 @@ def multi_turn_tool_use(messages, model="grok-3", tools=None, tool_mapping=None,
 if __name__ == "__main__":
     
     def grok_function_to_tool(func):
-        """Convert a Python function to X.AI tool format using the tool() function."""
-        openai_format = function_to_json(func)
-        # Use the X.AI SDK tool() function to create proper tool objects
-        return tool(
-            name=openai_format["name"],
-            description=openai_format["description"],
-            parameters=openai_format["parameters"]
-        )
+        """Convert a Python function to OpenAI tool format compatible with Grok API."""
+        # Return OpenAI format directly - the Grok API expects tools in OpenAI format
+        return function_to_json(func)
 
     system_instructions = """
 You are Agent 0 - an expert agent equipped with search and code tools working as part of a collaborative team to solve complex tasks.

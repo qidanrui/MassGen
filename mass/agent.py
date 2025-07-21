@@ -1,5 +1,7 @@
 import os
 import sys
+import time
+import json
 from typing import Callable, Union, Optional, List, Dict
 
 from dotenv import load_dotenv
@@ -10,7 +12,7 @@ from .types import TaskInput, AgentState, AgentResponse, ModelConfig
 from .utils import get_agent_type_from_model, function_to_json
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Union, Optional, List, Dict
-from backends import oai, gemini, grok
+from .backends import oai, gemini, grok
 
 
 SYSTEM_INSTRUCTION = """
@@ -198,12 +200,8 @@ class MassAgent(ABC):
                 **config
             )
 
-            return AgentResponse(
-                text=result.get("text", ""),
-                code=result.get("code", []),
-                citations=result.get("citations", []),
-                function_calls=result.get("function_calls", []),
-            )
+            # Backend implementations now return AgentResponse objects directly
+            return result
         except Exception as e:
             # Return error response
             return AgentResponse(
@@ -254,27 +252,24 @@ class MassAgent(ABC):
         return [
             {
                 "type": "function",
-                "function": {
-                    "name": "update_summary",
-                    "description": "Record your work on the task: your analysis, approach, solution, and reasoning. Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "summary_report": {
-                                "type": "string",
-                                "description": "Your work on the task: problem analysis, solution approach, final answer, and reasoning. Include insights from other agents if relevant."
-                            }
-                        },
-                        "required": ["summary_report"]
-                    }
+                "name": "update_summary",
+                "description": "Record your work on the task: your analysis, approach, solution, and reasoning. Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "summary_report": {
+                            "type": "string",
+                            "description": "Your work on the task: problem analysis, solution approach, final answer, and reasoning. Include insights from other agents if relevant."
+                        }
+                    },
+                    "required": ["summary_report"]
                 }
             },
             {
                 "type": "function",
-                "function": {
-                    "name": "vote",
-                    "description": "Vote for the representative agent, who you believe has found the correct solution.",
-                    "parameters": {
+                "name": "vote",
+                "description": "Vote for the representative agent, who you believe has found the correct solution.",
+                "parameters": {
                         "type": "object",
                         "properties": {
                             "target_agent_id": {
@@ -289,7 +284,6 @@ class MassAgent(ABC):
                         "required": ["target_agent_id", "response_text"]
                     }
                 }
-            }
         ]
 
     def _get_available_tools(self) -> List[Dict[str, Any]]:
@@ -311,18 +305,27 @@ class MassAgent(ABC):
             if tool_name in self.tools:
                 tool_schema = function_to_json(tool_func)
                 custom_tools.append(tool_schema)
-        
-                 return system_tools + built_in_tools + custom_tools
-         
+
+        return system_tools + built_in_tools + custom_tools
+
     def _execute_function_calls(self, function_calls: List[Dict]):
         """Execute function calls and return function outputs."""
         from .tools import register_tool
         function_outputs = []
         
+        # DEBUGGING
+        with open("function_calls.txt", "a") as f:
+            # Write the function calls to the file
+            # Include the agent id, agent model name, time, and function calls
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
+            f.write(f"{json.dumps(function_calls, indent=2)}\n")
+        
         for func_call in function_calls:
+            func_call_id = func_call.get("call_id")
             func_name = func_call.get("name")
             func_args = func_call.get("arguments", {})
-            func_call_id = func_call.get("call_id")
+            if isinstance(func_args, str):
+                func_args = json.loads(func_args)
             
             try:
                 if func_name == "update_summary":
@@ -346,6 +349,11 @@ class MassAgent(ABC):
                 }
                 function_outputs.append(function_output)
                 
+                # DEBUGGING
+                with open("function_outputs.txt", "a") as f:
+                    f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
+                    f.write(f"{json.dumps(function_output, indent=2)}\n")
+                
             except Exception as e:
                 # Handle execution errors
                 error_output = {
@@ -354,7 +362,12 @@ class MassAgent(ABC):
                     "output": f"Error executing function: {str(e)}"
                 }
                 function_outputs.append(error_output)
-                # print(f"Error executing function {function_name}: {e}")
+                print(f"Error executing function {func_name}: {e}")
+                
+                # DEBUGGING
+                with open("function_outputs.txt", "a") as f:
+                    f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
+                    f.write(f"{json.dumps(error_output, indent=2)}\n")
                 
         return function_outputs
       

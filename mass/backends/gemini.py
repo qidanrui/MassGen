@@ -10,9 +10,12 @@ import copy
 
 load_dotenv()
 
-# Import utility functions
-from .util import function_to_json, execute_function_calls
-from ..tools import update_summary, check_updates, vote, calculator, python_interpreter
+# Import utility functions and tools
+from mass.utils import function_to_json, execute_function_calls
+from mass.tools import (mock_update_summary as update_summary, 
+                        mock_check_updates as check_updates, 
+                        mock_vote as vote)
+from mass.types import AgentResponse
 
 
 def parse_completion(completion, add_citations=True):
@@ -46,80 +49,80 @@ def parse_completion(completion, add_citations=True):
                         # Add execution result as text output
                         text += f"\n[Code Output]\n{part.code_execution_result.output}\n"
                 # Handle function calls
-                elif hasattr(part, 'function_call') and part.function_call:
-                    # Extract function calls from Gemini response
-                    function_calls.append({
-                        "type": "function_call",
-                        "name": getattr(part.function_call, 'name', 'unknown'),
-                        "arguments": getattr(part.function_call, 'args', {}),
-                        "call_id": getattr(part.function_call, 'call_id', None),
-                        "id": getattr(part.function_call, 'id', None)
-                    })
-                # Debug: log unhandled part types
-                else:
-                    # Unhandled part type - skip in production
+                elif hasattr(part, 'function_call'):
+                    if part.function_call:
+                        # Extract function name and arguments
+                        func_name = getattr(part.function_call, 'name', 'unknown')
+                        func_args = {}
+                        if hasattr(part.function_call, 'args') and part.function_call.args:
+                            # Convert args to dict if it's a struct/object
+                            if hasattr(part.function_call.args, '_pb'):
+                                # It's a protobuf struct, need to convert to dict
+                                import json
+                                try:
+                                    func_args = dict(part.function_call.args)
+                                except:
+                                    func_args = {}
+                            else:
+                                func_args = part.function_call.args
+
+                        function_calls.append({
+                            "name": func_name,
+                            "arguments": func_args
+                        })
+                # Handle function responses
+                elif hasattr(part, 'function_response'):
+                    # Function responses are typically handled in multi-turn scenarios
                     pass
 
-    # Extract citations if available
-    if add_citations and hasattr(completion, 'candidates') and completion.candidates:
+    # Handle grounding metadata (citations from search)
+    if hasattr(completion, 'candidates') and completion.candidates:
         candidate = completion.candidates[0]
         if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
-            grounding_metadata = candidate.grounding_metadata
-            
-            if (hasattr(grounding_metadata, 'grounding_supports') and grounding_metadata.grounding_supports and
-                hasattr(grounding_metadata, 'grounding_chunks') and grounding_metadata.grounding_chunks):
-                supports = grounding_metadata.grounding_supports
-                chunks = grounding_metadata.grounding_chunks
+            grounding = candidate.grounding_metadata
+            if hasattr(grounding, 'grounding_chunks') and grounding.grounding_chunks:
+                for chunk in grounding.grounding_chunks:
+                    if hasattr(chunk, 'web') and chunk.web:
+                        web_chunk = chunk.web
+                        citation = {
+                            "url": getattr(web_chunk, 'uri', ''),
+                            "title": getattr(web_chunk, 'title', ''),
+                            "start_index": -1,  # Not available in grounding metadata
+                            "end_index": -1,    # Not available in grounding metadata
+                        }
+                        citations.append(citation)
 
-                # First, collect all citation information
-                for support in supports:
-                    if hasattr(support, 'segment') and support.segment:
-                        start_index = support.segment.start_index
-                        end_index = support.segment.end_index
-                        
-                        if hasattr(support, 'grounding_chunk_indices') and support.grounding_chunk_indices:
-                            for i in support.grounding_chunk_indices:
-                                if i < len(chunks):
-                                    chunk = chunks[i]
-                                    if hasattr(chunk, 'web') and chunk.web:
-                                        uri = chunk.web.uri
-                                        title = getattr(chunk.web, 'title', '')
-                                        citations.append(
-                                            {
-                                                "url": uri,
-                                                "title": title,
-                                                "start_index": start_index,
-                                                "end_index": end_index,
-                                                "chunk_index": i,
-                                            }
-                                        )
+            # Handle search entry point (if available)
+            if hasattr(grounding, 'search_entry_point') and grounding.search_entry_point:
+                entry_point = grounding.search_entry_point
+                if hasattr(entry_point, 'rendered_content') and entry_point.rendered_content:
+                    # Add search summary to citations if available
+                    pass
 
-                # Sort supports by end_index in descending order to avoid shifting issues when inserting.
-                if supports:
-                    sorted_supports = sorted(supports, key=lambda s: s.segment.end_index, reverse=True)
+    # Add citations to text if available and requested
+    if add_citations and citations and text:
+        # For Gemini, we don't have specific start/end indices, so we append citations at the end
+        citation_links = []
+        for idx, citation in enumerate(citations):
+            if citation["url"]:
+                citation_links.append(f"[{idx + 1}]({citation['url']})")
 
-                    for support in sorted_supports:
-                        if hasattr(support, 'segment') and support.segment:
-                            end_index = support.segment.end_index
-                            if hasattr(support, 'grounding_chunk_indices') and support.grounding_chunk_indices:
-                                # Create citation string like [1](link1)[2](link2)
-                                citation_links = []
-                                for i in support.grounding_chunk_indices:
-                                    if i < len(chunks):
-                                        chunk = chunks[i]
-                                        if hasattr(chunk, 'web') and chunk.web:
-                                            uri = chunk.web.uri
-                                            citation_links.append(f"[{i + 1}]({uri})")
+        if citation_links:
+            citation_string = ", ".join(citation_links)
+            # Find a good place to insert citations (at the end for now)
+            # In the future, we could use more sophisticated placement logic
+            if text.endswith('.') or text.endswith('!') or text.endswith('?'):
+                end_index = len(text)
+                if citation_links:
+                    citation_string = ", ".join(citation_links)
+                    text = text[:end_index] + citation_string + text[end_index:]
 
-                                if citation_links:
-                                    citation_string = ", ".join(citation_links)
-                                    text = text[:end_index] + citation_string + text[end_index:]
-
-    return {"text": text, 
-            "code": code, 
-            "citations": citations, 
-            "function_calls": function_calls,
-            "reasoning_items": reasoning_items}
+    return AgentResponse(
+        text=text,
+        code=code,
+        citations=citations,
+        function_calls=function_calls
+    )
 
 def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, processing_timeout=150, stream=False, stream_callback=None):
     """
@@ -262,25 +265,30 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                     stream_response = client.models.generate_content_stream(**request_params)
                     
                     for chunk in stream_response:
-                        # Handle text chunks
+                        # Handle text chunks - be very careful to avoid duplication
+                        chunk_text_processed = False
+                        
+                        # First, try to get text from the most direct source
                         if hasattr(chunk, 'text') and chunk.text:
                             chunk_text = chunk.text
                             text += chunk_text
                             try:
                                 stream_callback(chunk_text)
+                                chunk_text_processed = True
                             except Exception as e:
                                 print(f"Stream callback error: {e}")
                         
-                        # Handle other chunk types if available in the SDK
+                        # Only process candidates if we haven't already processed text from chunk.text
                         elif hasattr(chunk, 'candidates') and chunk.candidates:
                             candidate = chunk.candidates[0]
                             if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
                                 for part in candidate.content.parts:
-                                    if hasattr(part, 'text') and part.text:
+                                    if hasattr(part, 'text') and part.text and not chunk_text_processed:
                                         chunk_text = part.text
                                         text += chunk_text
                                         try:
                                             stream_callback(chunk_text)
+                                            chunk_text_processed = True  # Mark as processed to avoid further processing
                                         except Exception as e:
                                             print(f"Stream callback error: {e}")
                                     elif hasattr(part, 'executable_code') and part.executable_code and hasattr(part.executable_code, 'code') and part.executable_code.code:
@@ -293,7 +301,7 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                                         
                                         if code_lines_shown == 0:
                                             try:
-                                                stream_callback("[CODE] Starting code execution...")
+                                                stream_callback("\n💻 Starting code execution...\n")
                                             except Exception as e:
                                                 print(f"Stream callback error: {e}")
                                         
@@ -306,7 +314,7 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                                                     print(f"Stream callback error: {e}")
                                             elif code_lines_shown == 3:
                                                 try:
-                                                    stream_callback('[CODE_DISPLAY_ONLY]\n[CODE] ... (full code in log file)')
+                                                    stream_callback('\n[CODE_DISPLAY_ONLY]\n💻 ... (full code in log file)\n')
                                                     code_lines_shown += 1  # Ensure this message is only sent once
                                                 except Exception as e:
                                                     print(f"Stream callback error: {e}")
@@ -321,28 +329,28 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                                         if part.function_call:
                                             function_name = getattr(part.function_call, 'name', 'unknown')
                                             try:
-                                                stream_callback(f"[FUNCTION] Calling {function_name}")
+                                                stream_callback(f"\n🔧 Calling {function_name}\n")
                                             except Exception as e:
                                                 print(f"Stream callback error: {e}")
                                     
                                     elif hasattr(part, 'function_response'):
                                         try:
-                                            stream_callback("[FUNCTION] Function response received")
+                                            stream_callback("\n🔧 Function response received\n")
                                         except Exception as e:
                                             print(f"Stream callback error: {e}")
 
                     # Handle completion
                     try:
-                        stream_callback("[COMPLETE] Generation finished")
+                        stream_callback("\n✅ Generation finished\n")
                     except Exception as e:
                         print(f"Stream callback error: {e}")
 
-                    return {
-                        "text": text,
-                        "code": code,
-                        "citations": citations,
-                        "function_calls": [],
-                    }
+                    return AgentResponse(
+                        text=text,
+                        code=code,
+                        citations=citations,
+                        function_calls=[]
+                    )
                 else:
                     # Handle non-streaming response
                     completion = client.models.generate_content(**request_params)
@@ -355,7 +363,7 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
         if completion is None:
             # If we failed all retries, return empty response instead of raising exception
             print(f"Failed to get completion after {max_retries} retries, returning empty response")
-            return {"text": "", "code": [], "citations": [], "function_calls": []}
+            return AgentResponse(text="", code=[], citations=[], function_calls=[])
 
         # Parse the completion and return text, code, and citations
         result = parse_completion(completion, add_citations=True)
@@ -370,12 +378,12 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
             result_container["result"] = do_inference()
         except Exception as e:
             print(f"Error in thread worker: {e}")
-            result_container["result"] = {
-                "text": "",
-                "code": [],
-                "citations": [],
-                "function_calls": [],
-            }
+            result_container["result"] = AgentResponse(
+                text="",
+                code=[],
+                citations=[],
+                function_calls=[]
+            )
         finally:
             result_container["completed"] = True
 
@@ -391,7 +399,7 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
     else:
         print(f"⏰ SYSTEM: Processing timed out after {processing_timeout} seconds")
         # Thread will be automatically killed when this function returns (daemon thread)
-        return {"text": "", "code": [], "citations": [], "function_calls": []}
+        return AgentResponse(text="", code=[], citations=[], function_calls=[])
 
 def multi_turn_tool_use(messages, model="gemini-2.5-flash", tools=None, tool_mapping=None, max_rounds=5):
     """
