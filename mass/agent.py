@@ -79,14 +79,22 @@ Or you can choose to continue working on the task and then share your progress w
 
 UPDATE_NOTIFICATION = """
 [NOTIFICATION] Below are the recent updates from other agents:
+
 {updates}
+"""
+
+NO_UPDATE_NOTIFICATION = """
+There are no updates from other agents right now. 
+You can continue working on the task and share your progress with the team using the `update_summary` tool.
+Or you can vote for the representative agent and stop working using the `vote` tool.
 """
 
 PRESENTATION_NOTIFICATION = """
 You have been nominated as the representative agent to present the solution.
 
 Below are the vote information of the team:
-{options}
+
+{votes}
 
 Please incorporate all useful information from the team to present the final answer.
 """
@@ -95,7 +103,8 @@ DEBATE_NOTIFICATION = """
 The team has different opinions on the representative agent to present the solution.
 
 Below are the vote information of the team:
-{options}
+
+{votes}
 
 Please share your opinion via `update_summary` tool, or vote again with the `vote` tool.
 """
@@ -253,16 +262,16 @@ class MassAgent(ABC):
             {
                 "type": "function",
                 "name": "update_summary",
-                "description": "Record your work on the task: your analysis, approach, solution, and reasoning. Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents.",
+                "description": "Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents. Your updated content should be fully self-contained, including your analysis, approach, solution, and reasoning on the task.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "summary_report": {
+                        "new_content": {
                             "type": "string",
                             "description": "Your work on the task: problem analysis, solution approach, final answer, and reasoning. Include insights from other agents if relevant."
                         }
                     },
-                    "required": ["summary_report"]
+                    "required": ["new_content"]
                 }
             },
             {
@@ -306,8 +315,16 @@ class MassAgent(ABC):
                 tool_schema = function_to_json(tool_func)
                 custom_tools.append(tool_schema)
 
-        return system_tools + built_in_tools + custom_tools
+        return {"system_tools": system_tools, "built_in_tools": built_in_tools, "custom_tools": custom_tools}
 
+    def deduplicate_function_calls(self, function_calls: List[Dict]):
+        """Deduplicate function calls by their name and arguments."""
+        deduplicated_function_calls = []
+        for func_call in function_calls:
+            if func_call not in deduplicated_function_calls:
+                deduplicated_function_calls.append(func_call)
+        return deduplicated_function_calls
+    
     def _execute_function_calls(self, function_calls: List[Dict]):
         """Execute function calls and return function outputs."""
         from .tools import register_tool

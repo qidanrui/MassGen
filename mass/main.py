@@ -96,13 +96,14 @@ def _run_single_agent_simple(question: str, config: MassConfig) -> Dict[str, Any
         response = {
             "answer": result.text if result.text else "No response generated",
             "consensus_reached": True,  # Trivially true for single agent
+            "representative_agent_id": agent_config.agent_id,
             "session_duration": session_duration,
-            "voting_results": {
-                "representative_agent_id": agent_config.agent_id,
-                "distribution": {agent_config.agent_id: 1},  # Single agent votes for itself
-                "total_votes": 1
+            "summary": {
+                "total_agents": 1,
+                "failed_agents": 0,
+                "total_votes": 1,
+                "final_vote_distribution": {agent_config.agent_id: 1},  # Single agent votes for itself
             },
-            "agent_count": 1,
             "model_used": agent_config.model_config.model,
             "citations": result.citations if hasattr(result, 'citations') else [],
             "code": result.code if hasattr(result, 'code') else [],
@@ -120,13 +121,14 @@ def _run_single_agent_simple(question: str, config: MassConfig) -> Dict[str, Any
         return {
             "answer": f"Error in single agent processing: {str(e)}",
             "consensus_reached": False,
+            "representative_agent_id": None,
             "session_duration": session_duration,
-            "voting_results": {
-                "representative_agent_id": None,
-                "distribution": {},
-                "total_votes": 0
+            "summary": {
+                "total_agents": 1,
+                "failed_agents": 1,
+                "total_votes": 0,
+                "final_vote_distribution": {},
             },
-            "agent_count": 1,
             "model_used": agent_config.model_config.model,
             "citations": [],
             "code": [],

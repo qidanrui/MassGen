@@ -114,7 +114,7 @@ Examples:
         else:
             print(f"✅ Consensus: {result['consensus_reached']}")
             print(f"⏱️  Duration: {result['session_duration']:.1f}s")
-            print(f"🗳️  Votes: {result['voting_results']['distribution']}")
+            print(f"🗳️  Votes: {result['summary']['final_vote_distribution']}")
             print(f"🤖 Agents: {len(config.agents)}")
         
     except ConfigurationError as e:

@@ -207,9 +207,13 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                 has_native_tools = True
             else:
                 # Collect custom function declarations
-                function_declaration = copy.deepcopy(tool)
-                if "type" in function_declaration:
-                    del function_declaration["type"]
+                # Old format: {"type": "function", "function": {...}}
+                if hasattr(tool, 'function'): 
+                    function_declaration = tool["function"]
+                else: # New OpenAI format: {"type": "function", "name": ..., "description": ...}
+                    function_declaration = copy.deepcopy(tool)
+                    if "type" in function_declaration:
+                        del function_declaration["type"]
                 custom_functions.append(function_declaration)
         
         if custom_functions and has_native_tools:

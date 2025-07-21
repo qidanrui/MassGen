@@ -135,11 +135,11 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
 
         # Handle search parameters
         search_parameters = None
-        # if enable_search:
-        #     search_parameters = SearchParameters(
-        #         mode="on",
-        #         return_citations=True,
-        #     )
+        if enable_search:
+            search_parameters = SearchParameters(
+                mode="on",
+                return_citations=True,
+            )
 
         # Prepare tools for the API call
         api_tools = None
@@ -153,7 +153,7 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                         # OpenAI format: {"type": "function", "function": {...}}
                         func_def = custom_tool['function']
                     else:
-                        # Direct format from function_to_json: {"type": "function", "name": ..., "description": ...}
+                        # Older format: {"type": "function", "name": ..., "description": ...}
                         func_def = custom_tool
                     
                     xai_tool = xai_tool_func(

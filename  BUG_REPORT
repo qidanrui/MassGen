@@ -1,30 +1,26 @@
 OpenAI:
 - chat history keep adding assistant message, without adding user MESSAGES
-- No function call executed
 - Check the work_on_task function
 
 Grok:
 - chat history has new user messages, but not in correct order
-- function call executed
 - Check the work_on_task function
 
 Gemini:
 - Tool swap not finished
-- streaming record function calls?
 - Check the work_on_task function
 
 Prompt:
 - Make summary report complete, self-contained
 - Reuse the instructions
 
-Vote:
+Vote (fixed):
 - No unique votes for each agent
 - vote_counts is not correct: should be {"agent_id": "vote_count"}, start with 0
 - vote_distribution should be kept
 - voted_agents should be the number of agents whose current status is "voted"
 
-
 TODO:
 - Check work_on_task function for each agent (add notification)
 - Fix the bug for gemini tool conflict
-- No unique votes for each agent, Clear in the debate phase
+- logging file figured out (folder, log.txt)
