@@ -74,24 +74,6 @@ def parse_completion(response, add_citations=True):
             end_index = citation["end_index"]
             citation_link = f"[{len(citations) - idx}]({citation['url']})"
             text = text[:end_index] + citation_link + text[end_index:]
-
-    # DEBUGGING
-    with open("openai_output.txt", "a") as f:
-        import time  # Local import to ensure availability in threading context
-        inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OpenAI Parsed Response:\n"
-        inference_log += "#### Text:\n"
-        inference_log += text
-        inference_log += "\n\n"
-        inference_log += "#### Code:\n"
-        inference_log += json.dumps(code, indent=2)
-        inference_log += "\n\n"
-        inference_log += "#### Citations:\n"
-        inference_log += json.dumps(citations, indent=2)
-        inference_log += "\n\n"
-        inference_log += "#### Function Calls:\n"
-        inference_log += json.dumps(function_calls, indent=2)
-        inference_log += "\n\n"
-        f.write(inference_log)
                     
     return AgentResponse(
         text=text,
@@ -205,9 +187,8 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                 # DEBUGGING
                 with open("openai_input.txt", "a") as f:
                     import time  # Local import to ensure availability in threading context
-                    inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {json.dumps(params, indent=2)}\n"
-                    inference_log += "OpenAI API Request:\n"
-                    inference_log += json.dumps(params, indent=2)
+                    inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OpenAI API Request:\n"
+                    inference_log += f"Messages: {json.dumps(input_text, indent=2)}\n"
                     inference_log += "\n\n"
                     f.write(inference_log)
                     
@@ -282,25 +263,27 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                                 # Count lines in this delta
                                 new_lines = chunk.delta.count('\n')
                                 
-                                if code_lines_shown < 5:
-                                    # Still within first 5 lines - send normally for display & logging
+                                if code_lines_shown < 3:
+                                    # Still within first 3 lines - send normally for display & logging
                                     stream_callback(chunk.delta)
                                     code_lines_shown += new_lines
                                     
-                                    # Check if we just exceeded 5 lines with this chunk
-                                    if code_lines_shown >= 5 and not truncation_message_sent:
+                                    # Check if we just exceeded 3 lines with this chunk
+                                    if code_lines_shown >= 3 and not truncation_message_sent:
                                         # Send truncation message for display only (not logging)
                                         stream_callback('\n[CODE_DISPLAY_ONLY]\n💻 ... (full code in log file)\n')
                                         truncation_message_sent = True
                                 else:
-                                    # Beyond 5 lines - send with special prefix for logging only
+                                    # Beyond 3 lines - send with special prefix for logging only
                                     # The workflow can detect this prefix and log but not display
                                     stream_callback(f"[CODE_LOG_ONLY]{chunk.delta}")
                                          
                             except Exception as e:
                                 print(f"Stream callback error: {e}")
                     elif chunk.type == "response.code_interpreter_call_code.done":
-                        # Code writing completed
+                        # Code writing completed - capture the code
+                        if current_code_chunk:
+                            code.append(current_code_chunk)
                         try:
                             stream_callback("\n💻 Code writing completed\n")
                         except Exception as e:
@@ -335,6 +318,16 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                                     stream_callback("\n💻 Code interpreter starting...\n")
                                 except Exception as e:
                                     print(f"Stream callback error: {e}")
+                            elif hasattr(chunk.item, "type") and chunk.item.type == "function_call":
+                                # Capture function call information
+                                function_call_data = {
+                                    "type": "function_call",
+                                    "name": getattr(chunk.item, "name", None),
+                                    "arguments": getattr(chunk.item, "arguments", None),
+                                    "call_id": getattr(chunk.item, "call_id", None),
+                                    "id": getattr(chunk.item, "id", None)
+                                }
+                                function_calls.append(function_call_data)
                     elif chunk.type == "response.output_item.done":
                         # Check if this is a completed web search with query or reasoning completion
                         if hasattr(chunk, "item") and chunk.item:
@@ -356,6 +349,14 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                                     stream_callback("\n💻 Code interpreter completed\n")
                                 except Exception as e:
                                     print(f"Stream callback error: {e}")
+                            elif hasattr(chunk.item, "type") and chunk.item.type == "function_call":
+                                # Function call completed - update the function call data if needed
+                                if hasattr(chunk.item, "arguments"):
+                                    # Find and update the corresponding function call
+                                    for fc in function_calls:
+                                        if fc.get("id") == getattr(chunk.item, "id", None):
+                                            fc["arguments"] = chunk.item.arguments
+                                            break
                     elif chunk.type == "response.web_search_call.in_progress":
                         try:
                             stream_callback("\n🔍 Search in progress...\n")
@@ -372,10 +373,27 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                         except Exception as e:
                             print(f"Stream callback error: {e}")
                     elif chunk.type == "response.output_text.annotation.added":
+                        # Citation added - capture citation information
+                        if hasattr(chunk, "annotation"):
+                            citation_data = {
+                                "url": getattr(chunk.annotation, "url", None),
+                                "title": getattr(chunk.annotation, "title", None),
+                                "start_index": getattr(chunk.annotation, "start_index", None),
+                                "end_index": getattr(chunk.annotation, "end_index", None),
+                            }
+                            citations.append(citation_data)
                         try:
                             stream_callback("\n📚 Citation added\n")
                         except Exception as e:
                             print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.function_call_arguments.done":
+                        # Function arguments completed - update the function call
+                        if hasattr(chunk, "arguments") and hasattr(chunk, "item_id"):
+                            # Find and update the corresponding function call
+                            for fc in function_calls:
+                                if fc.get("id") == chunk.item_id:
+                                    fc["arguments"] = chunk.arguments
+                                    break
                     elif chunk.type == "response.completed":
                         try:
                             stream_callback("\n✅ Response complete\n")

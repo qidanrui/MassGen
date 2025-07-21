@@ -54,24 +54,6 @@ def parse_completion(response, add_citations=True):
                     "name": tool_call.name,
                     "arguments": tool_call.arguments
                 })
-
-    # DEBUGGING
-    with open("grok_output.txt", "a") as f:
-        import time  # Local import to ensure availability in threading context
-        inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Grok Parsed Response:\n"
-        inference_log += "#### Text:\n"
-        inference_log += text
-        inference_log += "\n\n"
-        inference_log += "#### Code:\n"
-        inference_log += json.dumps(code, indent=2)
-        inference_log += "\n\n"
-        inference_log += "#### Citations:\n"
-        inference_log += json.dumps(citations, indent=2)
-        inference_log += "\n\n"
-        inference_log += "#### Function Calls:\n"
-        inference_log += json.dumps(function_calls, indent=2)
-        inference_log += "\n\n"
-        f.write(inference_log)
         
     return AgentResponse(
         text=text,

@@ -10,7 +10,13 @@ import asyncio
 
 from .types import SystemState, AgentState, TaskInput, VoteRecord
 from .logging import get_log_manager
-from .agent import UPDATE_NOTIFICATION, PRESENTATION_NOTIFICATION, DEBATE_NOTIFICATION, PROMPT_UPDATE_NOTIFICATION
+from .agent import (
+    SYSTEM_INSTRUCTION,
+    UPDATE_NOTIFICATION, 
+    PRESENTATION_NOTIFICATION, 
+    DEBATE_NOTIFICATION, 
+    PROMPT_UPDATE_NOTIFICATION
+)
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -18,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class MassOrchestrator:
     """
-    Central orchestrator for managing multiple agents in the MASS framework.
+    Central orchestrator for managing multiple agents in the MASS framework, and logging for all events.
 
     Simplified workflow:
     1. Agents work on task (status: "working")
@@ -120,13 +126,39 @@ class MassOrchestrator:
                 {"agent_id": agent_id, "summary": summary, "timestamp": time.time()},
             )
 
+    def _get_current_vote_counts(self) -> Counter:
+        """
+        Get current vote counts based on agent states' vote_target.
+        Returns Counter of agent_id -> vote_count for ALL agents (0 if no votes).
+        """
+        current_votes = []
+        for agent_id, state in self.agent_states.items():
+            if state.status == "voted" and state.vote_target is not None:
+                current_votes.append(state.vote_target)
+        
+        # Create counter from actual votes
+        vote_counts = Counter(current_votes)
+        
+        # Ensure all agents are represented (0 if no votes)
+        for agent_id in self.agent_states.keys():
+            if agent_id not in vote_counts:
+                vote_counts[agent_id] = 0
+                
+        return vote_counts
+    
+    def _get_current_voted_agents_count(self) -> int:
+        """
+        Get count of agents who currently have status "voted".
+        """
+        return len([s for s in self.agent_states.values() if s.status == "voted"])
+
     def _get_voting_status(self) -> Dict[str, Any]:
         """Get current voting status and distribution."""
-        vote_counts = Counter(vote.target_id for vote in self.votes)
+        vote_counts = self._get_current_vote_counts()
         total_agents = len(self.agents)
         failed_agents = len([s for s in self.agent_states.values() if s.status == "failed"])
         votable_agents = total_agents - failed_agents
-        voted_agents = len(self.votes)
+        voted_agents = self._get_current_voted_agents_count()
 
         return {
             "vote_distribution": dict(vote_counts),
@@ -202,14 +234,15 @@ class MassOrchestrator:
                 logger.error(f"   ❌ Invalid target: Agent {target_id} not registered")
                 raise ValueError(f"Target agent {target_id} not registered")
 
-            # Remove any previous vote from this agent
+            # Check current vote status
             previous_vote = self.agent_states[voter_id].vote_target
+            # Log vote change type
             if previous_vote:
                 logger.info(f"   🔄 Agent {voter_id} changed vote from Agent {previous_vote} to Agent {target_id}")
             else:
                 logger.info(f"   ✨ Agent {voter_id} new vote for Agent {target_id}")
 
-            # Add new vote
+            # Add vote record to permanent history (only for actual changes)
             vote = VoteRecord(voter_id=voter_id, 
                               target_id=target_id, 
                               reason=response_text,
@@ -225,7 +258,7 @@ class MassOrchestrator:
             # Update streaming display
             if self.streaming_orchestrator:
                 self.streaming_orchestrator.update_agent_status(voter_id, "voted")
-                vote_counts = Counter(vote.target_id for vote in self.votes)
+                vote_counts = self._get_current_vote_counts()
                 self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
                 vote_msg = f"🗳️ Agent {voter_id} voted for Agent {target_id}"
                 self.streaming_orchestrator.add_system_message(vote_msg)
@@ -246,9 +279,10 @@ class MassOrchestrator:
                 )
 
             # Show current vote distribution
-            vote_counts = Counter(vote.target_id for vote in self.votes)
+            vote_counts = self._get_current_vote_counts()
+            voted_agents_count = self._get_current_voted_agents_count()
             logger.info(f"   📊 Vote distribution: {dict(vote_counts)}")
-            logger.info(f"   📈 Voting progress: {len(self.votes)}/{len(self.agent_states)} agents voted")
+            logger.info(f"   📈 Voting progress: {voted_agents_count}/{len(self.agent_states)} agents voted")
 
             # Calculate consensus requirements
             total_agents = len(self.agent_states)
@@ -267,7 +301,7 @@ class MassOrchestrator:
                     "target_id": target_id,
                     "timestamp": vote.timestamp,
                     "vote_distribution": dict(vote_counts),
-                    "total_votes": len(self.votes),
+                    "total_votes": voted_agents_count,
                 },
             )
 
@@ -307,7 +341,7 @@ class MassOrchestrator:
                     return True
                 return False
                 
-            vote_counts = Counter(vote.target_id for vote in self.votes)
+            vote_counts = self._get_current_vote_counts()
             votes_needed = max(1, int(votable_agents_count * self.consensus_threshold))
             
             if vote_counts and vote_counts.most_common(1)[0][1] >= votes_needed:
@@ -387,7 +421,7 @@ class MassOrchestrator:
             voted_agents_count = len([s for s in self.agent_states.values() if s.status == "voted"])
             working_agents_count = len([s for s in self.agent_states.values() if s.status == "working"])
             votable_agents_count = total_agents - failed_agents_count
-            vote_counts = Counter(vote.target_id for vote in self.votes)
+            vote_counts = self._get_current_vote_counts()
             votes_needed = max(1, int(votable_agents_count * self.consensus_threshold))
             
             print(f" 🔍 Checking System Status:")
@@ -419,13 +453,13 @@ class MassOrchestrator:
 
         # Update streaming orchestrator if available
         if self.streaming_orchestrator:
-            vote_distribution = dict(Counter(vote.target_id for vote in self.votes))
+            vote_distribution = dict(self._get_current_vote_counts())
             self.streaming_orchestrator.update_consensus_status(winning_agent_id, vote_distribution)
             self.streaming_orchestrator.update_phase(old_phase, "consensus")
 
         # Log to the comprehensive logging system
         if self.log_manager:
-            vote_distribution = dict(Counter(vote.target_id for vote in self.votes))
+            vote_distribution = dict(self._get_current_vote_counts())
             self.log_manager.log_consensus_reached(
                 winning_agent_id=winning_agent_id,
                 vote_distribution=vote_distribution,
@@ -447,7 +481,7 @@ class MassOrchestrator:
             {
                 "winning_agent_id": winning_agent_id,
                 "fallback_to_majority": False,
-                "final_vote_distribution": dict(Counter(vote.target_id for vote in self.votes)),
+                "final_vote_distribution": dict(self._get_current_vote_counts()),
             },
         )
 
@@ -503,7 +537,7 @@ class MassOrchestrator:
                     }
                     for vote in self.votes
                 ],
-                "final_vote_distribution": dict(Counter(vote.target_id for vote in self.votes)),
+                "final_vote_distribution": dict(self._get_current_vote_counts()),
             },
             "communication_log": self.communication_log,
             "final_response": self.final_response,
@@ -565,47 +599,6 @@ class MassOrchestrator:
         # Run the workflow
         return self._run_mass_workflow(task)
 
-    def _get_system_instruction(self, agent_id: int) -> str:
-        """Get system instruction for an agent."""
-        peer_agents = [str(aid) for aid in self.agents.keys() if aid != agent_id]
-        return f"""You are an expert agent equipped with tools to work as part of a collaborative team to solve complex tasks.
-
-You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents} to solve complex tasks.
-
-**Communication:** You can only use the `update_summary` tool to communicate with other agents. All information shared through this tool is visible to the entire team.
-
-### Core Workflow
-
-**1. Task Execution**
-- Use your available tools (search, code analysis, etc.) to investigate and solve the assigned task
-- Apply expertise to search for information, analyze data, identify patterns, and develop solutions
-
-**2. Progress Documentation**
-- Use the `update_summary` tool regularly to record your findings, hypotheses, and progress
-- Document your reasoning process so other agents can understand and build upon your work
-- Include supporting evidence and key insights
-
-**3. Collaboration & Information Sharing**
-- When sharing insights: Always provide supporting evidence so other agents can verify your findings
-- When receiving updates: Critically evaluate information from other agents
-- Build upon each other's work rather than duplicating efforts
-
-**4. Solution Validation**
-- Continuously verify information accuracy and look for missing pieces
-- Cross-check findings against multiple sources when possible
-
-**5. Consensus Building**
-- Use the `vote` tool to nominate an agent as representative to present the solution
-- Vote only when confident the solution is accurate and complete
-- Continue working until the team reaches consensus on the best answer
-
-**Key Principles**
-- Collaborative mindset: This is a team effort - share knowledge generously
-- Evidence-based reasoning: Always support your claims with verifiable sources
-- Quality over speed: Prioritize accuracy and thoroughness over quick answers
-- You are Agent {agent_id}. That is your identifier in the team.
-"""
-
     def _run_mass_workflow(self, task: TaskInput) -> Dict[str, Any]:
         """
         Run the MASS workflow with dynamic agent restart support:
@@ -659,7 +652,7 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
     def _run_all_agents_with_dynamic_restart(self, task: TaskInput):
         """
         Run all agents in parallel with support for dynamic restarts.
-        Unlike the original method, this handles agents restarting mid-execution.
+        This approach handles agents restarting mid-execution.
         """
         active_futures = {}
         executor = ThreadPoolExecutor(max_workers=len(self.agents))
@@ -694,7 +687,7 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
                         self.agent_states[agent_id].status == "working"):
                         self._start_agent_if_working(agent_id, task, executor, active_futures)
                 
-                time.sleep(0.1)  # Small delay to prevent busy waiting
+                time.sleep(0.5)  # Small delay to prevent busy waiting
                 
         finally:
             # Cancel any remaining futures
@@ -735,37 +728,6 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
             logger.error(f"❌ Agent {agent_id} failed: {e}")
             self.mark_agent_failed(agent_id, str(e))
 
-    def _get_restart_instruction(self, agent_id: int) -> Optional[str]:
-        """
-        Get restart instruction based on updates from other agents.
-        Uses proper notification templates for different scenarios.
-        """
-        agent_state = self.agent_states[agent_id]
-        
-        # Get updates from other agents since this agent last saw them
-        unseen_updates = []
-        for other_id, other_state in self.agent_states.items():
-            if other_id != agent_id and other_state.update_history:
-                last_seen = agent_state.seen_updates_timestamps.get(other_id, 0)
-                for update in other_state.update_history:
-                    if update.timestamp > last_seen:
-                        # Format: "Agent X (status): summary_preview"
-                        preview = update.summary[:200] + "..." if len(update.summary) > 200 else update.summary
-                        unseen_updates.append(f"Agent {other_id} ({update.status}): {preview}")
-        
-        if unseen_updates:
-            # Mark updates as seen
-            for other_id, other_state in self.agent_states.items():
-                if other_id != agent_id and other_state.update_history:
-                    latest_timestamp = max(update.timestamp for update in other_state.update_history)
-                    agent_state.seen_updates_timestamps[other_id] = latest_timestamp
-        
-            # Use UPDATE_NOTIFICATION template
-            updates_text = "\n".join(unseen_updates)
-            return UPDATE_NOTIFICATION.format(updates=updates_text)
-        
-        return None
-
     def _all_agents_voted(self) -> bool:
         """Check if all votable agents have voted."""
         votable_agents = [aid for aid, state in self.agent_states.items() 
@@ -801,10 +763,8 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
                     additional_data={"reason": "no_consensus_reached", "debate_round": True}
                 )
             
-            # Clear all votes
-            self.votes.clear()
-            
             # Reset agent statuses and add debate instruction to conversation
+            # Note: We don't clear self.votes as it's a historical record
             for agent_id, state in self.agent_states.items():
                 if state.status not in ["failed"]:
                     old_status = state.status
@@ -877,6 +837,42 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
             logger.error(f"❌ Final presentation failed: {e}")
             self.final_response = f"Error in final presentation: {str(e)}"
 
+    def _get_system_instruction(self, agent_id: int) -> str:
+        """Get system instruction for an agent."""
+        peer_agents = [str(aid) for aid in self.agents.keys() if aid != agent_id]
+        return SYSTEM_INSTRUCTION.format(agent_id=agent_id, peer_agents=peer_agents)
+    
+    def _get_restart_instruction(self, agent_id: int) -> Optional[str]:
+        """
+        Get restart instruction based on updates from other agents.
+        Uses proper notification templates for different scenarios.
+        """
+        agent_state = self.agent_states[agent_id]
+        
+        # Get updates from other agents since this agent last saw them
+        unseen_updates = []
+        for other_id, other_state in self.agent_states.items():
+            if other_id != agent_id and other_state.update_history:
+                last_seen = agent_state.seen_updates_timestamps.get(other_id, 0)
+                for update in other_state.update_history:
+                    if update.timestamp > last_seen:
+                        # Format: "Agent X (status): summary_preview"
+                        preview = update.summary[:200] + "..." if len(update.summary) > 200 else update.summary
+                        unseen_updates.append(f"Agent {other_id} ({update.status}): {preview}")
+        
+        if unseen_updates:
+            # Mark updates as seen
+            for other_id, other_state in self.agent_states.items():
+                if other_id != agent_id and other_state.update_history:
+                    latest_timestamp = max(update.timestamp for update in other_state.update_history)
+                    agent_state.seen_updates_timestamps[other_id] = latest_timestamp
+        
+            # Use UPDATE_NOTIFICATION template
+            updates_text = "\n".join(unseen_updates)
+            return UPDATE_NOTIFICATION.format(updates=updates_text)
+        
+        return None
+    
     def _get_presentation_instruction(self) -> str:
         """
         Get instruction for final presentation using PRESENTATION_NOTIFICATION template.
@@ -928,7 +924,7 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
         
         with self._lock:
             # Find agent with most votes, or earliest voter in case of tie
-            vote_counts = Counter(vote.target_id for vote in self.votes)
+            vote_counts = self._get_current_vote_counts()
             
             if vote_counts:
                 # Select agent with most votes
@@ -973,7 +969,7 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
                 },
                 "voting_results": {
                     "votes": [{"voter": v.voter_id, "target": v.target_id} for v in self.votes],
-                    "distribution": dict(Counter(v.target_id for v in self.votes))
+                    "distribution": dict(self._get_current_vote_counts())
                 },
                 "system_logs": self.export_detailed_session_log()
             }
@@ -1031,13 +1027,13 @@ You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents}
                         )
             
             if restarted_agents:
-                # Remove votes from restarted agents
-                self.votes = [v for v in self.votes if v.voter_id not in restarted_agents]
-                logger.info(f"🗳️ Removed votes from restarted agents: {restarted_agents}")
+                # Note: We don't remove historical votes as self.votes is a permanent record
+                # The current vote distribution will automatically reflect the change via agent.vote_target = None
+                logger.info(f"🔄 Restarted agents: {restarted_agents}")
                 
                 # Update vote distribution in streaming display
                 if self.streaming_orchestrator:
-                    vote_counts = Counter(vote.target_id for vote in self.votes)
+                    vote_counts = self._get_current_vote_counts()
                     self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
             
             return restarted_agents

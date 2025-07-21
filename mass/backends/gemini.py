@@ -174,6 +174,15 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
             elif role == "assistant":
                 gemini_messages.append(types.Content(role="model", parts=[types.Part(text=content)]))
 
+        # DEBUGGING
+        with open("gemini_input.txt", "a") as f:
+            import time  # Local import to ensure availability in threading context
+            import json
+            inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Gemini API Request:\n\n"
+            inference_log += f"Messages: {json.dumps(messages, indent=2)}\n"
+            inference_log += "\n\n"
+            f.write(inference_log)
+            
         # Set up generation config
         generation_config = {}
         if temperature is not None:
@@ -238,7 +247,7 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                 **generation_config
             )
         }
-
+                
         if system_instruction:
             request_params["config"].system_instruction = types.Content(
                 parts=[types.Part(text=system_instruction)]
@@ -257,10 +266,12 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                     text = ""
                     code = []
                     citations = []
+                    function_calls = []  # Initialize function_calls list
                     
                     # Code streaming tracking
                     code_lines_shown = 0
                     current_code_chunk = ""
+                    truncation_message_sent = False  # Track if truncation message was sent
 
                     stream_response = client.models.generate_content_stream(**request_params)
                     
@@ -312,10 +323,11 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                                                     code_lines_shown += 1
                                                 except Exception as e:
                                                     print(f"Stream callback error: {e}")
-                                            elif code_lines_shown == 3:
+                                            elif code_lines_shown == 3 and not truncation_message_sent:
                                                 try:
                                                     stream_callback('\n[CODE_DISPLAY_ONLY]\n💻 ... (full code in log file)\n')
-                                                    code_lines_shown += 1  # Ensure this message is only sent once
+                                                    truncation_message_sent = True  # Ensure this message is only sent once
+                                                    code_lines_shown += 1
                                                 except Exception as e:
                                                     print(f"Stream callback error: {e}")
                                             else:
@@ -324,20 +336,64 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                                                 except Exception as e:
                                                     print(f"Stream callback error: {e}")
                                     
-                                    elif hasattr(part, 'function_call'):
-                                        # Handle function calls
-                                        if part.function_call:
-                                            function_name = getattr(part.function_call, 'name', 'unknown')
-                                            try:
-                                                stream_callback(f"\n🔧 Calling {function_name}\n")
-                                            except Exception as e:
-                                                print(f"Stream callback error: {e}")
+                                    elif hasattr(part, 'function_call') and part.function_call:
+                                        # Handle function calls - extract the actual function call data
+                                        func_name = getattr(part.function_call, 'name', 'unknown')
+                                        func_args = {}
+                                        if hasattr(part.function_call, 'args') and part.function_call.args:
+                                            # Convert args to dict if it's a struct/object
+                                            if hasattr(part.function_call.args, '_pb'):
+                                                # It's a protobuf struct, need to convert to dict
+                                                import json
+                                                try:
+                                                    func_args = dict(part.function_call.args)
+                                                except:
+                                                    func_args = {}
+                                            else:
+                                                func_args = part.function_call.args
+
+                                        function_calls.append({
+                                            "name": func_name,
+                                            "arguments": func_args
+                                        })
+                                        
+                                        try:
+                                            stream_callback(f"\n🔧 Calling {func_name}\n")
+                                        except Exception as e:
+                                            print(f"Stream callback error: {e}")
                                     
                                     elif hasattr(part, 'function_response'):
                                         try:
                                             stream_callback("\n🔧 Function response received\n")
                                         except Exception as e:
                                             print(f"Stream callback error: {e}")
+                                    
+                                    elif hasattr(part, 'code_execution_result') and part.code_execution_result:
+                                        if hasattr(part.code_execution_result, 'output') and part.code_execution_result.output:
+                                            # Add execution result as text output
+                                            result_text = f"\n[Code Output]\n{part.code_execution_result.output}\n"
+                                            text += result_text
+                                            try:
+                                                stream_callback(result_text)
+                                            except Exception as e:
+                                                print(f"Stream callback error: {e}")
+
+                            # Handle grounding metadata (citations from search) at the candidate level
+                            if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+                                grounding = candidate.grounding_metadata
+                                if hasattr(grounding, 'grounding_chunks') and grounding.grounding_chunks:
+                                    for chunk_item in grounding.grounding_chunks:
+                                        if hasattr(chunk_item, 'web') and chunk_item.web:
+                                            web_chunk = chunk_item.web
+                                            citation = {
+                                                "url": getattr(web_chunk, 'uri', ''),
+                                                "title": getattr(web_chunk, 'title', ''),
+                                                "start_index": -1,  # Not available in grounding metadata
+                                                "end_index": -1,    # Not available in grounding metadata
+                                            }
+                                            # Avoid duplicate citations
+                                            if citation not in citations:
+                                                citations.append(citation)
 
                     # Handle completion
                     try:
@@ -349,7 +405,7 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                         text=text,
                         code=code,
                         citations=citations,
-                        function_calls=[]
+                        function_calls=function_calls  # Return the captured function calls
                     )
                 else:
                     # Handle non-streaming response
