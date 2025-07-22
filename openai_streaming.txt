@@ -1,0 +1,236 @@
+[2025-07-22 18:18:56] OpenAI API Streaming:
+text: “Overrated” is always going to be subjective—different fans, analysts, and coaches all have their own criteria (stats, impact, media hype, salary, team success, etc.). Rather than pick a single “most overrated” player (which often comes down to personal taste), here are five NBA players who frequently draw criticism for being overrated, along with the most common arguments against each. Decide for yourself whether the criticism sticks.
+
+1. Kristaps Porziņģis  
+  – Injury Concerns: After dazzling early in his career with 20+ points, 7+ rebounds, and 2+ blocks per game, Porziņģis has missed significant time each season since 2018. Critics point out that “the Unicorn” has played more than 60 games only once over the last five years, making it hard for teams to build around him.  
+  – Playoff Performance: Though capable of 30-point outbursts, his playoff performances have been uneven—shooting under 40 percent from the field in key series and rarely taking over games when matched against elite rim protectors.  
+  – Role Fit: Porziņģis’s unique skill set (7-foot shooting big) can clash with team schemes; coaches often complain about his defensive lapses and pick-and-roll communication.
+
+2. Bradley Beal  
+  – Volume vs. Efficiency: Beal has repeatedly led the league in scoring attempts, but his true shooting percentage (TS%) usually ranks in the bottom half of high-volume guards. Critics say his shot selection can tank offensive flow  
+  – Wins Above Replacement (WAR): Advanced metrics often penalize Beal for poor defensive impact, offsetting his offensive production—making his overall value closer to an above-average wing rather than an All-Star level two-way player.  
+  – Playoff Outcomes: Outside of an early-round upset over Philadelphia in 2019, Beal’s Wizards have largely failed to win meaningful postseason series, amplifying narratives that his scoring doesn’t translate to victories.
+
+3. Zach LaVine  
+  – Scoring Prowess vs. On-Court Impact: A two-time All-Star with a 27+ PPG ceiling, LaVine’s on/off numbers in Chicago have hovered near zero—suggesting the Bulls were about as good without him as with him.  
+  – Playmaking Limitations: He averages under 5 assists per 36 minutes despite handling the ball heavily, raising questions about his ability to involve teammates and create for others.  
+  – Defense: His defensive rating usually ranks near the bottom among starters, and opponents target him in critical fourth-quarter possessions.
+
+4. Donovan Mitchell  
+  – “Flash vs. Finish”: Mitchell’s highlight-reel dunks and deep threes fuel his superstar image, but critics highlight that his turnover rate spikes in crunch time and his shooting splits dip below league average when the game’s on the line.  
+  – Team Success: Though he averaged 28+ PPG in Utah, the Jazz never advanced past the second round. Early in Cleveland, he’s yet to lead the Cavs to a birth in the Conference Finals, leading some to question his “alpha” status.  
+  – Advanced Metrics: His box-plus/minus ratings despite gaudy scoring have trended closer to the high-end role player range than franchise cornerstone.
+
+5. DeMar DeRozan  
+  – Efficiency and Range: Once one of the league’s most efficient mid-range scorers, DeRozan has struggled to adapt to the 3-point era. His 3P% dipped below 30 percent in multiple seasons, making him easier to guard.  
+  – Playoff Resume: Despite six All-Star nods, he’s never reached the NBA Finals, and his playoff shooting splits (especially on catch-and-shoot attempts) have been underwhelming.  
+  – Defensive Impact: Frequently targeted on switches, DeRozan’s defensive rating often ranks in the bottom half of starters, limiting his two-way value.
+
+Honorable Mentions  
+  – Jrue Holiday: Criticized for being overrated offensively despite elite defense—his offensive trust issues in crunch time have drawn heat.  
+  – Pascal Siakam: A former MVP finalist whose production has dipped post-injury; some say he’s more of an 18/7 forward than the 24/7 superstar marketed in Toronto.  
+
+Key Takeaways  
+– “Overrated” often reflects a gap between perception (All-Star selections, L media hype, max contract) and reality (Win Shares, team success, consistency).  
+– Context matters: injuries, coaching schemes, teammates, and roles can all inflate or deflate a player’s reputation.  
+– Fan bias plays a huge role: market size, social media presence, and local media narratives can turn good players into “overrated” lightning rods overnight.  
+
+Ultimately, whether any of these players is “the most overrated” comes down to your own weighting of scoring efficiency, team success, defensive impact, and consistency. Which criteria matter most to you?
+code: []
+citations: []
+function_calls: []
+[2025-07-22 18:19:13] OpenAI API Streaming:
+text: Here’s a balanced look at several NBA players who—fairly or not—often find themselves labeled “overrated” by fans and media alike. Of course, “overrated” is ultimately a subjective tag: one fan’s overrated star is another’s elite performer. Below are five players who commonly come up in these debates, along with the key arguments on each side.  
+
+1. Kyrie Irving  
+  • The Case for “Overrated”  
+    – Injury History & Availability: Despite dazzling handles and a clutch gene, Irving has frequently missed games due to injuries or off-court decisions, leaving critics to question the value of his talent when he isn’t on the court.  
+    – Playoff Leadership: Irving’s polarizing tenure in Cleveland (including demanding a trade in 2017) and uneven play in high-pressure moments have led some to suggest he underdelivers relative to his immense talent.  
+  • The Counterpoint  
+    – Elite Scoring & Creativity: When healthy and engaged, Irving is among the best one-on-one scorers the league has ever seen. His 2016 NBA Finals Game 7 performance—26 points with seven assists—is often cited as peak Irving.  
+    – Teammate Impact: Multiple All-Star selections and Team USA gold medals underscore the respect his peers have for his game.  
+
+2. Russell Westbrook  
+  • The Case for “Overrated”  
+    – Efficiency Concerns: Westbrook’s career field-goal percentage (roughly 43%) and high turnover rates feed into the narrative that his relentless pace comes at an efficiency cost.  
+    – Volatility of “Hustle” Stats: Triple-doubles are eye-catching, but critics argue that padding rebound and assist totals can mask inefficiencies—while turnovers and poor shot selection can sabotage winning basketball.  
+  • The Counterpoint  
+    – Motor & Energy: No one in the NBA has matched Westbrook’s relentless intensity. His historic 2016–17 MVP season (a 42nd–year triple-double average) was legitimately groundbreaking.  
+    – Impact on Pace: In the modern, pace-driven NBA, a player who can push a team in transition is extremely valuable. His court vision and pace creation have lifted teams he’s played on.  
+
+3. Paul George  
+  • The Case for “Overrated”  
+    – Playoff Performance Drop-Offs: George’s regular-season consistency hasn’t always translated to the postseason—critics point to his struggles in the 2019 NBA Finals and some early-exit years as evidence.  
+    – Defensive Consistency Issues: Once considered a Defensive Player of the Year contender, George’s focus on offense at times has led to lapses on that end.  
+  • The Counterpoint  
+    – Two-Way Excellence: When on, George is legitimately a top-five two-way wing in the league—his eight All-Defensive Team nods and four All-NBA selections speak volumes.  
+    – Scarcity of Comparison: There are very few wings who combine his size (6’8”), shooting touch, and perimeter defense into one package.  
+
+4. DeMarcus Cousins  
+  • The Case for “Overrated”  
+    – Availability & Chemistry: Nicknamed “Boogie” for his boisterous personality, Cousins routinely clashed with coaches and teammates. He also missed 55 games combined in 2017–2018 due to Achilles and quad injuries.  
+    – Playoff Performance: In limited playoff runs he’s had, leaky defense and foul trouble often hurt his impact more than his scoring helped.  
+  • The Counterpoint  
+    – Peak Production: At his healthiest, Cousins posted back-to-back seasons averaging 27 points and 12 rebounds—numbers rare even among the greatest centers of the modern era.  
+    – Versatility: Boogie could step out to the three-point line, face-up smaller defenders, and pass out of double teams. Few big men of his size blended skill and strength so seamlessly.  
+
+5. John Wall  
+  • The Case for “Overrated”  
+    – Injury & Impact Decline: Wall’s Achilles tear in 2020 and subsequent knee issues have limited him to a reserve role; some suggest his career trajectory fell far short of the All-NBA ceiling he once seemed poised to reach.  
+    – Team Success: During his Wizards prime (2013–2017), despite multiple All-Star nods, he never advanced past the second round—raising questions about his ability to carry a franchise.  
+  • The Counterpoint  
+    – Peak Elite Point Guard: Wall’s combination of sub-4-second first steps, elite court vision, and transition dominance made him one of the league’s most electrifying playmakers.  
+    – Cultural Impact: His jersey was the NBA’s highest-selling men’s uniform in 2017–18, reflecting just how highly fans regarded his talent and flair.  
+
+Key Takeaways on “Overrated” debates:  
+  • Context Matters: Availability, team fit, coaching, and role definitions all shape how a player’s raw talent translates to wins.  
+  • Human Factor: Injuries and locker-room dynamics (e.g., Kyrie’s “no vaccines” stance, Cousins’s clashes) often color perceptions beyond pure on-court production.  
+  • Evolving Standards: A player once considered a superstar can look overrated if the league around him shifts (e.g., small-ball pace & space after Wall’s ascension).  
+
+Ultimately, “most overrated” is a moving target. Depending on your criteria—efficiency, impact in big games, leadership, team success—you may land on any of the above names (or none at all!). The healthiest approach is to recognize that even “overrated” talents have extraordinary gifts—and the real debate is about relative value, not a wholesale dismissal of their skills.
+code: []
+citations: []
+function_calls: []
+[2025-07-22 18:19:34] OpenAI API Streaming:
+text: When we talk about “overrated” NBA players, it’s important to define the frame of reference. Are we looking at:
+
+  1. A **peer vote** of today’s players on who they personally think is overhyped?  
+  2. **All‐time candidates** whose public reputation has outpaced both team success and individual impact?  
+  3. Players whose **current market value or media profile** exceeds their on‐court production in recent seasons?
+
+Below are four names who frequently surface in each of these categories, along with the source of the claim and the reasoning behind it.
+
+1. Rudy Gobert (Most‐Voted Peer‐Overrated Player)  
+   • In an anonymous mid‐2024 poll of NBA players conducted by The Athletic, Gobert led all vote-getters as the league’s “most overrated” player, with 13.6 percent of ballots—far more than any other player. He was even tied with players like Anthony Davis, Jayson Tatum, and Patrick Beverley, each on 2.5 percent of ballots. Despite his three Defensive Player of the Year awards and elite rim protection, peers felt his reputation as an all‐around impact player outweighed his actual offensive contributions (2.5 percent vote share for Sabonis; 13.6 percent for Gobert) ([si.com](https://www.si.com/college/gonzaga/basketball/domantas-sabonis-voted-as-one-of-the-most-overrated-players-in-the-nba?utm_source=chatgpt.com)).
+
+2. Trae Young (Most‐Voted Peer‐Overrated “Current” Star)  
+   • A spring 2023 Athletic survey of 108 active NBA players asked point-blank, “Who is the most overrated player in the league?” Trae Young received the most mentions, as several peers pointed to his high usage and scoring volume not translating into efficient team success, especially in the playoffs ([reddit.com](https://www.reddit.com/r/nba/comments/12qmbko?utm_source=chatgpt.com)).  
+
+3. James Harden (All‐Time / Contract‐Value vs. Rings)  
+   • Multiple retrospectives on “most overrated players ever” place Harden near—or at—the top. Bleacher Report ranked him the No. 1 overrated player over the last five years, citing declining individual efficiency, multiple early playoff exits, and a career without a Finals appearance despite MVP-caliber regular seasons ([bleacherreport.com](https://www.bleacherreport.com/articles/10131814-ranking-the-nbas-most-overrated-players-of-the-last-5-years?utm_source=chatgpt.com)). Sportsnaut’s historical list also highlights Harden’s repeated trade demands, high turnover totals, and lack of a championship ring as evidence that his superstar billing outpaces his ultimate achievements ([sportsnaut.com](https://sportsnaut.com/nba/lists/most-overrated-nba-players-ever/?utm_source=chatgpt.com)).  
+
+4. Bradley Beal (Contract vs. Team Success)  
+   • Before his trade to the Suns, Beal was earning a top-five contract in NBA history (five years, $251 million) yet never led the Wizards past the conference semifinals. Critics point to his subpar defense, declining scoring averages, and lack of playoff heroics as reasons his salary and media profile did not match his team accomplishments ([sportsnaut.com](https://sportsnaut.com/nba/lists/most-overrated-nba-players-ever/?utm_source=chatgpt.com)).  
+
+—  
+**Caveat:** Labeling someone “overrated” doesn’t negate that they’re still All-Star talents or elite at their craft. Rather, it reflects a gap between public/media/market perception (or even teammate perception) and on-court results—particularly winning in the playoffs and efficiency metrics. Depending on which criterion you prioritize (peer polls, advanced stats, championships), you may swap in other names, but Rudy Gobert, Trae Young, James Harden, and Bradley Beal are among the most frequently cited in recent years.
+code: []
+citations: [{'url': 'https://www.si.com/college/gonzaga/basketball/domantas-sabonis-voted-as-one-of-the-most-overrated-players-in-the-nba?utm_source=chatgpt.com', 'title': 'Domantas Sabonis voted as one of the most overrated players in the NBA', 'start_index': 1182, 'end_index': 1333}, {'url': 'https://www.reddit.com/r/nba/comments/12qmbko?utm_source=chatgpt.com', 'title': '[The Athletic] We asked NBA players who the most overrated player in the league was. The leading vote-getter? Trae Young.', 'start_index': 1698, 'end_index': 1782}, {'url': 'https://www.bleacherreport.com/articles/10131814-ranking-the-nbas-most-overrated-players-of-the-last-5-years?utm_source=chatgpt.com', 'title': "Ranking the NBA's Most Overrated Players of the Last 5 Years | News, Scores, Highlights, Stats, and Rumors | Bleacher Report", 'start_index': 2165, 'end_index': 2320}, {'url': 'https://sportsnaut.com/nba/lists/most-overrated-nba-players-ever/?utm_source=chatgpt.com', 'title': 'Most overrated NBA players ever: James Harden, Tracy McGrady among most overrated ever', 'start_index': 2528, 'end_index': 2636}, {'url': 'https://sportsnaut.com/nba/lists/most-overrated-nba-players-ever/?utm_source=chatgpt.com', 'title': 'Most overrated NBA players ever: James Harden, Tracy McGrady among most overrated ever', 'start_index': 3031, 'end_index': 3139}]
+function_calls: []
+[2025-07-22 18:19:48] OpenAI API Streaming:
+text: When discussing who’s “overrated” in the NBA, it’s important to first define what we mean by overrated—typically, a player whose reputation (via media hype, marketability, accolades, etc.) exceeds their actual on-court value or impact. Opinions will vary widely, but here are five names that often come up in these conversations, along with the context and nuance behind each pick:
+
+1. Kyrie Irving  
+   • Strengths: One of the most dazzling ball-handlers and clutch shot-makers the game has ever seen. A six-time All-Star and 2016 NBA champion.  
+   • Critiques: Criticized for being a ball-dominant scorer whose impact wanes when he doesn’t have a co-star or when defenses aren’t focused on him. Injury history and off-court controversies sometimes overshadow his talent.  
+   • Why “overrated”? Many argue that outside of isolation scoring and cross-overs, his overall impact (defense, playmaking, leadership) hasn’t consistently matched the superstar label.  
+
+2. Russell Westbrook  
+   • Strengths: Incredible athleticism, relentless motor, and the only player in NBA history to average a triple-double for three straight seasons (2016–17 through 2018–19).  
+   • Critiques: High turnover rates, inefficient shot selection, and questionable decision-making in late-game situations.  
+   • Why “overrated”? While his counting stats are gaudy, critics say his ball-hogging style can stifle team offense and that his all-around impact, especially on winning, is overrated.  
+
+3. Draymond Green  
+   • Strengths: Defensive Player of the Year (2017), emotional engine and vocal leader of the Warriors’ dynasty, versatile playmaking forward.  
+   • Critiques: Offensive limitations, low scoring output, and a history of on-court incidents (flagrant fouls, technicals) that sometimes hurt his team.  
+   • Why “overrated”? Some feel his defensive reputation glosses over lapses in focus and that his value is too tied to Golden State’s system and superstar teammates.  
+
+4. Ben Simmons  
+   • Strengths: Elite defender, excellent passer and rebounder, unique size/speed combo that can cover multiple positions.  
+   • Critiques: Almost nonexistent shooting range (career 54% from the line), reluctance to attack in clutch moments, and mental/effort concerns on offense.  
+   • Why “overrated”? Drafted first overall and hyped as a franchise cornerstone, Simmons’s severe shooting limitations and playoff struggles have led many to downgrade his “superstar” billing.  
+
+5. Chris Paul (in recent years)  
+   • Strengths: Hall-of-Fame point guard résumé—nine All-Star nods, led the league in assists four times, and multiple deep playoff runs.  
+   • Critiques: Age-related decline in athleticism and defense; blown-out tendons/injuries in key moments; now more a steady facilitator than game-changer.  
+   • Why “overrated”? Even as he ages gracefully, some argue that media reverence for CP3’s floor generalship overlooks that he’s no longer transformative on either end, especially compared to younger All-Star guards.  
+
+––––––––––––––––––––––  
+Caveats & Nuance  
+• “Overrated” is inherently subjective: For every detractor, there’s a fan arguing these players are exactly as good as—or better than—their reputations suggest.  
+• Context matters: Team fit, coaching, supporting casts, and system can dramatically alter perceived value.  
+• Statistical vs. “eye-test” value: Some players excel in the advanced metrics but don’t “feel” impactful in real time, and vice versa.  
+
+Ultimately, labeling someone “the most overrated” often tells us more about our own evaluation criteria than about the player. NBA talent is elite across the board—it’s the subtle differences in how and when that talent gets deployed that fuel the debate.
+code: []
+citations: []
+function_calls: []
+[2025-07-22 18:19:58] OpenAI API Streaming:
+text: Here’s a balanced look at five NBA players who—fairly or not—frequently spark “overrated” debates among fans and analysts. “Overrated” here means that public perception and hype around their skills or impact often outpace what they actually deliver on the court, whether in counting stats, team success, or efficiency. Of course, “overrated” is subjective: some will agree, others will vehemently disagree.
+
+1. **D’Angelo Russell**  
+   • Case for “overrated”: Despite being a talented scorer and playmaker, Russell has struggled to elevate winning teams. He’s bounced between four franchises in six seasons, posting moderate assist and scoring numbers but lacking consistency and playoff success. His high usage rate hasn’t translated into true star-level impact, and he frequently disappears in big moments.  
+   • Counterpoint: When healthy, he can light it up from deep, and he’s come close to All-Star numbers in the past.
+
+2. **Ben Simmons**  
+   • Case for “overrated”: A former Rookie of the Year and Defensive Player of the Year runner-up, Simmons’ inability to develop a reliable jump shot and his poor free-throw shooting have capped his ceiling. His anticipated leap into “superstar” status never materialized in Philadelphia or Brooklyn, and his playoff inconsistencies (notably in the 2021 conference semifinals) cast long shadows.  
+   • Counterpoint: He remains one of the league’s best defenders and playmakers—if you value rim-running and passing above scoring.
+
+3. **Patrick Beverley**  
+   • Case for “overrated”: Billed as one of the NBA’s premier “defensive pests,” Beverley’s offensive limitations (career 33% three-point shooter) and limited role often mean his net impact is minimal. His emotional intensity and trash talk earn headlines, but that persona sometimes overshadows the fact that his on-court contributions outside defense are modest.  
+   • Counterpoint: His willingness to guard the opposing team’s best backcourt player night after night does have tangible value.
+
+4. **John Wall**  
+   • Case for “overrated”: Once a perennial All-Star and one of the fastest guards in NBA history, Wall’s knee injuries derailed him. Since returning, his production and efficiency have dipped far below his Washington Wizards peak, yet fans and pundits still cite his old reputation when praising him—as if he’s unchanged. The gap between “prime John Wall” hype and “current John Wall” reality fuels the overrated talk.  
+   • Counterpoint: In bursts, he still flashes his old elite speed and playmaking.
+
+5. **Zach LaVine**  
+   • Case for “overrated”: A two-time All-Star and highlight-reel dunker, LaVine’s defensive shortcomings and uneven playoff performances have led some to question whether he truly warrants “star” status. His true shooting percentage hovers around league average, and though he scores a lot, he doesn’t always make winning plays or next-level improvements late in the season.  
+   • Counterpoint: His offensive creativity and ability to carry second-unit scoring make him a coveted RFA on the open market.
+
+—  
+Why this matters: Labeling someone “overrated” doesn’t mean they’re bad—it means expectations outstrip actual impact. In the NBA, where reputations form around highlight plays and scoring gaudy numbers, players who lack all-around games or consistent winning results often get tagged as overrated. Fans should weigh eye-popping stats against efficiency, two-way impact, playoff performance, and role fit before cementing opinions.
+
+What do you think—agree or disagree? Who would you add to the list?
+code: []
+citations: []
+function_calls: []
+[2025-07-22 18:20:10] OpenAI API Streaming:
+text: Opinion on who’s the “most overrated” NBA player inevitably varies by fan perspective and the criteria you use, but here are five players commonly cited—and why—when fans discuss being overrated. Remember, “overrated” here means their reputation (through media hype, endorsements, or past success) often outpaces their recent on-court impact or value to a winning team.
+
+1. Kyrie Irving  
+   • Reputation: Viewed as a perennial All-Star and clutch shot-maker.  
+   • Why overrated?  
+     – Defensive liability: Despite his offensive wizardry, Irving ranks near the bottom among point guards in on-ball defense and defensive win shares the past several seasons.  
+     – Team fit questions: Has bounced between contenders (Cleveland, Boston, Brooklyn) without reaching a conference finals since 2018, raising questions about his ability to elevate teams beyond regular-season success.  
+   • Summary: Elite scoring guard, but his defensive shortcomings and fit issues temper his Hall-of-Fame–level billing.
+
+2. DeMarcus Cousins  
+   • Reputation: Two-time All-NBA player and one of the best bigs entering the 2016–17 season.  
+   • Why overrated?  
+     – Injuries derailed him: A ruptured Achilles in 2018 and torn quad in 2019 cost him two full seasons and he never regained his peak form.  
+     – On-court impact: Since the injuries, he’s been a borderline rotation player—far below the dominant center many expected.  
+   • Summary: Talent was real, but career-altering injuries and a perceived “bust” label play into the overrated narrative.
+
+3. Chris Paul  
+   • Reputation: Future Hall of Famer, among the best point guards ever.  
+   • Why overrated?  
+     – Playoff shortcomings: Multiple first-round exits and “chokeful” criticism, despite strong regular-season numbers.  
+     – Diminishing returns: At age 39 in 2024–25, his leadership and passing remain top-tier, but his shooting and quickness have noticeably declined.  
+   • Summary: An all-time great floor-general, but recent playoff results and age-related drop-off fuel questions about whether legacy hype overshoots current impact.
+
+4. Ben Simmons  
+   • Reputation: Former Defensive Player of the Year, five-time All-Star selection on rookie ballots.  
+   • Why overrated?  
+     – Offensive limitations: A career free-throw percentage around 60% and unwillingness to shoot threes make him a one-dimensional threat.  
+     – Mental/fit issues: High-profile holdout and reported locker-room friction in Philadelphia and Brooklyn have overshadowed his defensive prowess.  
+   • Summary: Exceptional defender and playmaker on drives, yet lack of shooting range and confidence dent his two-way “unicorn” aura.
+
+5. Lonzo Ball  
+   • Reputation: Hyped as a generational playmaker since high school, son of a social-media phenomenon.  
+   • Why overrated?  
+     – Shooting regression: Seen his three-point and free-throw percentages dip significantly from rookie year, eroding the “floor-spacer” label.  
+     – Injuries and impact: Knee and ankle issues have limited his availability and consistency as a two-way guard.  
+   • Summary: Still a strong passer and defender, but the lofty expectations from draft hype haven’t fully materialized in all facets.
+
+These players each have legitimate strengths—often elite in one or two areas—but their reputations sometimes eclipse recent production, team success, or all-around impact. Debates on “overrated” hinge on whether you privilege peak career accomplishments, current form, or fitting into winning rosters. Ultimately, calling someone “overrated” says more about fan expectations than a player’s true talent.
+code: []
+citations: []
+function_calls: []
+[2025-07-22 18:20:32] OpenAI API Streaming:
+text: When NBA players were anonymously polled by The Athletic in April 2025, Tyrese Haliburton of the Indiana Pacers was voted overwhelmingly as the league’s most overrated player, receiving 14.4 percent of the vote. Behind him were Rudy Gobert (Minnesota Timberwolves) at 10 percent and Trae Young (Atlanta Hawks) at 8.9 percent. Jimmy Butler and Bradley Beal rounded out the top five, each with 5.5 percent and 4.4 percent of the vote, respectively ([nbcsportsbayarea.com](https://www.nbcsportsbayarea.com/nba/golden-state-warriors/jimmy-butler-draymond-green-overrated/1844478/?utm_source=chatgpt.com)) [si.com](https://www.si.com/nba/suns/news/phoenix-suns-guard-voted-among-most-overrated-players-nba?utm_source=chatgpt.com))
+
+It’s important to note that “overrated” in this context reflects peers’ perceptions of hype versus on-court impact, not necessarily a player’s statistical production. For example, despite his critics, Haliburton still averaged 18.6 points, 9.2 assists, and 3.5 rebounds last season and earned an All-NBA Third Team nod ([nbamaniacs.com](https://www.nbamaniacs.com/en/news/overrated-haliburton/?utm_source=chatgpt.com)). Public and media opinions often diverge from players’ views—some fans point to veterans like LeBron James or Giannis Antetokounmpo when debating this topic—but the Athletic poll remains the most direct snapshot of how current players perceive overhyped peers.
+code: []
+citations: [{'url': 'https://www.nbcsportsbayarea.com/nba/golden-state-warriors/jimmy-butler-draymond-green-overrated/1844478/?utm_source=chatgpt.com', 'title': 'Jimmy Butler, Draymond Green among ‘most overrated,’ per NBA players – NBC Sports Bay Area & California', 'start_index': 446, 'end_index': 725}, {'url': 'https://www.si.com/nba/suns/news/phoenix-suns-guard-voted-among-most-overrated-players-nba?utm_source=chatgpt.com', 'title': 'Phoenix Suns Guard Voted Among Most Overrated Players in NBA', 'start_index': 446, 'end_index': 725}, {'url': 'https://www.nbamaniacs.com/en/news/overrated-haliburton/?utm_source=chatgpt.com', 'title': 'Haliburton, voted most overrated', 'start_index': 1046, 'end_index': 1145}]
+function_calls: []

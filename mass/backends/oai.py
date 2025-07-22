@@ -144,6 +144,7 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
         with open("openai_input.txt", "a") as f:
             import time  # Local import to ensure availability in threading context
             inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OpenAI API Request:\n"
+            inference_log += f"tools: {formatted_tools}\n"
             inference_log += f"Messages: {json.dumps(messages, indent=2)}\n"
             inference_log += "\n\n"
             f.write(inference_log)
@@ -170,14 +171,14 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                 model_name = model
                 
                 # Use responses API for all models (supports streaming)
-                # Note: Some models like o4-mini don't support temperature parameter
+                # Note: Response models doesn't support temperature parameter
                 params = {
                     "model": model_name,
                     "tools": formatted_tools if formatted_tools else None,
                     "instructions": instructions if instructions else None,
                     "input": input_text,
                     "max_output_tokens": max_tokens if max_tokens else None,
-                    "stream": stream if stream and stream_callback else False,
+                    "stream": True if stream and stream_callback else False,
                 }
 
                 # Only add temperature and top_p for models that support them
@@ -408,7 +409,14 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                             stream_callback("\n✅ Response complete\n")
                         except Exception as e:
                             print(f"Stream callback error: {e}")
-
+                            
+            with open("openai_streaming.txt", "a") as f:
+                f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OpenAI API Streaming:\n")
+                f.write(f"text: {text}\n")
+                f.write(f"code: {code}\n")
+                f.write(f"citations: {citations}\n")
+                f.write(f"function_calls: {function_calls}\n")
+                
             result = AgentResponse(
                 text=text,
                 code=code,

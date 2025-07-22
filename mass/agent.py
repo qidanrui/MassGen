@@ -255,7 +255,7 @@ class MassAgent(ABC):
                 function_outputs.append(function_output)
                 
                 # DEBUGGING
-                with open("function_outputs.txt", "a") as f:
+                with open("function_calls.txt", "a") as f:
                     f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
                     f.write(f"{json.dumps(function_output, indent=2)}\n")
                 
@@ -270,7 +270,7 @@ class MassAgent(ABC):
                 print(f"Error executing function {func_name}: {e}")
                 
                 # DEBUGGING
-                with open("function_outputs.txt", "a") as f:
+                with open("function_calls.txt", "a") as f:
                     f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
                     f.write(f"{json.dumps(error_output, indent=2)}\n")
                 
@@ -362,7 +362,7 @@ class MassAgent(ABC):
         # Case 1: Initial round without running answer
         if not self.state.curr_answer:
             return AGENT_ANSWER_MESSAGE.format(task=task.question, agent_answers="None") + \
-                   "There are no current answers right now. Please use your expertise and tools (if available) to provide a new answer and submit it using the `add_answer` tool first."
+                   "There are no current answers right now. Please use your expertise and tools (if available) to provide a new answer and submit it using the `new_answer` tool first."
     
         all_agent_answers = self._get_all_answers()
         all_agent_answers_str = "\n\n".join(all_agent_answers)
@@ -461,7 +461,7 @@ class MassAgent(ABC):
                             # Renew the conversation within the loop
                             working_messages = self._get_task_input_messages(task)
                         else: # Continue the current conversation and prompting checkin
-                            working_messages.append({"role": "user", "content": "Please use either `add_answer` or `vote` tool once your analysis is done."})
+                            working_messages.append({"role": "user", "content": "Please use either `new_answer` or `vote` tool once your analysis is done."})
                  
                 curr_round += 1
                 self.state.chat_round += 1        

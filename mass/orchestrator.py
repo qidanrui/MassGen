@@ -357,9 +357,9 @@ class MassOrchestrator:
                     vote_counts = self._get_current_vote_counts()
                     self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
                     # Update vote cast counts for all agents to ensure accuracy
-                    votes_cast_by_agent = len(self.agent_states[voter_id].cast_votes)
-                    for agent_id, votes_cast in votes_cast_by_agent.items():
-                        self.streaming_orchestrator.update_agent_votes_cast(agent_id, votes_cast)
+                    for agent_id, agent_state in self.agent_states.items():
+                        vote_cast_count = len(agent_state.cast_votes)
+                        self.streaming_orchestrator.update_agent_votes_cast(agent_id, vote_cast_count)
             
             return restarted_agents
         

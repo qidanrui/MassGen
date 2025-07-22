@@ -182,7 +182,7 @@ Examples:
     args = parser.parse_args()
     
     # DEBUGGING
-    for file in ["function_calls.txt", "function_outputs.txt", "errors.txt",
+    for file in ["function_calls.txt", "errors.txt", "openai_streaming.txt",
                  "gemini_input.txt", "grok_input.txt", "openai_input.txt"]:
         if os.path.exists(file):
             os.remove(file)

@@ -210,7 +210,7 @@ class GeminiMassAgent(OpenAIMassAgent):
                             # Renew the conversation within the loop
                             working_messages = self._get_task_input_messages(task)
                         else: # Continue the current conversation and prompting checkin
-                            working_messages.append({"role": "user", "content": "Please use either `add_answer` or `vote` tool once your analysis is done."})
+                            working_messages.append({"role": "user", "content": "Please use either `new_answer` or `vote` tool once your analysis is done."})
 
                     # Switch to custom tools in the next round
                     if tool_switch:
