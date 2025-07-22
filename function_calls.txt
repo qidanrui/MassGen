@@ -1,0 +1,33 @@
+[2025-07-22 02:47:33] Agent 1 (gemini-2.5-flash):
+[
+  {
+    "type": "function_call",
+    "call_id": null,
+    "name": "update_summary",
+    "arguments": {
+      "new_content": "The sum of 31283 and 312 is 31595. I have completed the calculation and have the final answer."
+    }
+  }
+]
+[2025-07-22 02:47:35] Agent 1 (gemini-2.5-flash):
+[
+  {
+    "type": "function_call",
+    "call_id": null,
+    "name": "vote",
+    "arguments": {
+      "target_agent_id": 1,
+      "response_text": "I have calculated the sum of 31283 and 312, which is 31595. I am confident in this answer."
+    }
+  }
+]
+[2025-07-22 02:47:37] Agent 2 (gpt-4o-mini):
+[
+  {
+    "type": "function_call",
+    "name": "vote",
+    "arguments": "{\"target_agent_id\":1,\"response_text\":\"I voted for Agent 1 because they provided the correct calculation and confirmed the final answer of 31595 for the sum of 31283 and 312.\"}",
+    "call_id": "call_yaT510aswSaeidnz7upVmZgm",
+    "id": "fc_687f3408f8808199b3a46bf5db7b5398063bc28fe6e842d7"
+  }
+]

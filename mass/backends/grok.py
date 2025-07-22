@@ -7,14 +7,12 @@ import copy
 
 from dotenv import load_dotenv
 from xai_sdk import Client
-from xai_sdk.chat import assistant, system, user, tool as xai_tool_func
+from xai_sdk.chat import assistant, system, user, tool_result, tool as xai_tool_func
 from xai_sdk.search import SearchParameters
 
 # Import utility functions and tools  
 from mass.utils import function_to_json, execute_function_calls
-from mass.tools import (mock_update_summary as update_summary, 
-                        mock_check_updates as check_updates, 
-                        mock_vote as vote)
+from mass.tools import mock_update_summary, mock_check_updates, mock_vote
 from mass.types import AgentResponse
 
 load_dotenv()
@@ -44,12 +42,16 @@ def parse_completion(response, add_citations=True):
             if hasattr(tool_call, 'function'):
                 # OpenAI-style structure: tool_call.function.name, tool_call.function.arguments
                 function_calls.append({
+                    "type": "function_call",
+                    "call_id": tool_call.function.id,
                     "name": tool_call.function.name,
                     "arguments": tool_call.function.arguments
                 })
             elif hasattr(tool_call, 'name') and hasattr(tool_call, 'arguments'):
                 # Direct structure: tool_call.name, tool_call.arguments
                 function_calls.append({
+                    "type": "function_call",
+                    "call_id": tool_call.id,
                     "name": tool_call.name,
                     "arguments": tool_call.arguments
                 })
@@ -185,8 +187,8 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
             chat = client.chat.create(**chat_params)
 
             for message in messages:
-                role = message["role"]
-                content = message["content"]
+                role = message.get("role", None)
+                content = message.get("content", None)
 
                 if role == "system":
                     chat.append(system(content))
@@ -194,6 +196,11 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                     chat.append(user(content))
                 elif role == "assistant":
                     chat.append(assistant(content))
+                elif message.get("type", None) == "function_call":
+                    pass
+                elif message.get("type", None) == "function_call_output":
+                    content = message.get("output", None)
+                    chat.append(tool_result(content))
                     
             # DEBUGGING
             with open("grok_input.txt", "a") as f:
@@ -281,11 +288,15 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                         for tool_call in response.tool_calls:
                             if hasattr(tool_call, 'function'):
                                 function_calls.append({
+                                    "type": "function_call",
+                                    "call_id": tool_call.function.id,
                                     "name": tool_call.function.name,
                                     "arguments": tool_call.function.arguments
                                 })
                             elif hasattr(tool_call, 'name') and hasattr(tool_call, 'arguments'):
                                 function_calls.append({
+                                    "type": "function_call",
+                                    "call_id": tool_call.id,
                                     "name": tool_call.name,
                                     "arguments": tool_call.arguments
                                 })
@@ -295,11 +306,15 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                                 for tool_call in choice.message.tool_calls:
                                     if hasattr(tool_call, 'function'):
                                         function_calls.append({
+                                            "type": "function_call",
+                                            "call_id": tool_call.function.id,
                                             "name": tool_call.function.name,
                                             "arguments": tool_call.function.arguments
                                         })
                                     elif hasattr(tool_call, 'name') and hasattr(tool_call, 'arguments'):
                                         function_calls.append({
+                                            "type": "function_call",
+                                            "call_id": tool_call.id,
                                             "name": tool_call.name,
                                             "arguments": tool_call.arguments
                                         })
@@ -412,13 +427,7 @@ def multi_turn_tool_use(messages, model="grok-3", tools=None, tool_mapping=None,
                 # Add function call results to conversation
                 for function_call, function_output in zip(result.function_calls, function_outputs):
                     # Add function call result as user message
-                    current_messages.append({
-                        "role": "user",
-                        "content": (
-                            f"You have called function `{function_call['name']}` with arguments: {function_call['arguments']}.\n"
-                            f"The return is:\n{function_output['output']}"
-                        )
-                    })
+                    current_messages.extend([function_call, function_output])
                             
         except Exception as e:
             print(f"Error in round {round}: {e}")
@@ -431,11 +440,6 @@ def multi_turn_tool_use(messages, model="grok-3", tools=None, tool_mapping=None,
 
 if __name__ == "__main__":
     
-    def grok_function_to_tool(func):
-        """Convert a Python function to OpenAI tool format compatible with Grok API."""
-        # Return OpenAI format directly - the Grok API expects tools in OpenAI format
-        return function_to_json(func)
-
     system_instructions = """
 You are Agent 0 - an expert agent equipped with search and code tools working as part of a collaborative team to solve complex tasks.
 
@@ -497,8 +501,8 @@ Below are the recent updates from other agents:
 
     # Custom functions (converted to X.AI tool format)
     customized_functions = [
-        grok_function_to_tool(update_summary), 
-        grok_function_to_tool(vote)
+        function_to_json(mock_update_summary), 
+        function_to_json(mock_vote)
     ]
     
     # Include live_search string - it will be filtered out in process_message and used to enable search
@@ -506,9 +510,9 @@ Below are the recent updates from other agents:
 
     # Create tool mapping from the provided tools
     tool_mapping = {
-        "update_summary": update_summary,
-        "check_updates": check_updates,
-        "vote": vote,
+        "mock_update_summary": mock_update_summary,
+        "mock_check_updates": mock_check_updates,
+        "mock_vote": mock_vote,
     }
     
     # Call the multi_turn_tool_use function with the example parameters

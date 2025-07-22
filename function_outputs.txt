@@ -1,0 +1,18 @@
+[2025-07-22 02:47:33] Agent 1 (gemini-2.5-flash):
+{
+  "type": "function_call_output",
+  "call_id": null,
+  "output": "Your summary report has been updated and shared with other agents."
+}
+[2025-07-22 02:47:35] Agent 1 (gemini-2.5-flash):
+{
+  "type": "function_call_output",
+  "call_id": null,
+  "output": "Your vote for Agent 1 has been cast."
+}
+[2025-07-22 02:47:37] Agent 2 (gpt-4o-mini):
+{
+  "type": "function_call_output",
+  "call_id": "call_yaT510aswSaeidnz7upVmZgm",
+  "output": "Your vote for Agent 1 has been cast."
+}

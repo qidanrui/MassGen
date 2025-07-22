@@ -11,10 +11,8 @@ import copy
 load_dotenv()
 
 # Import utility functions and tools
-from mass.utils import function_to_json, execute_function_calls
-from mass.tools import (mock_update_summary as update_summary, 
-                        mock_check_updates as check_updates, 
-                        mock_vote as vote)
+from mass.utils import function_to_json, execute_function_calls, generate_random_id
+from mass.tools import mock_update_summary, mock_check_updates, mock_vote
 from mass.types import AgentResponse
 
 def add_citations_to_response(response):
@@ -91,6 +89,7 @@ def parse_completion(completion, add_citations=True):
                         # Extract function name and arguments
                         func_name = getattr(part.function_call, 'name', 'unknown')
                         func_args = {}
+                        call_id = getattr(part.function_call, 'id', generate_random_id())
                         if hasattr(part.function_call, 'args') and part.function_call.args:
                             # Convert args to dict if it's a struct/object
                             if hasattr(part.function_call.args, '_pb'):
@@ -104,6 +103,8 @@ def parse_completion(completion, add_citations=True):
                                 func_args = part.function_call.args
 
                         function_calls.append({
+                            "type": "function_call",
+                            "call_id": call_id,
                             "name": func_name,
                             "arguments": func_args
                         })
@@ -188,10 +189,11 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
         # Convert messages from OpenAI format to Gemini format
         gemini_messages = []
         system_instruction = None
-
+        function_calls = {}
+        
         for message in messages:
-            role = message["role"]
-            content = message["content"]
+            role = message.get("role", None)
+            content = message.get("content", None)
 
             if role == "system":
                 system_instruction = content
@@ -199,7 +201,18 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                 gemini_messages.append(types.Content(role="user", parts=[types.Part(text=content)]))
             elif role == "assistant":
                 gemini_messages.append(types.Content(role="model", parts=[types.Part(text=content)]))
-
+            elif message.get("type", None) == "function_call":
+                function_calls[message["call_id"]] = message
+            elif message.get("type", None) == "function_call_output":
+                func_name = function_calls[message["call_id"]]["name"]
+                func_resp = message["output"]
+                function_response_part = types.Part.from_function_response(
+                    name=func_name,
+                    response={"result": func_resp}
+                )
+                # Append the function response
+                gemini_messages.append(types.Content(role="user", parts=[function_response_part])) 
+            
         # DEBUGGING
         with open("gemini_input.txt", "a") as f:
             import time  # Local import to ensure availability in threading context
@@ -383,6 +396,8 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
                                                 func_args = part.function_call.args
 
                                         function_calls.append({
+                                            "type": "function_call",
+                                            "call_id": part.function_call.id,
                                             "name": func_name,
                                             "arguments": func_args
                                         })
@@ -513,26 +528,20 @@ def multi_turn_tool_use(messages, model="gemini-2.5-flash", tools=None, tool_map
             )
             
             # Add assistant response to conversation
-            if result['text']:
-                current_messages.append({"role": "assistant", "content": result['text']})
+            if result.text:
+                current_messages.append({"role": "assistant", "content": result.text})
                 
             # If no function calls, we're terminated
-            if not result['function_calls']:
+            if not result.function_calls:
                 break
             else:
                 # Execute function calls and add them back to the conversation
-                function_outputs = execute_function_calls(result['function_calls'], tool_mapping)
+                function_outputs = execute_function_calls(result.function_calls, tool_mapping)
                 
                 # Add function call results to conversation (Gemini format)
-                for function_call, function_output in zip(result['function_calls'], function_outputs):
+                for function_call, function_output in zip(result.function_calls, function_outputs):
                     # Add function call result as user message
-                    current_messages.append({
-                        "role": "user",
-                        "content": (
-                            f"You have called function `{function_call['name']}` with arguments: {function_call['arguments']}.\n"
-                            f"The return is:\n{function_output['output']}"
-                        )
-                    })
+                    current_messages.extend([function_call, function_output])
                             
         except Exception as e:
             print(f"Error in round {round}: {e}")
@@ -605,17 +614,18 @@ Below are the recent updates from other agents:
 
     # built-in tools
     built_in_tools = ["live_search", "code_execution"]
+    built_in_tools = []
     # customized functions
-    customized_functions = [function_to_json(update_summary), function_to_json(vote)]
+    customized_functions = [function_to_json(mock_update_summary), function_to_json(mock_vote)]
     
     # Combine tools for Gemini (note: Gemini can't use both native and custom tools simultaneously)
     tools = built_in_tools + customized_functions
 
     # Create tool mapping from the provided tools
     tool_mapping = {
-        "update_summary": update_summary,
-        "check_updates": check_updates,
-        "vote": vote,
+        "mock_update_summary": mock_update_summary,
+        "mock_check_updates": mock_check_updates,
+        "mock_vote": mock_vote,
     }
     
     # Call the multi_turn_tool_use function with the example parameters
