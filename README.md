@@ -14,6 +14,7 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 - [✨ Key Features](#-key-features)
 - [🏗️ System Design](#️-system-design)
 - [🚀 Quick Start](#-quick-start)
+- [💡 Examples](#-examples)
 - [🤝 Contributing](#-contributing)
 
 ---
@@ -134,7 +135,35 @@ The system shows real-time collaboration between agents in a multi-region displa
 
 ---
 
+## 💡 Examples
+
+Here are a few examples of how you can use MASS for different tasks:
+
+### 1. 📝 Code Generation (TODO: hanoi, video)
+
+```bash
+# Generate a Python function to calculate the Fibonacci sequence
+python cli.py --config examples/production.yaml "Write a Python function to calculate the nth Fibonacci number."
+```
+
+### 2. ❓ Question Answering (TODO: economic, video)
+
+```bash
+# Ask a question about a complex topic
+python cli.py --config examples/production.yaml "Explain the theory of relativity in simple terms."
+```
+
+### 3. 🧠 Creative Writing (TODO: try, video)
+
+```bash
+# Generate a short story
+python cli.py --config examples/production.yaml "Write a short story about a robot who discovers music."
+```
+
+---
+
 ##  Roadmap
+
 
 MASS is currently in its foundational stage, with a focus on core multi-agent collaboration and orchestration. Our roadmap is centered on enhancing this framework to build a more robust, intelligent, and user-friendly system.
 
