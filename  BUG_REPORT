@@ -1,58 +1,11 @@
 OpenAI:
-- chat history keep adding assistant message, without adding user MESSAGES
-- Check the work_on_task function
+- gpt-4o-mini did not have response streaming
 
-Grok:
-- chat history has new user messages, but not in correct order
-- Check the work_on_task function
-- round number always 0
+Logging:
+- where the information are saved
+- what information will be saved
 
-Gemini:
-- Tool swap not finished
-- Check the work_on_task function
-- round number always 0
+Display:
+- Region border
 
-Prompt:
-- Make summary report complete, self-contained
-- Reuse the instructions
-
-Vote (fixed):
-- No unique votes for each agent
-- vote_counts is not correct: should be {"agent_id": "vote_count"}, start with 0
-- vote_distribution should be kept
-- voted_agents should be the number of agents whose current status is "voted"
-
-TODO:
-- Check work_on_task function for each agent (add notification)
-- Fix the bug for gemini tool conflict
-- logging file figured out (folder, log.txt)
-
-
-Vote:
-- Looks not accurate
-
-Prompt for summary:
-- check each message
-
-Display and loggings:
-- where are all the information stored?
-- there are four types of logging information:
-    - the multi-region streaming display UI
-    - vote record and summary record for each agent
-
-Border display issues (FIXED):
-- ✅ Border alignment inconsistencies resolved
-- ✅ Terminal width detection locked for consistent display
-- ✅ Width calculation methods unified to prevent discrepancies 
-- ✅ ANSI escape sequence handling improved
-- ✅ Padding and truncation logic simplified for reliability
-- ✅ Border validation method improved with unified width calculation
-- ✅ Terminal resize detection added to reset cached dimensions
-- ✅ Error handling improved with fallback display mode
-
-
-TODO:
-
-1. change to simplified design
-2. log system (where the files are saved)
-3. Gemini/Grok Function Call Message Construction
+Max Round Termination

@@ -1,12 +1,10 @@
 import logging
-import re
 import threading
 import time
 from collections import Counter
 from datetime import datetime
-from typing import Any, Optional, Union, Dict, List
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import asyncio
+from typing import Any, Optional, Dict, List
+from concurrent.futures import ThreadPoolExecutor
 
 from .types import SystemState, AgentState, TaskInput, VoteRecord
 from .logging import get_log_manager
@@ -35,7 +33,6 @@ class MassOrchestrator:
         consensus_threshold: float = 1.0,
         max_debate_rounds: int = 2,
         status_check_interval: float = 2.0,
-        thread_pool_timeout: int = 5,
         streaming_orchestrator=None,
     ):
         """
@@ -46,7 +43,6 @@ class MassOrchestrator:
             consensus_threshold: Fraction of agents that must agree for consensus (1.0 = unanimous)
             max_debate_rounds: Maximum number of debate rounds before fallback
             status_check_interval: Interval for checking agent status (seconds)
-            thread_pool_timeout: Timeout for thread pool shutdown (seconds)
             streaming_orchestrator: Optional streaming orchestrator for real-time display
         """
         self.agents: Dict[int, Any] = {}  # agent_id -> MassAgent instance
@@ -57,7 +53,6 @@ class MassOrchestrator:
         self.consensus_threshold = consensus_threshold
         self.max_debate_rounds = max_debate_rounds
         self.status_check_interval = status_check_interval
-        self.thread_pool_timeout = thread_pool_timeout
         self.streaming_orchestrator = streaming_orchestrator
 
         # Simplified coordination
@@ -144,6 +139,23 @@ class MassOrchestrator:
         Get count of agents who currently have status "voted".
         """
         return len([s for s in self.agent_states.values() if s.status == "voted"])
+    
+    def _get_votes_cast_by_agent(self) -> Dict[int, int]:
+        """
+        Get count of votes cast by each agent (as voter).
+        Returns dict of agent_id -> vote_count.
+        """
+        votes_cast = {}
+        # Initialize all agents with 0 votes
+        for agent_id in self.agent_states.keys():
+            votes_cast[agent_id] = 0
+        
+        # Count votes in the permanent vote history
+        for vote in self.votes:
+            if vote.voter_id in votes_cast:
+                votes_cast[vote.voter_id] += 1
+        
+        return votes_cast
 
     def _get_voting_status(self) -> Dict[str, Any]:
         """Get current voting status and distribution."""
@@ -233,6 +245,10 @@ class MassOrchestrator:
                 # Update agent update count
                 update_count = len(self.agent_states[voter_id].update_history)
                 self.streaming_orchestrator.update_agent_update_count(voter_id, update_count)
+                # Update vote cast counts for all agents
+                votes_cast_by_agent = self._get_votes_cast_by_agent()
+                for agent_id, votes_cast in votes_cast_by_agent.items():
+                    self.streaming_orchestrator.update_agent_votes_cast(agent_id, votes_cast)
                 vote_counts = self._get_current_vote_counts()
                 self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
                 vote_msg = f"🗳️ Agent {voter_id} voted for Agent {target_id}"
@@ -351,6 +367,10 @@ class MassOrchestrator:
                 if self.streaming_orchestrator:
                     vote_counts = self._get_current_vote_counts()
                     self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
+                    # Update vote cast counts for all agents to ensure accuracy
+                    votes_cast_by_agent = self._get_votes_cast_by_agent()
+                    for agent_id, votes_cast in votes_cast_by_agent.items():
+                        self.streaming_orchestrator.update_agent_votes_cast(agent_id, votes_cast)
             
             return restarted_agents
         
@@ -830,7 +850,6 @@ class MassOrchestrator:
     def _present_final_answer(self, task: TaskInput):
         """
         Run the final presentation by the representative agent.
-        The representative agent receives PRESENTATION_NOTIFICATION with vote information.
         """
         representative_id = self.system_state.representative_agent_id
         if not representative_id:
@@ -850,40 +869,6 @@ class MassOrchestrator:
         except Exception as e:
             logger.error(f"❌ Final presentation failed: {e}")
             self.final_response = f"Error in final presentation: {str(e)}"
-
-    def _get_system_instruction(self, agent_id: int) -> str:
-        """Get system instruction for an agent."""
-        peer_agents = [str(aid) for aid in self.agents.keys() if aid != agent_id]
-        return SYSTEM_INSTRUCTION.format(agent_id=agent_id, peer_agents=peer_agents)
-    
-    def _get_current_vote_info(self) -> str:
-        """
-        Get current vote information for each agent.
-        """
-        # Find the latest vote record for each agent
-        latest_votes = {}
-        for vote in self.votes:
-            if (vote.voter_id not in latest_votes) or (vote.timestamp > latest_votes[vote.voter_id].timestamp):
-                latest_votes[vote.voter_id] = vote
-
-        # Format the latest votes
-        votes_text = ""
-        for voter_id, vote in latest_votes.items():
-            votes_text += f"Agent {voter_id}: {vote.target_id} votes - {vote.reason}\n\n"
-        
-        return votes_text
-    
-    def _get_presentation_instruction(self) -> str:
-        """
-        Get instruction for final presentation using PRESENTATION_NOTIFICATION template.
-        """
-        return PRESENTATION_NOTIFICATION.format(votes=self._get_current_vote_info())
-
-    def _get_debate_instruction(self) -> str:
-        """
-        Get instruction for debate phase using DEBATE_NOTIFICATION template.
-        """
-        return DEBATE_NOTIFICATION.format(votes=self._get_current_vote_info())
              
     def _force_consensus_by_timeout(self):
         """
@@ -907,7 +892,7 @@ class MassOrchestrator:
                 logger.info(f"   No votes - selected Agent {winning_agent_id} as fallback")
                 
             self._reach_consensus(winning_agent_id)
-            
+
     def _finalize_session(self) -> Dict[str, Any]:
         """
         Finalize the session and return comprehensive results.

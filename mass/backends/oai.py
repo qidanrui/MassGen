@@ -148,8 +148,11 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
             if message.get("role", "") == "system":
                 instructions = message["content"]
             else:
+                # Clean the function calls' id to avoid the requirements of related reasoning items
+                if message.get("type", "") == "function_call" and message.get("id", None) is not None:
+                    del message["id"]
                 input_text.append(message)
-
+                
         # Make API request with retry logic (use Responses API for all models)
         completion = None
         retry = 0

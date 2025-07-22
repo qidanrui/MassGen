@@ -37,6 +37,7 @@ class MultiRegionDisplay:
         self._agent_vote_targets: Dict[int, Optional[int]] = {}
         self._agent_chat_rounds: Dict[int, int] = {}
         self._agent_update_counts: Dict[int, int] = {}  # Track update history count
+        self._agent_votes_cast: Dict[int, int] = {}  # Track number of votes cast by each agent
         
         # Border consistency tracking - improved tracking
         self._terminal_width = None
@@ -111,7 +112,15 @@ class MultiRegionDisplay:
                 (char_code >= 0x1F000 and char_code <= 0x1FAFF) or  # Emoji blocks
                 (char_code >= 0x2600 and char_code <= 0x27BF) or   # Misc symbols  
                 (char_code >= 0x1F300 and char_code <= 0x1F5FF) or  # More emojis
+                (char_code >= 0x1F600 and char_code <= 0x1F64F) or  # Emoticons
+                (char_code >= 0x1F680 and char_code <= 0x1F6FF) or  # Transport & Map
+                (char_code >= 0x1F700 and char_code <= 0x1F77F) or  # Alchemical
+                (char_code >= 0x1F780 and char_code <= 0x1F7FF) or  # Geometric Shapes Extended
+                (char_code >= 0x1F800 and char_code <= 0x1F8FF) or  # Supplemental Arrows-C
                 (char_code >= 0x1F900 and char_code <= 0x1F9FF) or  # Supplemental symbols
+                (char_code >= 0x2190 and char_code <= 0x21FF) or   # Arrows
+                (char_code >= 0x2700 and char_code <= 0x27BF) or   # Dingbats
+                (char_code >= 0x25A0 and char_code <= 0x25FF) or   # Geometric shapes
                 unicodedata.east_asian_width(char) in ('F', 'W')    # Full-width
             ):
                 width += 2
@@ -246,6 +255,10 @@ class MultiRegionDisplay:
         if actual_width != expected_width:
             self._border_error_count += 1
             
+            # Log border inconsistency for debugging (only occasionally to avoid spam)
+            if self._border_error_count % 50 == 1:
+                print(f"DEBUG: Border width mismatch #{self._border_error_count}: expected {expected_width}, got {actual_width}", flush=True)
+            
             # More robust border correction
             if line.startswith('│') and line.endswith('│'):
                 # Extract content between borders
@@ -347,6 +360,11 @@ class MultiRegionDisplay:
         """Update the update count for an agent."""
         with self._lock:
             self._agent_update_counts[agent_id] = count
+    
+    def update_agent_votes_cast(self, agent_id: int, votes_cast: int):
+        """Update the number of votes cast by an agent."""
+        with self._lock:
+            self._agent_votes_cast[agent_id] = votes_cast
     
     def update_debate_rounds(self, rounds: int):
         """Update the debate rounds count."""
@@ -633,11 +651,13 @@ class MultiRegionDisplay:
             chat_round = getattr(self, '_agent_chat_rounds', {}).get(agent_id, 0)
             vote_target = getattr(self, '_agent_vote_targets', {}).get(agent_id)
             update_count = getattr(self, '_agent_update_counts', {}).get(agent_id, 0)
+            votes_cast = getattr(self, '_agent_votes_cast', {}).get(agent_id, 0)
             
             # Format state info with better handling of color codes (removed redundant status)
             state_info = []
             state_info.append(f"{BRIGHT_WHITE}Round:{RESET} {BRIGHT_GREEN}{chat_round}{RESET}")
-            state_info.append(f"{BRIGHT_WHITE}Updates:{RESET} {BRIGHT_MAGENTA}{update_count}{RESET}")
+            state_info.append(f"{BRIGHT_WHITE}#Updates:{RESET} {BRIGHT_MAGENTA}{update_count}{RESET}")
+            state_info.append(f"{BRIGHT_WHITE}#Votes:{RESET} {BRIGHT_CYAN}{votes_cast}{RESET}")
             if vote_target:
                 state_info.append(f"{BRIGHT_WHITE}Vote →{RESET} {BRIGHT_GREEN}{vote_target}{RESET}")
             else:
@@ -821,6 +841,10 @@ class StreamingOrchestrator:
     def update_agent_update_count(self, agent_id: int, count: int):
         """Update the update count for an agent."""
         self.display.update_agent_update_count(agent_id, count)
+    
+    def update_agent_votes_cast(self, agent_id: int, votes_cast: int):
+        """Update the number of votes cast by an agent."""
+        self.display.update_agent_votes_cast(agent_id, votes_cast)
     
     def update_debate_rounds(self, rounds: int):
         """Update the debate rounds count."""

@@ -383,15 +383,13 @@ class MassAgent(ABC):
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": self._get_task_input(task)}
         ]
-            
-        
+               
     @abstractmethod
     def _get_builtin_tools(self) -> List[Dict[str, Any]]:
         """Return the built-in tools that are available to different agent backends."""
         pass
     
-    @abstractmethod
-    def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    def work_on_task(self, task: TaskInput) -> List[Dict[str, str]]:
         """
         Work on the task with conversation continuation.
         
@@ -405,5 +403,82 @@ class MassAgent(ABC):
             
         This method should be implemented by concrete agent classes.
         The agent continues the conversation until it votes or reaches max rounds.
-        """
-        pass
+        """  
+        
+        # Get available tools (system tools + built-in tools + custom tools)
+        all_tools = []
+        all_tools.extend(self._get_builtin_tools())
+        all_tools.extend(self._get_registered_tools())
+        all_tools.extend(self._get_system_tools())
+        
+        # Initialize working messages
+        curr_round = 0
+        working_messages = self._get_task_input_messages(task)
+        
+        # Start the task solving loop
+        while curr_round < self.max_rounds and self.state.status == "working":
+            try:
+                # Call LLM with current conversation
+                result = self.process_message(messages=working_messages, 
+                                              tools=all_tools)
+                
+                # Add assistant response
+                if result.text:
+                    working_messages.append({"role": "assistant", "content": result.text})
+                
+                # Execute function calls if any
+                if result.function_calls:
+                    # Deduplicate function calls by their name
+                    result.function_calls = self.deduplicate_function_calls(result.function_calls)
+                    function_outputs = self._execute_function_calls(result.function_calls)
+
+                    continue_loop = True
+                    for function_call, function_output in zip(result.function_calls, function_outputs):
+                        # If call `new_answer`, we need to rebuild the conversation history with new answers
+                        if function_call.get("name") == "new_answer":
+                            working_messages = self._get_task_input_messages(task)
+                            continue_loop = False
+                            break
+                    
+                        # If call `vote`, we need to break the loop
+                        if function_call.get("name") == "vote":
+                            continue_loop = False
+                            break
+                        
+                    if continue_loop:
+                        # Add all function call results to the current conversation
+                        for function_call, function_output in zip(result.function_calls, function_outputs):
+                            working_messages.extend([function_call, function_output])
+                else:
+                    # No function calls - check if we should continue or stop
+                    if self.state.status == "voted":
+                        # Agent has voted, exit the work loop
+                        break
+                    else:
+                        # Check if there is any update from other agents that are unseen by this agent
+                        has_update = self.check_update()
+                        if has_update: 
+                            # Renew the conversation within the loop
+                            working_messages = self._get_task_input_messages(task)
+                        else: # Continue the current conversation and prompting checkin
+                            working_messages.append({"role": "user", "content": "Please use either `add_answer` or `vote` tool once your analysis is done."})
+                 
+                curr_round += 1
+                self.state.chat_round += 1        
+                
+                # Check if agent voted or failed
+                if self.state.status in ["voted", "failed"]:
+                    break
+                
+            except Exception as e:
+                print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")                   
+                if self.orchestrator:
+                    self.orchestrator.mark_agent_failed(self.agent_id, str(e))
+                self.state.chat_round += 1
+                # DEBUGGING
+                with open("errors.txt", "a") as f:
+                    f.write(f"Agent {self.agent_id} error in round {self.state.chat_round}: {e}\n")
+                    f.write(traceback.format_exc())
+                    f.write("\n\n")
+                           
+        return working_messages
