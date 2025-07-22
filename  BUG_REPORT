@@ -5,10 +5,12 @@ OpenAI:
 Grok:
 - chat history has new user messages, but not in correct order
 - Check the work_on_task function
+- round number always 0
 
 Gemini:
 - Tool swap not finished
 - Check the work_on_task function
+- round number always 0
 
 Prompt:
 - Make summary report complete, self-contained
@@ -25,11 +27,31 @@ TODO:
 - Fix the bug for gemini tool conflict
 - logging file figured out (folder, log.txt)
 
+
+Vote:
+- Looks not accurate
+
+Prompt for summary:
+- check each message
+
 Display and loggings:
 - where are all the information stored?
-- Multi-region display:
- - use border and color for better distuinguishing
- - add border (上下左右) to every region
- - region border should always be strict (but now it is not)
- - for each region (agents and system), display their useful state information in real-time, like phase, status, vote_target, please refer to mass/types.py for useful agent and system state.
- - in the bottom part where we display system events. Can you also add an emoji indicate the agent status change? Like before: Agent 2: working → voted, add an emoji
+- there are four types of logging information:
+    - the multi-region streaming display UI
+    - vote record and summary record for each agent
+
+Border display issues (FIXED):
+- ✅ Border alignment inconsistencies resolved
+- ✅ Terminal width detection locked for consistent display
+- ✅ Width calculation methods unified to prevent discrepancies 
+- ✅ ANSI escape sequence handling improved
+- ✅ Padding and truncation logic simplified for reliability
+- ✅ Border validation method improved with unified width calculation
+- ✅ Terminal resize detection added to reset cached dimensions
+- ✅ Error handling improved with fallback display mode
+
+TODO:
+- change cli to accept user input
+- add the automatic removal of txt file at the beginning of cli
+- check their history and polish the prompt
+- check why round = 0

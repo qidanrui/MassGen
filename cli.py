@@ -12,6 +12,9 @@ Usage examples:
     # Use model names directly (single or multiple agents)
     python cli.py "What is 2+2?" --models gpt-4o gemini-2.5-flash
     python cli.py "What is 2+2?" --models gpt-4o  # Single agent mode
+    
+    # Interactive mode (no question provided)
+    python cli.py --models gpt-4o grok-4
 """
 
 import argparse
@@ -25,6 +28,110 @@ from mass import (
     run_mass_with_config, load_config_from_yaml, create_config_from_models, 
     ConfigurationError
 )
+
+
+def run_interactive_mode(config):
+    """Run MASS in interactive mode, asking for questions repeatedly."""
+    print("\n🤖 MASS Interactive Mode")
+    print("="*60)
+    
+    # Display current configuration
+    print("📋 Current Configuration:")
+    print("-" * 30)
+    
+    # Show models/agents
+    if hasattr(config, 'agents') and config.agents:
+        print(f"🤖 Agents ({len(config.agents)}):")
+        for i, agent in enumerate(config.agents, 1):
+            model_name = getattr(agent.model_config, 'model', 'Unknown') if hasattr(agent, 'model_config') else 'Unknown'
+            agent_type = getattr(agent, 'agent_type', 'Unknown')
+            tools = getattr(agent.model_config, 'tools', []) if hasattr(agent, 'model_config') else []
+            tools_str = ', '.join(tools) if tools else 'None'
+            print(f"   {i}. {model_name} ({agent_type})")
+            print(f"      Tools: {tools_str}")
+    else:
+        print("🤖 Single Agent Mode")
+    
+    # Show orchestrator settings
+    if hasattr(config, 'orchestrator'):
+        orch = config.orchestrator
+        print(f"⚙️  Orchestrator:")
+        print(f"   • Duration: {getattr(orch, 'max_duration', 'Default')}s")
+        print(f"   • Consensus: {getattr(orch, 'consensus_threshold', 'Default')}")
+        print(f"   • Max Rounds: {getattr(orch, 'max_debate_rounds', 'Default')}")
+    
+    # Show model parameters (from first agent as representative)
+    if hasattr(config, 'agents') and config.agents and hasattr(config.agents[0], 'model_config'):
+        model_config = config.agents[0].model_config
+        print(f"🔧 Model Config:")
+        temp = getattr(model_config, 'temperature', 'Default')
+        timeout = getattr(model_config, 'processing_timeout', 'Default')
+        max_rounds = getattr(model_config, 'max_rounds', 'Default')
+        print(f"   • Temperature: {temp}")
+        print(f"   • Timeout: {timeout}s")
+        print(f"   • Max Rounds: {max_rounds}")
+    
+    # Show display settings
+    if hasattr(config, 'streaming_display'):
+        display = config.streaming_display
+        display_status = "✅ Enabled" if getattr(display, 'display_enabled', True) else "❌ Disabled"
+        logs_status = "✅ Enabled" if getattr(display, 'save_logs', True) else "❌ Disabled"
+        print(f"📺 Display: {display_status}")
+        print(f"📁 Logs: {logs_status}")
+    
+    print("-" * 30)
+    print("💬 Type your questions below. Type 'quit', 'exit', or press Ctrl+C to stop.")
+    print("="*60)
+    
+    try:
+        while True:
+            try:
+                question = input("\nUser: ").strip()
+                
+                if question.lower() in ['quit', 'exit', 'q']:
+                    print("👋 Goodbye!")
+                    break
+                
+                if not question:
+                    print("Please enter a question or type 'quit' to exit.")
+                    continue
+                
+                print("\n🔄 Processing your question...")
+                
+                # Run MASS
+                result = run_mass_with_config(question, config)
+                
+                # Display results
+                print("\n" + "="*60)
+                print("🎯 FINAL ANSWER:")
+                print("="*60)
+                print(result["answer"])
+                print("\n" + "="*60)
+                
+                # Show different metadata based on single vs multi-agent mode
+                if result.get("single_agent_mode", False):
+                    print("🤖 Single Agent Mode")
+                    print(f"✅ Model: {result.get('model_used', 'Unknown')}")
+                    print(f"⏱️  Duration: {result['session_duration']:.1f}s")
+                    if result.get("citations"):
+                        print(f"📚 Citations: {len(result['citations'])}")
+                    if result.get("code"):
+                        print(f"💻 Code blocks: {len(result['code'])}")
+                else:
+                    print(f"✅ Consensus: {result['consensus_reached']}")
+                    print(f"⏱️  Duration: {result['session_duration']:.1f}s")
+                    print(f"🗳️  Votes: {result['summary']['final_vote_distribution']}")
+                    print(f"🤖 Agents: {len(config.agents)}")
+                
+            except KeyboardInterrupt:
+                print("\n👋 Goodbye!")
+                break
+            except Exception as e:
+                print(f"❌ Error processing question: {e}")
+                print("Please try again or type 'quit' to exit.")
+                
+    except KeyboardInterrupt:
+        print("\n👋 Goodbye!")
 
 
 def main():
@@ -41,13 +148,16 @@ Examples:
   python cli.py "What is 2+2?" --models gpt-4o gemini-2.5-flash
   python cli.py "What is 2+2?" --models gpt-4o  # Single agent mode
   
+  # Interactive mode (no question provided)
+  python cli.py --models gpt-4o grok-4
+  
   # Override parameters
   python cli.py "Question" --models gpt-4o gemini-2.5-flash --max-duration 1200 --consensus 0.8
         """
     )
     
-    # Task input (positional argument must come before nargs='+' to avoid conflicts)
-    parser.add_argument("question", help="Question to solve")
+    # Task input (now optional for interactive mode)
+    parser.add_argument("question", nargs='?', help="Question to solve (optional - if not provided, enters interactive mode)")
     
     # Configuration options (mutually exclusive)
     config_group = parser.add_mutually_exclusive_group(required=True)
@@ -92,30 +202,35 @@ Examples:
         # Validate final configuration
         config.validate()
         
-        # Run MASS
-        result = run_mass_with_config(args.question, config)
-        
-        # Display results
-        print("\n" + "="*60)
-        print("🎯 FINAL ANSWER:")
-        print("="*60)
-        print(result["answer"])
-        print("\n" + "="*60)
-        
-        # Show different metadata based on single vs multi-agent mode
-        if result.get("single_agent_mode", False):
-            print("🤖 Single Agent Mode")
-            print(f"✅ Model: {result.get('model_used', 'Unknown')}")
-            print(f"⏱️  Duration: {result['session_duration']:.1f}s")
-            if result.get("citations"):
-                print(f"📚 Citations: {len(result['citations'])}")
-            if result.get("code"):
-                print(f"💻 Code blocks: {len(result['code'])}")
+        # Check if question was provided
+        if args.question:
+            # Single question mode
+            result = run_mass_with_config(args.question, config)
+            
+            # Display results
+            print("\n" + "="*60)
+            print("🎯 FINAL ANSWER:")
+            print("="*60)
+            print(result["answer"])
+            print("\n" + "="*60)
+            
+            # Show different metadata based on single vs multi-agent mode
+            if result.get("single_agent_mode", False):
+                print("🤖 Single Agent Mode")
+                print(f"✅ Model: {result.get('model_used', 'Unknown')}")
+                print(f"⏱️  Duration: {result['session_duration']:.1f}s")
+                if result.get("citations"):
+                    print(f"📚 Citations: {len(result['citations'])}")
+                if result.get("code"):
+                    print(f"💻 Code blocks: {len(result['code'])}")
+            else:
+                print(f"✅ Consensus: {result['consensus_reached']}")
+                print(f"⏱️  Duration: {result['session_duration']:.1f}s")
+                print(f"🗳️  Votes: {result['summary']['final_vote_distribution']}")
+                print(f"🤖 Agents: {len(config.agents)}")
         else:
-            print(f"✅ Consensus: {result['consensus_reached']}")
-            print(f"⏱️  Duration: {result['session_duration']:.1f}s")
-            print(f"🗳️  Votes: {result['summary']['final_vote_distribution']}")
-            print(f"🤖 Agents: {len(config.agents)}")
+            # Interactive mode
+            run_interactive_mode(config)
         
     except ConfigurationError as e:
         print(f"❌ Configuration error: {e}")

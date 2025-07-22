@@ -40,8 +40,8 @@ class MassOrchestrator:
         self,
         max_duration: int = 600,
         consensus_threshold: float = 1.0,
-        max_debate_rounds: int = 3,
-        status_check_interval: float = 1.0,
+        max_debate_rounds: int = 2,
+        status_check_interval: float = 2.0,
         thread_pool_timeout: int = 5,
         streaming_orchestrator=None,
     ):
@@ -261,6 +261,9 @@ class MassOrchestrator:
             if self.streaming_orchestrator:
                 self.streaming_orchestrator.update_agent_status(voter_id, "voted")
                 self.streaming_orchestrator.update_agent_vote_target(voter_id, target_id)
+                # Update agent update count
+                update_count = len(self.agent_states[voter_id].update_history)
+                self.streaming_orchestrator.update_agent_update_count(voter_id, update_count)
                 vote_counts = self._get_current_vote_counts()
                 self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
                 vote_msg = f"🗳️ Agent {voter_id} voted for Agent {target_id}"
@@ -330,6 +333,9 @@ class MassOrchestrator:
         if self.streaming_orchestrator:
             summary_msg = f"📝 Agent {agent_id} updated summary ({len(summary)} chars)"
             self.streaming_orchestrator.add_system_message(summary_msg)
+            # Update agent update count
+            update_count = len(self.agent_states[agent_id].update_history)
+            self.streaming_orchestrator.update_agent_update_count(agent_id, update_count)
         
         # CRITICAL FIX: Restart voted agents when any agent shares new updates
         with self._lock:
@@ -342,7 +348,7 @@ class MassOrchestrator:
                     
                     # Restart the voted agent
                     state.status = "working"
-                    # state.vote_target = None
+                    state.vote_target = None  # CRITICAL FIX: Clear vote target when restarting
                     state.execution_start_time = time.time()
                     restarted_agents.append(other_agent_id)
                     
@@ -351,6 +357,10 @@ class MassOrchestrator:
                     # Update streaming display
                     if self.streaming_orchestrator:
                         self.streaming_orchestrator.update_agent_status(other_agent_id, "working")
+                        self.streaming_orchestrator.update_agent_vote_target(other_agent_id, None)  # Clear vote target in display
+                        # Update agent update count for restarted agent
+                        update_count = len(self.agent_states[other_agent_id].update_history)
+                        self.streaming_orchestrator.update_agent_update_count(other_agent_id, update_count)
                         restart_msg = f"🔄 Agent {other_agent_id} restarted due to new update"
                         self.streaming_orchestrator.add_system_message(restart_msg)
                     
@@ -634,6 +644,8 @@ class MassOrchestrator:
                 if self.streaming_orchestrator:
                     self.streaming_orchestrator.set_agent_model(agent_id, agent.model)
                     self.streaming_orchestrator.update_agent_status(agent_id, "working")
+                    # Initialize agent update count
+                    self.streaming_orchestrator.update_agent_update_count(agent_id, 0)
 
             # Clear previous session data
             self.votes.clear()
@@ -642,6 +654,8 @@ class MassOrchestrator:
             # Initialize streaming display system message
             if self.streaming_orchestrator:
                 self.streaming_orchestrator.update_phase("unknown", "collaboration")
+                # Initialize debate rounds to 0
+                self.streaming_orchestrator.update_debate_rounds(0)
                 init_msg = f"🚀 Starting MASS task with {len(self.agents)} agents"
                 self.streaming_orchestrator.add_system_message(init_msg)
 
@@ -688,6 +702,10 @@ class MassOrchestrator:
                 else:
                     # No consensus - start debate round
                     debate_rounds += 1
+                    # Update streaming display with new debate round count
+                    if self.streaming_orchestrator:
+                        self.streaming_orchestrator.update_debate_rounds(debate_rounds)
+                    
                     if debate_rounds >= self.max_debate_rounds:
                         logger.warning(f"⚠️ Maximum debate rounds ({self.max_debate_rounds}) reached")
                         self._force_consensus_by_timeout()
@@ -778,6 +796,9 @@ class MassOrchestrator:
             # Update streaming display with chat round
             if self.streaming_orchestrator:
                 self.streaming_orchestrator.update_agent_chat_round(agent_id, agent.state.chat_round)
+                # Update agent update count
+                update_count = len(self.agent_states[agent_id].update_history)
+                self.streaming_orchestrator.update_agent_update_count(agent_id, update_count)
             
             logger.info(f"✅ Agent {agent_id} completed work with status: {self.agent_states[agent_id].status}")
             
@@ -826,11 +847,15 @@ class MassOrchestrator:
                 if state.status not in ["failed"]:
                     old_status = state.status
                     state.status = "working"
-                    state.vote_target = None
+                    state.vote_target = None  # CRITICAL FIX: Clear vote target when restarting for debate
                     
                     # Update streaming display for each agent
                     if self.streaming_orchestrator:
                         self.streaming_orchestrator.update_agent_status(agent_id, "working")
+                        self.streaming_orchestrator.update_agent_vote_target(agent_id, None)  # Clear vote target in display
+                        # Update agent update count for debate restart
+                        update_count = len(self.agent_states[agent_id].update_history)
+                        self.streaming_orchestrator.update_agent_update_count(agent_id, update_count)
                     
                     # Log agent restart
                     if self.log_manager:
@@ -849,6 +874,11 @@ class MassOrchestrator:
             
             # Update system phase
             self.system_state.phase = "collaboration"
+            
+            # Update vote distribution in streaming display after clearing all vote targets
+            if self.streaming_orchestrator:
+                vote_counts = self._get_current_vote_counts()
+                self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
 
     def _run_final_presentation(self, task: TaskInput):
         """

@@ -47,7 +47,7 @@ class ModelConfig:
     model: Optional[str] = None
     tools: Optional[List[str]] = None
     max_retries: int = 10 # max retries for each LLM call
-    max_rounds: int = 25 # max round for task
+    max_rounds: int = 20 # max round for task
     max_tokens: Optional[int] = None
     temperature: Optional[float] = None
     top_p: Optional[float] = None
@@ -162,7 +162,7 @@ class StreamingDisplayConfig:
     """Configuration for streaming display system."""
     
     display_enabled: bool = True
-    max_lines: int = 40
+    max_lines: int = 30
     save_logs: bool = True
     stream_callback: Optional[Any] = None  # Callable, but avoid circular imports
 
@@ -182,8 +182,8 @@ class OrchestratorConfig:
     
     max_duration: int = 600
     consensus_threshold: float = 1.0
-    max_debate_rounds: int = 3
-    status_check_interval: float = 1.0
+    max_debate_rounds: int = 2
+    status_check_interval: float = 2.0
     thread_pool_timeout: int = 5
 
 
