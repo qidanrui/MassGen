@@ -9,9 +9,9 @@
   </a>
 </div>
 
-> 🧠 **Advanced multi-agent orchestrator that emulates Grok Heavy through intelligent collaboration**
+> 🧠 **Next-gen multi-agent scaling through intelligent collaboration in Grok Heavy style**
 
-MASS is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result. This project is inspired by the ideas presented in [The Myth of Reasoning](https://docs.ag2.ai/latest/docs/blog/#the-myth-of-reasoning) and aims to emulate the power of systems like grok-4 heavy.
+MASS is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result. This project is inspired by the "threads of thoughts" and "iterative refinement" ideas presented in [The Myth of Reasoning](https://docs.ag2.ai/latest/docs/blog/#the-myth-of-reasoning), the power of "parallel study group" demonstrated in premium commercial prodcuts like [Grok Heavy](https://x.ai/news/grok-4#grok-4-heavy), and extends the classic "multi-agent conversation" idea in [AG2](https://github.com/ag2ai/ag2).
 
 ---
 
@@ -29,11 +29,10 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 
 | Feature | Description |
 |---------|-------------|
-| **🧠 Grok Heavy Emulation** | Multi-agent system delivering deep, comprehensive analysis |
+| **🤝 Cross-Model/Agent Synergy** | Scale up intelligence by combining strengths from diverse frontier model-powered agents |
 | **⚡ Parallel Processing** | Multiple agents tackle problems simultaneously |
 | **👥 Intelligence Sharing** | Agents share and learn from each other's work |
 | **🔄 Consensus Building** | Natural convergence through collaborative refinement |
-| **🔄 Multi-Region Display** | Display all agents' running process in different regions |
 
 ---
 
