@@ -26,7 +26,7 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 | **⚡ Parallel Processing** | Multiple agents tackle problems simultaneously |
 | **👥 Intelligence Sharing** | Agents share and learn from each other's work |
 | **🔄 Consensus Building** | Natural convergence through collaborative refinement |
-| **🔄 Mulit-Region Display** | Display all agents' running process in different regions |
+| **🔄 Multi-Region Display** | Display all agents' running process in different regions |
 
 ---
 
@@ -147,49 +147,19 @@ The system shows real-time collaboration between agents in a multi-region displa
 
 ---
 
-## ⚠️ Project Status
+##  Roadmap
 
-> **Early Development Stage** - This project is currently in active development and requires significant improvements.
+MASS is currently in its foundational stage, with a focus on core multi-agent collaboration and orchestration. Our roadmap is centered on enhancing this framework to build a more robust, intelligent, and user-friendly system.
 
-### Current Limitations
+### Key Future Enhancements:
 
-- **Basic Implementation**: The current system provides an early prototype but lacks the sophisticated features planned for the full MASS system
-- **Limited Model Support**: Claude/Anthropic integration is planned but not yet implemented (Gemini, OpenAI, and xAI/Grok are currently supported)
-- **Simple Collaboration**: Current notification and convergence mechanisms need enhancement for seamless real-time collaboration
-- **Resource Management**: System needs better streaming optimization and performance improvements for smooth multi-agent coordination
+-   **Advanced Agent Collaboration:** Implementing more sophisticated communication and consensus-building protocols to improve agent synergy.
+-   **Expanded Model & Tool Integration:** Adding support for more models, including Claude, and integrating a wider range of tools like MCP Servers.
+-   **Improved Performance & Scalability:** Optimizing the streaming and logging mechanisms for better performance and resource management.
+-   **Enhanced Developer Experience:** Introducing a more modular agent design and a comprehensive benchmarking framework for easier extension and evaluation.
+-   **Web Interface:** Developing a web-based UI for better visualization and interaction with the agent ecosystem.
 
-### 🔮 Future Direction
-
-This project is evolving toward the **advanced MASS architecture** found in `future_mass/`, which includes:
-
-- **Enhanced Agent Interface**: Sophisticated `update_summary()`, `check_updates()`, and notification systems
-- **Comprehensive Backend Support**: Full integration with Claude, Gemini, GPT, Grok + tools and MCP servers
-- **Rich Analytics & Tracing**: Detailed performance analysis, cost tracking, and API tracing capabilities
-- **Extensible Framework**: Modular design for easy addition of new agents, benchmarks, and evaluation; integration with AgentOS like [AG2](ag2.ai).
-
-### 📋 Planned Improvements
-
-- [ ] Implement advanced agent collaboration patterns in `future_mass/`
-- [ ] Add comprehensive tool integration and MCP server support
-- [ ] Enhance streaming display system with better formatting
-- [ ] Implement proper cost tracking and budget management
-- [ ] Add benchmarking framework for evaluation
-- [ ] Improve error handling and graceful failure recovery
-- [ ] Add web interface for better visualization and control
-
-### 📋 TODO
-
-- [x] Fix Grok Fake Stream
-- [x] (optional) Convert Gemini from Request to API
-- [x] Add function call feature to backends
-- [x] The backends should support both their built-in tools (if exists) and provided custom tools
-- [ ] Re-design the Agent Class, with the running config (temperaute, top_p) intialized, and add a work_on_task function
-- [ ] Change the workflow from system maintained to agent maintain
-- [ ] (optional) Add Claude and Fireworks backend
-- [ ] (optional) Add more tools (DuckDuckGo Search, and calculators)
-
-
-**Contributions Welcome!** We encourage developers to help bridge the gap between the current implementation and the target architecture.
+We welcome community contributions to help us achieve these goals.
 
 ---
 
