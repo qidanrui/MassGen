@@ -43,7 +43,7 @@ def parse_completion(response, add_citations=True):
                 # OpenAI-style structure: tool_call.function.name, tool_call.function.arguments
                 function_calls.append({
                     "type": "function_call",
-                    "call_id": tool_call.function.id,
+                    "call_id": tool_call.id,
                     "name": tool_call.function.name,
                     "arguments": tool_call.function.arguments
                 })
@@ -289,7 +289,7 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                             if hasattr(tool_call, 'function'):
                                 function_calls.append({
                                     "type": "function_call",
-                                    "call_id": tool_call.function.id,
+                                    "call_id": tool_call.id,
                                     "name": tool_call.function.name,
                                     "arguments": tool_call.function.arguments
                                 })
@@ -307,7 +307,7 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                                     if hasattr(tool_call, 'function'):
                                         function_calls.append({
                                             "type": "function_call",
-                                            "call_id": tool_call.function.id,
+                                            "call_id": tool_call.id,
                                             "name": tool_call.function.name,
                                             "arguments": tool_call.function.arguments
                                         })
@@ -340,7 +340,11 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                                 print(f"Stream callback error: {e}")
 
             except Exception as e:
-                print(f"Streaming error: {e}")
+                import traceback
+                print("Streaming error (full exception):")
+                print(traceback.format_exc())
+                with open("streaming_error.txt", "a") as f:
+                    f.write(traceback.format_exc())
                 # Fall back to non-streaming
                 completion = make_grok_request(stream=False)
                 result = parse_completion(completion, add_citations=True)

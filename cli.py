@@ -216,7 +216,7 @@ Examples:
             
             # Display results
             print("\n" + "="*60)
-            print("🎯 FINAL ANSWER:")
+            print(f"🎯 FINAL ANSWER (Agent {result['representative_agent_id']}):")
             print("="*60)
             print(result["answer"])
             print("\n" + "="*60)
