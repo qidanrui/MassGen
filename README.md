@@ -3,17 +3,24 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+    <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg" alt="MASS Demo Video">
+  </a>
+</div>
+
 > 🧠 **Advanced multi-agent orchestrator that emulates Grok Heavy through intelligent collaboration**
 
-MASS is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result.
+MASS is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result. This project is inspired by the ideas presented in [The Myth of Reasoning](https://docs.ag2.ai/latest/docs/blog/#the-myth-of-reasoning) and aims to emulate the power of systems like grok-4 heavy.
 
 ---
 
 ## 📋 Table of Contents
 
 - [✨ Key Features](#-key-features)
-- [🏗️ How It Works](#️-how-it-works)
+- [🏗️ System Design](#️-system-design)
 - [🚀 Quick Start](#-quick-start)
+- [💡 Examples](#-examples)
 - [🤝 Contributing](#-contributing)
 
 ---
@@ -26,52 +33,40 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 | **⚡ Parallel Processing** | Multiple agents tackle problems simultaneously |
 | **👥 Intelligence Sharing** | Agents share and learn from each other's work |
 | **🔄 Consensus Building** | Natural convergence through collaborative refinement |
+| **🔄 Multi-Region Display** | Display all agents' running process in different regions |
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ System Design
+
+MASS operates through a sophisticated architecture designed for **seamless multi-agent collaboration**:
 
 ```mermaid
 graph TB
     O[🚀 MASS Orchestrator<br/>📋 Task Distribution & Coordination]
 
-    A1[🤖 Agent 1<br/>🏗️ Anthropic/Claude<br/>📝 Working Summary]
-    A2[🤖 Agent 2<br/>🌟 Google/Gemini<br/>📝 Working Summary]
-    A3[🤖 Agent 3<br/>🤖 OpenAI/GPT + Tools<br/>📝 Working Summary]
-    A4[🤖 Agent 4<br/>⚡ xAI/Grok + Search<br/>📝 Working Summary]
+    subgraph Collaborative Agents
+        A1[Agent 1<br/>🏗️ Anthropic/Claude]
+        A2[Agent 2<br/>🌟 Google/Gemini]
+        A3[Agent 3<br/>🤖 OpenAI/GPT + Tools]
+        A4[Agent 4<br/>⚡ xAI/Grok + Search]
+    end
 
-    H[🔄 Shared Collaboration Hub<br/>📡 Real-time Notification System<br/>🎯 Convergence Detection<br/>🤝 Consensus Building]
+    H[🔄 Shared Collaboration Hub<br/>📡 Real-time Notification & Consensus]
 
-    O --> A1
-    O --> A2
-    O --> A3
-    O --> A4
-
-    A1 <--> H
-    A2 <--> H
-    A3 <--> H
-    A4 <--> H
-
-    A1 -.-> A2
-    A1 -.-> A3
-    A1 -.-> A4
-    A2 -.-> A3
-    A2 -.-> A4
-    A3 -.-> A4
+    O --> A1 & A2 & A3 & A4
+    A1 & A2 & A3 & A4 <--> H
 
     classDef orchestrator fill:#e1f5fe,stroke:#0288d1,stroke-width:3px
     classDef agent fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
     classDef hub fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
-    classDef collaboration stroke:#ff9800,stroke-width:1px,stroke-dasharray: 5 5
 
     class O orchestrator
     class A1,A2,A3,A4 agent
     class H hub
 ```
 
-## 🏗️ How It Works
-
-MASS operates through **seamless multi-agent collaboration**:
+The system's workflow is defined by the following key principles:
 
 **Parallel Processing** - Multiple agents tackle the same task simultaneously, each leveraging their unique capabilities (different models, tools, and specialized approaches).
 
@@ -97,77 +92,96 @@ pip install -r requirements.txt
 
 ### 2. 🔐 API Configuration
 
-Create a `.env` file in the `agents/` directory with your API keys:
+Create a `.env` file in the `mass/backends/` directory with your API keys:
 
 ```bash
 # Copy example configuration
-cp agents/.env.example agents/.env
+cp mass/backends/.env.example mass/backends/.env
 
-# Edit agents/.env with your API keys
+# Edit with your API keys
 OPENAI_API_KEY=sk-your-openai-key-here
 XAI_API_KEY=xai-your-xai-key-here
 GEMINI_API_KEY=your-gemini-key-here
 ```
 
-### 3. 🏃 Run Example
+### 3. 🏃 Run MASS
 
+#### Simple Usage
 ```bash
-# Run simple multi-agent example
-python mass_main.py --config example_config.json
+# Run with specific models
+python cli.py --models gpt-4o gemini-2.5-flash "What is 2+2?"
 
-# Or run with custom task
-python cli.py --question "2312312 * (142342 + 222552) = ?" --agents o4-mini,gemini-2.5-flash,grok-4
+# Mathematical calculation
+python cli.py --models gpt-4o gemini-2.5-flash "2312312 * (142342 + 222552) = ?"
+```
+
+#### Configuration File Usage
+```bash
+# Use existing configuration file
+python cli.py --config examples/production.yaml "Complex analysis question"
+
+# Override specific parameters
+python cli.py --config examples/production.yaml "Question" --max-duration 1200 --consensus 0.8
+```
+
+#### Parameter Overrides
+```bash
+# Customize execution parameters
+python cli.py --models gpt-4o gemini-2.5-flash "Question" \
+  --max-duration 1200 \
+  --consensus 0.8 \
+  --max-debates 5 \
+  --no-display \
+  --no-logs
 ```
 
 ### 4. 📊 View Results
 
-The system will show real-time collaboration between agents and present the final converged solution.
+The system shows real-time collaboration between agents in a multi-region display and presents the final converged solution with consensus details.
 
 ---
 
-## ⚠️ Project Status
+## 💡 Examples
 
-> **Early Development Stage** - This project is currently in active development and requires significant improvements.
+Here are a few examples of how you can use MASS for different tasks:
 
-### Current Limitations
+### 1. 📝 Code Generation (TODO: hanoi, video)
 
-- **Basic Implementation**: The current system provides an early prototype but lacks the sophisticated features planned for the full MASS system
-- **Limited Model Support**: Claude/Anthropic integration is planned but not yet implemented (Gemini, OpenAI, and xAI/Grok are currently supported)
-- **Simple Collaboration**: Current notification and convergence mechanisms need enhancement for seamless real-time collaboration
-- **Resource Management**: System needs better streaming optimization and performance improvements for smooth multi-agent coordination
+```bash
+# Generate a Python function to calculate the Fibonacci sequence
+python cli.py --config examples/production.yaml "Write a Python function to calculate the nth Fibonacci number."
+```
 
-### 🔮 Future Direction
+### 2. ❓ Question Answering (TODO: economic, video)
 
-This project is evolving toward the **advanced MASS architecture** found in `future_mass/`, which includes:
+```bash
+# Ask a question about a complex topic
+python cli.py --config examples/production.yaml "Explain the theory of relativity in simple terms."
+```
 
-- **Enhanced Agent Interface**: Sophisticated `update_summary()`, `check_updates()`, and notification systems
-- **Comprehensive Backend Support**: Full integration with Claude, Gemini, GPT, Grok + tools and MCP servers
-- **Rich Analytics & Tracing**: Detailed performance analysis, cost tracking, and API tracing capabilities
-- **Extensible Framework**: Modular design for easy addition of new agents, benchmarks, and evaluation; integration with AgentOS like [AG2](ag2.ai).
+### 3. 🧠 Creative Writing (TODO: try, video)
 
-### 📋 Planned Improvements
+```bash
+# Generate a short story
+python cli.py --config examples/production.yaml "Write a short story about a robot who discovers music."
+```
 
-- [ ] Implement advanced agent collaboration patterns in `future_mass/`
-- [ ] Add comprehensive tool integration and MCP server support
-- [ ] Enhance streaming display system with better formatting
-- [ ] Implement proper cost tracking and budget management
-- [ ] Add benchmarking framework for evaluation
-- [ ] Improve error handling and graceful failure recovery
-- [ ] Add web interface for better visualization and control
+---
 
-### 📋 TODO
-
-- [x] Fix Grok Fake Stream
-- [x] (optional) Convert Gemini from Request to API
-- [x] Add function call feature to backends
-- [x] The backends should support both their built-in tools (if exists) and provided custom tools
-- [ ] Re-design the Agent Class, with the running config (temperaute, top_p) intialized, and add a work_on_task function
-- [ ] Change the workflow from system maintained to agent maintain
-- [ ] (optional) Add Claude and Fireworks backend
-- [ ] (optional) Add more tools (DuckDuckGo Search, and calculators)
+##  Roadmap
 
 
-**Contributions Welcome!** We encourage developers to help bridge the gap between the current implementation and the target architecture.
+MASS is currently in its foundational stage, with a focus on core multi-agent collaboration and orchestration. Our roadmap is centered on enhancing this framework to build a more robust, intelligent, and user-friendly system.
+
+### Key Future Enhancements:
+
+-   **Advanced Agent Collaboration:** Exploring more communication and consensus-building protocols to improve agent synergy.
+-   **Expanded Model & Tool Integration:** Adding support for more models, including Claude, and integrating a wider range of tools like MCP Servers.
+-   **Improved Performance & Scalability:** Optimizing the streaming and logging mechanisms for better performance and resource management.
+-   **Enhanced Developer Experience:** Introducing a more modular agent design and a comprehensive benchmarking framework for easier extension and evaluation.
+-   **Web Interface:** Developing a web-based UI for better visualization and interaction with the agent ecosystem.
+
+We welcome community contributions to help us achieve these goals.
 
 ---
 
