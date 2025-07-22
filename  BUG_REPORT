@@ -28,6 +28,7 @@ TODO:
 Display and loggings:
 - where are all the information stored?
 - Multi-region display:
+ - use border and color for better distuinguishing
  - add border (上下左右) to every region
  - region border should always be strict (but now it is not)
  - for each region (agents and system), display their useful state information in real-time, like phase, status, vote_target, please refer to mass/types.py for useful agent and system state.

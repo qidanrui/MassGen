@@ -46,22 +46,50 @@ class MultiRegionDisplay:
     
     def _validate_border_consistency(self, line: str, expected_width: int) -> str:
         """Validate and correct border alignment issues."""
-        # Simple validation - ensure line meets expected width
         import re
-        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        
+        # Count actual visual width more accurately
+        ansi_escape = re.compile(r'\x1B\[[0-9;]*[a-zA-Z]')
         clean_line = ansi_escape.sub('', line)
         
-        actual_width = sum(2 if ord(c) >= 0x1F000 else 1 for c in clean_line)
+        # Calculate actual display width
+        actual_width = 0
+        for char in clean_line:
+            char_code = ord(char)
+            if (
+                (char_code >= 0x1F000 and char_code <= 0x1FAFF) or  # Emoji blocks
+                (char_code >= 0x2600 and char_code <= 0x27BF) or   # Misc symbols
+                unicodedata.east_asian_width(char) in ('F', 'W')
+            ):
+                actual_width += 2
+            else:
+                actual_width += 1
         
         if actual_width != expected_width:
             self._border_error_count += 1
-            # Force correct width
+            
+            # More sophisticated correction
             if actual_width > expected_width:
-                # Truncate
-                return line[:expected_width]
+                # Truncate safely from the right, preserving border chars
+                excess = actual_width - expected_width
+                if line.endswith('│'):
+                    # Keep the border character, truncate content
+                    content = line[:-1]
+                    truncated_content = content[:max(1, len(content) - excess)]
+                    # Pad to exact width
+                    padding_needed = expected_width - len(truncated_content) - 1
+                    return truncated_content + " " * max(0, padding_needed) + "│"
+                else:
+                    return line[:expected_width]
             else:
-                # Pad
-                return line + " " * (expected_width - actual_width)
+                # Pad to correct width
+                padding_needed = expected_width - actual_width
+                if line.endswith('│'):
+                    # Insert padding before the final border
+                    content = line[:-1]
+                    return content + " " * padding_needed + "│"
+                else:
+                    return line + " " * padding_needed
         
         return line
     
@@ -392,9 +420,9 @@ class MultiRegionDisplay:
             if not text:
                 return 0
             
-            # Strip ANSI escape sequences first
+            # Strip ANSI escape sequences first - improved regex
             import re
-            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+            ansi_escape = re.compile(r'\x1B\[[0-9;]*[a-zA-Z]')
             clean_text = ansi_escape.sub('', text)
             
             # Try wcwidth first if available
@@ -406,7 +434,7 @@ class MultiRegionDisplay:
             except ImportError:
                 pass
             
-            # Simple fallback that's more reliable
+            # Simple fallback that's more reliable for complex content
             width = 0
             for char in clean_text:
                 char_code = ord(char)
@@ -435,10 +463,10 @@ class MultiRegionDisplay:
             if current_width > target_width:
                 # Simple truncation that's safe
                 import re
-                ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+                ansi_escape = re.compile(r'\x1B\[[0-9;]*[a-zA-Z]')
                 clean_text = ansi_escape.sub('', text)
                 
-                # Truncate clean text to fit
+                # Truncate clean text to fit, being conservative
                 truncated = ""
                 width = 0
                 for char in clean_text:
@@ -449,10 +477,13 @@ class MultiRegionDisplay:
                     truncated += char
                     width += char_width
                 
-                # Restore ANSI codes from original text (simple approach)
-                if '\x1B' in text:
-                    # For simplicity, just use the truncated clean text
-                    text = truncated
+                # For text with ANSI codes, try to preserve formatting but truncate safely
+                if '\x1B' in text and len(truncated) > 0:
+                    # Find ANSI codes in original and try to preserve color resets
+                    if '\033[0m' in text:
+                        text = truncated + '\033[0m'  # Add reset to prevent color bleeding
+                    else:
+                        text = truncated
                 else:
                     text = truncated
                 current_width = get_display_width_safe(text)
@@ -475,7 +506,13 @@ class MultiRegionDisplay:
             if final_width != target_width:
                 # Force correct width by truncating or padding as needed
                 if final_width > target_width:
+                    # More aggressive truncation for safety
                     result = result[:target_width]
+                    # Ensure no broken ANSI codes at the end
+                    if result.endswith('\x1B'):
+                        result = result[:-1] + " "
+                    elif len(result) > 1 and result[-2:].startswith('\x1B'):
+                        result = result[:-2] + "  "
                 else:
                     result += " " * (target_width - final_width)
             
@@ -563,20 +600,25 @@ class MultiRegionDisplay:
             chat_round = getattr(self, '_agent_chat_rounds', {}).get(agent_id, 0)
             vote_target = getattr(self, '_agent_vote_targets', {}).get(agent_id)
             
-            # Format state info
+            # Format state info with better handling of color codes
             state_info = []
-            state_info.append(f"{BRIGHT_WHITE}Status: {RESET}{BRIGHT_BLUE}{status}{RESET}")
-            state_info.append(f"{BRIGHT_WHITE}Round: {RESET}{BRIGHT_GREEN}{chat_round}{RESET}")
+            state_info.append(f"{BRIGHT_WHITE}Status:{RESET} {BRIGHT_BLUE}{status}{RESET}")
+            state_info.append(f"{BRIGHT_WHITE}Round:{RESET} {BRIGHT_GREEN}{chat_round}{RESET}")
             if vote_target:
-                state_info.append(f"{BRIGHT_WHITE}Vote → {RESET}{BRIGHT_GREEN}{vote_target}{RESET}")
+                state_info.append(f"{BRIGHT_WHITE}Vote →{RESET} {BRIGHT_GREEN}{vote_target}{RESET}")
             else:
-                state_info.append(f"{BRIGHT_WHITE}Vote: {RESET}None")
+                state_info.append(f"{BRIGHT_WHITE}Vote:{RESET} None")
             
             state_text = f"📊 {' | '.join(state_info)}"
+            # Ensure exact column width with improved padding
             state_content = pad_to_exact_width(state_text, col_width, 'center')
             state_parts.append(state_content)
         
-        print("│" + "│".join(state_parts) + "│")
+        # Validate state line consistency before printing
+        state_line = "│" + "│".join(state_parts) + "│"
+        expected_state_width = actual_display_width
+        state_line = self._validate_border_consistency(state_line, expected_state_width)
+        print(state_line)
         
         # Log file information
         if self.save_logs and hasattr(self, 'session_logs_dir'):
@@ -588,9 +630,10 @@ class MultiRegionDisplay:
                     # Shortened display path
                     display_path = log_path.replace(os.getcwd() + "/", "") if log_path.startswith(os.getcwd()) else log_path
                     
-                    # Safe path truncation
+                    # Safe path truncation with better width handling
                     prefix = "📁 Log: "
-                    max_path_len = col_width - len(prefix) - 10  # Safety margin
+                    # More conservative calculation
+                    max_path_len = max(10, col_width - get_display_width_safe(prefix) - 8)
                     if len(display_path) > max_path_len:
                         display_path = "..." + display_path[-(max_path_len-3):]
                     
@@ -600,7 +643,10 @@ class MultiRegionDisplay:
                     link_content = pad_to_exact_width("", col_width, 'center')
                 link_parts.append(link_content)
             
-            print("│" + "│".join(link_parts) + "│")
+            # Validate log line consistency
+            log_line = "│" + "│".join(link_parts) + "│"
+            log_line = self._validate_border_consistency(log_line, expected_state_width)
+            print(log_line)
         
         print(border_line)
         
@@ -628,16 +674,18 @@ class MultiRegionDisplay:
             consensus_text = "✅ YES" if self.consensus_reached else "❌ NO"
             
             system_state_info = []
-            system_state_info.append(f"{BRIGHT_WHITE}Phase: {RESET}{phase_color}{self.current_phase.upper()}{RESET}")
-            system_state_info.append(f"{BRIGHT_WHITE}Consensus: {RESET}{consensus_color}{consensus_text}{RESET}")
+            system_state_info.append(f"{BRIGHT_WHITE}Phase:{RESET} {phase_color}{self.current_phase.upper()}{RESET}")
+            system_state_info.append(f"{BRIGHT_WHITE}Consensus:{RESET} {consensus_color}{consensus_text}{RESET}")
             if self.representative_agent_id:
-                system_state_info.append(f"{BRIGHT_WHITE}Rep → {RESET}{BRIGHT_GREEN}{self.representative_agent_id}{RESET}")
+                system_state_info.append(f"{BRIGHT_WHITE}Rep →{RESET} {BRIGHT_GREEN}{self.representative_agent_id}{RESET}")
             else:
-                system_state_info.append(f"{BRIGHT_WHITE}Rep: {RESET}None")
+                system_state_info.append(f"{BRIGHT_WHITE}Rep:{RESET} None")
             
             system_header_text = f"{BRIGHT_CYAN}📋 SYSTEM STATE{RESET} - {' | '.join(system_state_info)}"
             system_header_content = pad_to_exact_width(system_header_text, actual_display_width - 2, 'left')
-            print(f"│{system_header_content}│")
+            system_header_line = f"│{system_header_content}│"
+            system_header_line = self._validate_border_consistency(system_header_line, actual_display_width)
+            print(system_header_line)
             
             # System log file link
             if self.save_logs and hasattr(self, 'system_log_file'):
@@ -646,25 +694,29 @@ class MultiRegionDisplay:
                     UNDERLINE = '\033[4m'
                     display_path = system_log_path.replace(os.getcwd() + "/", "") if system_log_path.startswith(os.getcwd()) else system_log_path
                     
-                    # Safe path truncation
+                    # Safe path truncation with consistent width handling
                     prefix = "📁 Log: "
-                    max_path_len = actual_display_width - len(prefix) - 10
+                    max_path_len = max(10, actual_display_width - get_display_width_safe(prefix) - 15)
                     if len(display_path) > max_path_len:
                         display_path = "..." + display_path[-(max_path_len-3):]
                     
                     system_link_text = f"{prefix}{UNDERLINE}{display_path}{RESET}"
                     system_link_content = pad_to_exact_width(system_link_text, actual_display_width - 2, 'left')
-                    print(f"│{system_link_content}│")
+                    system_link_line = f"│{system_link_content}│"
+                    system_link_line = self._validate_border_consistency(system_link_line, actual_display_width)
+                    print(system_link_line)
             
             print(border_line)
             
-            # System messages with exact width
+            # System messages with exact width and validation
             if self.consensus_reached and self.representative_agent_id is not None:
                 consensus_msg = f"🎉 CONSENSUS REACHED! Representative: Agent {self.representative_agent_id}"
                 consensus_content = pad_to_exact_width(consensus_msg, actual_display_width - 2, 'left')
-                print(f"│{consensus_content}│")
+                consensus_line = f"│{consensus_content}│"
+                consensus_line = self._validate_border_consistency(consensus_line, actual_display_width)
+                print(consensus_line)
             
-            # Vote distribution
+            # Vote distribution with validation
             if self.vote_distribution:
                 vote_msg = "🗳️  Vote Distribution: " + ", ".join([f"Agent {k}→{v} votes" for k, v in self.vote_distribution.items()])
                 
@@ -672,28 +724,36 @@ class MultiRegionDisplay:
                 max_content_width = actual_display_width - 2
                 if get_display_width_safe(vote_msg) <= max_content_width:
                     vote_content = pad_to_exact_width(vote_msg, max_content_width, 'left')
-                    print(f"│{vote_content}│")
+                    vote_line = f"│{vote_content}│"
+                    vote_line = self._validate_border_consistency(vote_line, actual_display_width)
+                    print(vote_line)
                 else:
                     # Wrap vote distribution
                     vote_header = "🗳️  Vote Distribution:"
                     header_content = pad_to_exact_width(vote_header, max_content_width, 'left')
-                    print(f"│{header_content}│")
+                    header_line = f"│{header_content}│"
+                    header_line = self._validate_border_consistency(header_line, actual_display_width)
+                    print(header_line)
                     
                     for agent_id, votes in self.vote_distribution.items():
                         vote_detail = f"   Agent {agent_id}: {votes} votes"
                         detail_content = pad_to_exact_width(vote_detail, max_content_width, 'left')
-                        print(f"│{detail_content}│")
+                        detail_line = f"│{detail_content}│"
+                        detail_line = self._validate_border_consistency(detail_line, actual_display_width)
+                        print(detail_line)
             
-            # Regular system messages
+            # Regular system messages with validation
             for message in self.system_messages:
                 max_content_width = actual_display_width - 2
                 
                 # Handle long messages by wrapping
                 if get_display_width_safe(message) <= max_content_width:
                     message_content = pad_to_exact_width(message, max_content_width, 'left')
-                    print(f"│{message_content}│")
+                    message_line = f"│{message_content}│"
+                    message_line = self._validate_border_consistency(message_line, actual_display_width)
+                    print(message_line)
                 else:
-                    # Simple word wrapping
+                    # Simple word wrapping with validation
                     words = message.split()
                     current_line = ""
                     
@@ -702,14 +762,18 @@ class MultiRegionDisplay:
                         if get_display_width_safe(test_line) > max_content_width:
                             if current_line.strip():
                                 line_content = pad_to_exact_width(current_line.strip(), max_content_width, 'left')
-                                print(f"│{line_content}│")
+                                wrapped_line = f"│{line_content}│"
+                                wrapped_line = self._validate_border_consistency(wrapped_line, actual_display_width)
+                                print(wrapped_line)
                             current_line = word + " "
                         else:
                             current_line = test_line + " "
                     
                     if current_line.strip():
                         final_content = pad_to_exact_width(current_line.strip(), max_content_width, 'left')
-                        print(f"│{final_content}│")
+                        final_line = f"│{final_content}│"
+                        final_line = self._validate_border_consistency(final_line, actual_display_width)
+                        print(final_line)
         
         # Final border
         print(border_line)
