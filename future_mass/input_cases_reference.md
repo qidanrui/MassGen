@@ -62,6 +62,14 @@ IF NO, do additional work first, then use the `new_answer` tool to record a bett
 
 ## Input Cases
 
+**🔄 Dynamic Case Transitions**: Cases are not static! When any agent calls `new_answer`, all other agents automatically transition to Case 2 for their next inference call, since new summaries become available.
+
+**Key Transition Rules**:
+- Case 1 → Case 2: When any agent provides `new_answer`
+- Case 3 → Case 2: When enforcement succeeds or other agents have provided `new_answer`  
+- Case 4 → Case 2: When error recovery succeeds or other agents have provided `new_answer`
+- Case 2 → Case 2: When any agent provides `new_answer` during evaluation
+
 ### Case 1: Initial Work (No Summaries Exist)
 
 **When**: Agent has no summary yet, no other agents have summaries
@@ -130,7 +138,13 @@ IF NO, do additional work first, then use the `new_answer` tool to record a bett
 
 **Conversation Flow**:
 ```
-User: {task with current answers and decision prompt}
+User: <ORIGINAL MESSAGE> {task} <END OF ORIGINAL MESSAGE>
+
+<CURRENT ANSWERS from the agents>
+<Agent A> {summary_A} <end of Agent A>
+<Agent B> {summary_B} <end of Agent B>
+<Agent C> {summary_C} <end of Agent C>
+<END OF CURRENT ANSWERS>
 Assistant: {may provide reasoning/analysis or calls other tools without new_answer/vote}
 Tool Response: {result if tool call was made}
 User: "Finish your work above by making a tool call of `vote` or `new_answer`. Make sure you actually call the tool."
@@ -140,6 +154,8 @@ User: "Finish your work above by making a tool call of `vote` or `new_answer`. M
 ```
 
 **Expected Behavior**: Agent redirected to use proper workflow tools
+
+**🔄 Transition Note**: If other agents provide `new_answer` while this agent is in Case 3 enforcement, this agent will transition to Case 2 for their next inference call.
 
 ---
 
@@ -157,7 +173,13 @@ IF NO, do additional work first, then use the `new_answer` tool to record a bett
 
 **Conversation Flow**:
 ```
-User: {task with current answers and decision prompt}
+User: <ORIGINAL MESSAGE> {task} <END OF ORIGINAL MESSAGE>
+
+<CURRENT ANSWERS from the agents>
+<Agent A> {summary_A} <end of Agent A>
+<Agent B> {summary_B} <end of Agent B>
+<Agent C> {summary_C} <end of Agent C>
+<END OF CURRENT ANSWERS>
 Assistant: {may provide reasoning/analysis}
 User: {may provide clarification or additional context}
 Assistant: {may continue analysis}
@@ -166,6 +188,8 @@ Tool Response: Error: {specific error message - e.g., "Invalid agent_id 'invalid
 ```
 
 **Expected Behavior**: Agent retries with corrected approach
+
+**🔄 Transition Note**: If other agents provide `new_answer` while this agent is in Case 4 error recovery, this agent will transition to Case 2 for their next inference call.
 
 ## Decision Logic
 
@@ -179,6 +203,23 @@ This eliminates the perfectionism loop by:
 - ✅ **Task-focused evaluation**: "Does the best answer address the question?"
 - ✅ **No self-reference confusion**: Agent evaluates others' answers objectively
 - ✅ **Direct tool guidance**: Explicit instruction on which tool to use when
+
+## 🛑 Stop Condition
+
+**Coordination terminates when all agents have `has_voted = True`.**
+
+**Voting State Tracking**:
+- **Initialization**: All agents start with `has_voted = False`
+- **After `vote` tool call**: Set agent's `has_voted = True`
+- **After `new_answer` tool call**: Set ALL agents' `has_voted = False` (new answers invalidate previous votes)
+- **Stop check**: Coordination continues until all agents have `has_voted == True`
+
+This natural stop condition ensures:
+- **Consensus reached**: All agents have voted and no new answers are being provided
+- **Dynamic invalidation**: New answers reset the voting state, requiring fresh consensus
+- **No infinite loops**: Process terminates when no agent wants to improve further
+- **Semantic correctness**: Termination based on actual voting consensus, not arbitrary counters
+- **Handles failures**: Agents that fail (remain `has_voted = False`) don't prevent termination
 
 ## Tool Usage Patterns
 
