@@ -1,80 +1,113 @@
+import os
+import sys
 import time
+import json
+from typing import Callable, Union, Optional, List, Dict
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from .types import TaskInput, AgentState, AgentResponse, ModelConfig
+from .utils import get_agent_type_from_model, function_to_json
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from typing import Any, Callable, Union, Optional, List, Dict
-
-@dataclass
-class TaskInput:
-    """Represents a task to be processed by the MASS system."""
-
-    question: str
-    context: Dict[str, Any] = field(default_factory=dict)
-    task_id: Optional[str] = None
+from .backends import oai, gemini, grok
 
 
-@dataclass
-class AgentState:
-    """Represents the current state of an agent in the MASS system."""
+SYSTEM_INSTRUCTION = """
+You are an expert agent equipped with tools to work as part of a collaborative team to solve complex tasks.
 
-    agent_id: int
-    status: str = "working"  # "working", "voted", or "failed"
-    working_summary: str = ""
-    final_answer: str = ""  # The final answer extracted from agent response
-    execution_start_time: Optional[float] = None
-    execution_end_time: Optional[float] = None
-    update_history: List[Dict[str, Any]] = field(default_factory=list)
-    vote_target: Optional[int] = None  # Which agent's solution this agent voted for
-    seen_updates_timestamps: Dict[int, float] = field(default_factory=dict)  # agent_id -> last_seen_timestamp
+You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents} to solve complex tasks.
 
-    @property
-    def execution_time(self) -> Optional[float]:
-        """Calculate execution time if both start and end times are available."""
-        if self.execution_start_time and self.execution_end_time:
-            return self.execution_end_time - self.execution_start_time
-        return None
+**Communication:** You can only use the `update_summary` tool to communicate with other agents. All information shared through this tool is visible to the entire team.
 
-    def add_update(self, summary: str, final_answer: str = "", timestamp: Optional[float] = None):
-        """Add an update to the agent's history."""
-        if timestamp is None:
-            timestamp = time.time()
+### Core Workflow
 
-        self.update_history.append(
-            {
-                "timestamp": timestamp,
-                "summary": summary,
-                "final_answer": final_answer,
-                "status": self.status,
-            }
-        )
-        self.working_summary = summary
-        if final_answer:  # Only update if a final answer is provided
-            self.final_answer = final_answer
+**1. Task Execution**
+- Use your available tools (search, code analysis, etc.) to investigate and solve the assigned task
+- Apply expertise to search for information, analyze data, identify patterns, and develop solutions
 
-    def mark_updates_seen(self, agent_updates: Dict[int, float]):
-        """Mark updates from other agents as seen."""
-        for agent_id, timestamp in agent_updates.items():
-            if agent_id != self.agent_id:  # Don't track own updates
-                self.seen_updates_timestamps[agent_id] = timestamp
+**2. Progress Documentation**
+- Use the `update_summary` tool regularly to record your findings, hypotheses, and progress
+- Document your reasoning process so other agents can understand and build upon your work
+- Ensure that you include supporting evidence including:
+  - Information sources and URLs
+  - Data analysis or code execution results
+  - Key insights and discoveries
+  - Promising solutions and approaches
 
-    def has_unseen_updates(self, other_agent_updates: Dict[int, float]) -> bool:
-        """Check if there are unseen updates from other agents."""
-        for agent_id, latest_timestamp in other_agent_updates.items():
-            if agent_id != self.agent_id:  # Don't check own updates
-                last_seen = self.seen_updates_timestamps.get(agent_id, 0.0)
-                if latest_timestamp > last_seen:
-                    return True
-        return False
+**3. Collaboration & Information Sharing**
+- When sharing insights: 
+  - Always provide supporting evidence (sources, URLs, calculations)
+  - Ensure that other agents can understand and build upon your work
+- When receiving updates: 
+  - Critically evaluate information from other agents
+  - Verify their claims with your tools and expertise
+  - Identify gaps, inconsistencies, or errors in collective analysis
+- If no updates received yet:
+  - Continue working on the task
+  - Verify your own progress with your tools and expertise
+  - Find missing pieces in the analysis or other perspectives
+  - Use the `update_summary` tool to update the team on your progress
 
+**4. Solution Validation**
+  - Continuously verify information accuracy
+  - Cross-check findings against multiple sources
+  - Challenge assumptions and test hypotheses
+  - Look for missing pieces in the analysis
 
-@dataclass
-class AgentResponse:
-    """Response from an agent's process_message function."""
+**5. Consensus Building**
+- Use the `vote` tool to nominate an agent as representative to present the solution
+- Vote only when confident the solution is accurate and complete
+- Continue working until the team reaches consensus on the best answer
 
-    text: str
-    code: List[str] = field(default_factory=list)
-    citations: List[Dict[str, Any]] = field(default_factory=list)
-    function_calls: List[Dict[str, Any]] = field(default_factory=list)
+**Key Principles**
+- Collaborative mindset: This is a team effort - share knowledge generously and build on others' work
+- Evidence-based reasoning: Always support your claims with verifiable sources and data
+- Quality over speed: Prioritize accuracy and thoroughness over quick answers
+- Continuous verification: Question and verify information, even from trusted team members
+- You are Agent {agent_id}. That is your identifier in the team. 
+"""
 
+PROMPT_UPDATE_NOTIFICATION = """
+If you have any valuable information that have not been shared with the team, please use the `update_summary` tool to record your work on the task: your analysis, approach, solution, and reasoning. 
+Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents. 
+If you have found any agents that have found the correct solution (include yourself), use the `vote` tool to vote for them.
+Or you can choose to continue working on the task and then share your progress with the team.
+"""
+
+UPDATE_NOTIFICATION = """
+[NOTIFICATION] Below are the recent updates from other agents:
+
+{updates}
+"""
+
+NO_UPDATE_NOTIFICATION = """
+There are no updates from other agents right now. 
+You can continue working on the task and share your progress with the team using the `update_summary` tool.
+Or you can vote for the representative agent and stop working using the `vote` tool.
+"""
+
+PRESENTATION_NOTIFICATION = """
+You have been nominated as the representative agent to present the solution.
+
+Below are the vote information of the team:
+
+{votes}
+
+Please incorporate all useful information from the team to present the final answer.
+"""
+
+DEBATE_NOTIFICATION = """
+The team has different opinions on the representative agent to present the solution.
+
+Below are the vote information of the team:
+
+{votes}
+
+Please share your opinion via `update_summary` tool, or vote again with the `vote` tool.
+"""
 
 class MassAgent(ABC):
     """
@@ -88,14 +121,7 @@ class MassAgent(ABC):
         self, 
         agent_id: int, 
         orchestrator=None,
-        model: str = None,
-        tools: List[str] = None,
-        max_retries: int = 3,
-        max_tokens: int = None,
-        temperature: float = 0.7,
-        top_p: float = None,
-        processing_timeout: float = None,
-        stream: bool = False,
+        model_config: Optional[ModelConfig] = None,
         stream_callback: Optional[Callable] = None,
         **kwargs
     ):
@@ -105,131 +131,117 @@ class MassAgent(ABC):
         Args:
             agent_id: Unique identifier for this agent
             orchestrator: Reference to the MassOrchestrator
-            model: LLM model to use
-            tools: List of tools available to the agent
-            max_retries: Maximum number of retry attempts
-            max_tokens: Maximum tokens for LLM responses
-            temperature: Sampling temperature for the LLM
-            top_p: Top-p sampling parameter
-            processing_timeout: Timeout for processing requests
-            stream: Whether to stream responses
+            model_config: Configuration object containing model parameters (model, tools, 
+                         temperature, top_p, max_tokens, processing_timeout, max_retries, stream)
             stream_callback: Optional callback function for streaming chunks
+            agent_type: Type of agent ("openai", "gemini", "grok") to determine backend
             **kwargs: Additional parameters specific to the agent implementation
         """
         self.agent_id = agent_id
         self.orchestrator = orchestrator
         self.state = AgentState(agent_id=agent_id)
         
+        # Initialize model configuration with defaults if not provided
+        if model_config is None:
+            model_config = ModelConfig()
+        
         # Store configuration parameters
-        self.model = model
-        self.tools = tools if tools is not None else self._get_available_tools()
-        self.max_retries = max_retries
-        self.max_tokens = max_tokens
-        self.temperature = temperature
-        self.top_p = top_p
-        self.processing_timeout = processing_timeout
-        self.stream = stream
+        self.model = model_config.model
+        self.agent_type = get_agent_type_from_model(self.model)
+        # Map agent types to their backend modules
+        process_message_impl_map = {
+            "openai": oai.process_message,
+            "gemini": gemini.process_message, 
+            "grok": grok.process_message
+        }
+        if self.agent_type not in process_message_impl_map:
+            raise ValueError(f"Unknown agent type: {self.agent_type}. Available types: {list(process_message_impl_map.keys())}")
+        
+        # Get the appropriate process_message implementation based on the agent type
+        self.process_message_impl = process_message_impl_map[self.agent_type]
+                
+        # Other model configuration parameters
+        self.tools = model_config.tools
+        self.max_retries = model_config.max_retries
+        self.max_rounds = model_config.max_rounds
+        self.max_tokens = model_config.max_tokens
+        self.temperature = model_config.temperature
+        self.top_p = model_config.top_p
+        self.processing_timeout = model_config.processing_timeout
+        self.stream = model_config.stream
         self.stream_callback = stream_callback
         self.kwargs = kwargs
 
-    @abstractmethod
-    def process_message(
-        self,
-        messages: List[Dict[str, str]],
-        **kwargs,
-    ) -> AgentResponse:
+    def process_message(self, messages: List[Dict[str, str]], tools: List[str] = None) -> AgentResponse:
         """
         Core LLM inference function for task processing.
 
-        This method should handle the actual LLM interaction using the agent's
-        specific backend (OpenAI, Gemini, Grok, etc.) and return a standardized response.
-        All configuration parameters are now stored as instance variables and should
-        be accessed via self.model, self.tools, self.temperature, etc.
+        This method handles the actual LLM interaction using the agent's
+        specific backend (OpenAI, Gemini, Grok, etc.) and returns a standardized response.
+        All configuration parameters are stored as instance variables and accessed
+        via self.model, self.tools, self.temperature, etc.
 
         Args:
             messages: List of messages in OpenAI format
-            **kwargs: Additional parameters that override instance configuration
+            tools: List of tools to use
 
         Returns:
             AgentResponse containing the agent's response text, code, citations, etc.
         """
+        
+        # Create configuration dictionary using model configuration parameters
+        config = {
+            "model": self.model,
+            "max_retries": self.max_retries,
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "api_key": None,  # Let backend use environment variable
+            "processing_timeout": self.processing_timeout,
+            "stream": self.stream,
+            "stream_callback": self.stream_callback
+        }
+        
+        try:
+            result = self.process_message_impl(
+                messages=messages,
+                tools=tools,
+                **config
+            )
 
-    def cleanup(self):
-        """
-        Clean up agent resources (HTTP clients, sessions, etc.).
+            # Backend implementations now return AgentResponse objects directly
+            return result
+        except Exception as e:
+            # Return error response
+            return AgentResponse(
+                text=f"Error in {self.model} agent processing: {str(e)}",
+                code=[],
+                citations=[],
+                function_calls=[],
+            )
 
-        This method should be implemented by agents that maintain persistent
-        connections or background resources that need explicit cleanup.
-        Default implementation does nothing.
+    def update_summary(self, new_content: str):
         """
-
-    def update_summary(self, summary_report: str, final_answer: str = ""):
-        """
-        Record working process and summary report for sharing with other agents.
+        Record your work on the task: your analysis, approach, solution, and reasoning. Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents.
 
         Args:
-            summary_report: Comprehensive progress report including reasoning and findings
-            final_answer: The final answer to the question (optional)
+            new_content: Comprehensive progress report
         """
-        if self.orchestrator:
-            self.orchestrator.update_agent_summary(self.agent_id, summary_report, final_answer)
-        else:
-            # Fallback: Update local state only if no orchestrator
-            self.state.add_update(summary_report, final_answer)
-
-    def check_updates(self) -> Dict[str, Any]:
-        """
-        Check for updates from other agents working on the same task.
-        Now tracks which updates have been seen to avoid processing duplicates.
-
-        Returns:
-            Dictionary containing updates from all agents, including their summaries and states
-        """
-        if self.orchestrator:
-            # Get updates (only new ones by default)
-            updates = self.orchestrator.get_all_updates(exclude_agent_id=self.agent_id, check_new_only=True)
-
-            # Mark the other agents' updates we've seen
-            if updates.get("agents"):
-                seen_updates = {}
-                for agent_id, agent_info in updates["agents"].items():
-                    if "latest_timestamp" in agent_info:
-                        seen_updates[int(agent_id)] = agent_info["latest_timestamp"]
-
-                if seen_updates:
-                    self.orchestrator.mark_updates_seen_by_agent(self.agent_id, seen_updates)
-
-            return updates
-        return {}
-
-    def check_all_updates(self) -> Dict[str, Any]:
-        """
-        Check for all updates from other agents (including previously seen ones).
-
-        Returns:
-            Dictionary containing all updates from all agents
-        """
-        if self.orchestrator:
-            # Get all updates (including previously seen ones)
-            return self.orchestrator.get_all_updates(exclude_agent_id=self.agent_id, check_new_only=False)
-        return {}
-
+        # Use the orchestrator to update the summary and notify other agents to restart
+        self.orchestrator.notify_summary_update(self.agent_id, new_content)
+        return f"Your summary report has been updated and shared with other agents."
+    
     def vote(self, target_agent_id: int, response_text: str = ""):
         """
-        Vote for the representative agent.
+        Vote for the representative agent, who you believe has found the correct solution.
 
         Args:
             target_agent_id: ID of the voted representative agent
-            response_text: The full response text that led to this vote (optional)
+            response_text: Your full explanation of why you voted for this agent
         """
-        if self.orchestrator:
-            self.orchestrator.cast_vote(self.agent_id, target_agent_id, response_text)
-        else:
-            # Update local state
-            self.state.status = "voted"
-            self.state.vote_target = target_agent_id
-            self.state.execution_end_time = time.time()
-
+        self.orchestrator.cast_vote(self.agent_id, target_agent_id, response_text)
+        return f"Your vote for Agent {target_agent_id} has been cast."
+    
     def mark_failed(self, reason: str = ""):
         """
         Mark this agent as failed.
@@ -237,237 +249,159 @@ class MassAgent(ABC):
         Args:
             reason: Optional reason for the failure
         """
-        if self.orchestrator:
-            self.orchestrator.mark_agent_failed(self.agent_id, reason)
-        else:
-            # Update local state
-            self.state.status = "failed"
-            self.state.execution_end_time = time.time()
+        # Report the failure to the orchestrator for logging
+        self.orchestrator.mark_agent_failed(self.agent_id, reason)
 
-    def get_workflow_instructions(self, phase: str) -> str:
+    def _get_system_tools(self) -> List[Dict[str, Any]]:
         """
-        Get phase-specific instructions for the agent workflow.
-
-        Args:
-            phase: Current workflow phase ("initial", "collaboration", "consensus")
-
-        Returns:
-            Detailed instructions for the specified phase
+        The system tools available to this agent for orchestration:
+        - update_summary: Record your work on the task: your analysis, approach, solution, and reasoning. Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents.
+        - vote: Vote for the representative agent, who you believe has found the correct solution.
         """
-        instructions = {
-            "initial": """
-Write a clear, concise, and comprehensive report that answers the user's question.
-Your report should:
-- Directly address the question with a well-supported answer.
-- Summarize the key facts, evidence, and reasoning steps that lead to your conclusion.
-- Avoid unnecessary details, excessive length, or unrelated information.
-Focus on clarity, accuracy, and logical explanation.
-""",
-            "collaboration": f"""
-You are Agent {self.agent_id} working with other agents as a team to solve a task.
-
-You will be shown the your previous solution and other agents' solution.
-
-**Your Goal**:
-1. Review your own solution and all peer solutions against the original task
-2. Check each step, statement, assumption, and conclusion of all provided solutions
-3. Evaluate whether any agent (including yourself) has found the correct solution
-4. Decide:
- - If you are sure that your own or other agent's solution is 100% correct, vote for that agent to be the representative.
- - If you are not the team has found the most correct solution, continue working on finding the correct solution.
-
-**Response Format**:
-- Your response should be comprehensive, detailed and grounded.
-- To clarify your decision, your response must conclude with the following response format:
-```
-### Voting Decision
-{{"voting": agent_id or None}}
-```
-*Replace agent_id with the actual agent ID you're voting for, or use "None" if no satisfactory solution exists yet and you propose a new solution.*
-
-**Guidelines**:
-- Remember: You are Agent {self.agent_id}
-- Carefully review all solutions alongside the original task
-- Check each step, statement, information sources, assumption, and conclusion of all provided solutions
-- If no satisfactory solution exists yet, you should include your updated solution in summary report, and put `None` in voting decision.
-- If you find some agent (including yourself) has find the final solution, include why your believe that in summary report, and put its agent_id in voting decision
-""",
-            "debate": f"""
-You are Agent {self.agent_id} working with other agents as a team to solve a task.
-
-You will be shown the summary report of your own and other agents' solution.
-
-The team has different opinions on the correct solution.
-
-**Your Goal**:
-1. Review all peer solutions and your own solution
-2. Check each step, statement, information sources, assumption, and conclusion of all provided solutions
-3. Evaluate whether any agent (including yourself) has found the correct solution
-4. Decide: If you are sure that some agent's solution is correct, vote for that agent to be the representative. If not, continue working on finding the correct solution.
-
-**Response Format**:
-- Your response should be comprehensive, detailed and grounded.
-- To clarify your decision, your response must conclude with the following response format:
-```
-### Voting Decision
-{{"voting": agent_id or None}}
-```
-*Replace agent_id with the actual agent ID you're voting for, or use "None" if no satisfactory solution exists yet and you propose a new solution.*
-""",
-            "presentation": f"""
-You are Agent {self.agent_id} working with other agents as a team to solve a task.
-
-You will be shown the summary report of your own and other agents' solution.
-
-You have been voted by other agents to present the final answer.
-
-**Your Goal**:
-1. Incorporate all peer solutions and opinions to form a final solution
-2. Compose a final summary report in response to the original task question
-3. State the final answer at the end of your response
-
-**Response Format**:
-- Your response should be comprehensive, detailed and grounded on the original task question.
-- To clarify your final answer, your response must conclude with the following response format:
-```
-### Final answer
-[final answer to the question]
-```
-""",
-        }
-        return instructions.get(phase, "")
-
-    def process_task(
-        self,
-        task: TaskInput,
-        phase: str = "initial",
-        timeout: float = None,
-        stream: bool = None,
-        stream_callback: Optional[Callable] = None,
-    ) -> AgentResponse:
-        """
-        Process a task in a specific workflow phase.
-        Now leverages incremental update detection to avoid reprocessing seen updates.
-
-        Args:
-            task: The task to process
-            phase: The workflow phase ("initial", "collaboration", "debate", "presentation")
-            timeout: Maximum time to spend processing (in seconds) - overrides instance setting
-            stream: Whether to stream the response - overrides instance setting
-            stream_callback: Optional callback function for streaming chunks - overrides instance setting
-
-        Returns:
-            AgentResponse containing the agent's response
-        """
-        # Phase-specific orchestration handled by workflow system
-        if phase == "collaboration":
-            # Check for new updates to determine if we should process
-            new_updates = self.check_updates()
-            has_new_updates = new_updates and new_updates.get("has_new_updates", False)
-
-            # Build context with own summary and only NEW updates from other agents
-            context_parts = []
-
-            # Include agent's own latest summary
-            context_parts.append(f"Your ID: Agent {self.agent_id}")
-            if self.state.working_summary:
-                context_parts.append(f"Your latest summary:\n{self.state.working_summary}")
-
-            # Include only NEW updates from other agents (if any)
-            print(f"   📥 Agent {self.agent_id} has_new_updates: {has_new_updates}")
-            # print(f"   📥 Agent {self.agent_id} new_updates: {new_updates}")
-            # _ = input("[DEBUG] Press Enter to continue...")
-
-            if has_new_updates and new_updates.get("agents"):
-                new_agent_updates = []
-                for agent_id, agent_info in new_updates["agents"].items():
-                    if agent_info.get("is_new_update", False):
-                        summary = agent_info.get("working_summary", "")
-                        if summary:
-                            new_agent_updates.append(f"Agent {agent_id} (NEW): {summary}")
-
-                if new_agent_updates:
-                    context_parts.append("New updates from other agents:")
-                    context_parts.extend(new_agent_updates)
-
-            # Create context showing only own summary + new updates from others
-            full_peer_context = "\n\n" + "\n\n".join(context_parts)
-            # print(f"   📥 Agent {self.agent_id} full_peer_context: {full_peer_context}")
-
-            # Log whether there are new updates
-            if has_new_updates:
-                new_count = sum(
-                    1 for agent_info in new_updates["agents"].values() if agent_info.get("is_new_update", False)
-                )
-                print(f"   📥 Agent {self.agent_id} processing with {new_count} new updates available")
-            else:
-                print(f"   📥 Agent {self.agent_id} processing with no new updates")
-
-        elif phase in ["debate", "presentation"]:
-            # In consensus phase, check all updates to make final decision
-            updates = self.check_all_updates()
-
-            # Include agent's own ID and latest summary for consensus phase
-            own_summary_context = f"\n\nYour ID: Agent {self.agent_id}"
-            if self.state.working_summary:
-                own_summary_context += f"\n\nYour latest summary:\n{self.state.working_summary}"
-
-            if updates and updates.get("agents"):
-                # Get only the latest summary for each peer agent
-                peer_summaries = []
-                for agent_id, agent_info in updates["agents"].items():
-                    # Ensure we get the latest summary - working_summary should be the most recent
-                    latest_summary = agent_info.get("working_summary")
-                    if latest_summary:
-                        peer_summaries.append(f"Agent {agent_id}: {latest_summary}")
-
-                if peer_summaries:
-                    peer_context = "\n\nLatest solutions from all peer agents:\n" + "\n".join(peer_summaries)
-                else:
-                    peer_context = ""
-            else:
-                peer_context = ""
-
-            # Combine own latest summary and peer latest summaries
-            full_peer_context = own_summary_context + peer_context
-
-        else:
-            # Initial phase - no peer context, but include agent ID
-            full_peer_context = f"\n\nYour ID: Agent {self.agent_id}"
-
-        # Get phase-specific instructions
-        instructions = self.get_workflow_instructions(phase)
-
-        # Prepare messages for the LLM
-        messages = [
-            {"role": "system", "content": instructions},
+        return [
             {
-                "role": "user",
-                "content": "Task: " + task.question + "\n\n" + full_peer_context,
+                "type": "function",
+                "name": "update_summary",
+                "description": "Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents. Your updated content should be fully self-contained, including your analysis, approach, solution, and reasoning on the task.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "new_content": {
+                            "type": "string",
+                            "description": "Your work on the task: problem analysis, solution approach, final answer, and reasoning. Include insights from other agents if relevant."
+                        }
+                    },
+                    "required": ["new_content"]
+                }
             },
+            {
+                "type": "function",
+                "name": "vote",
+                "description": "Vote for the representative agent, who you believe has found the correct solution.",
+                "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "target_agent_id": {
+                                "type": "integer",
+                                "description": "The ID of the agent you believe has found the correct solution."
+                            },
+                            "response_text": {
+                                "type": "string",
+                                "description": "Your full explanation of why you voted for this agent."
+                            }
+                        },
+                        "required": ["target_agent_id", "response_text"]
+                    }
+                }
         ]
 
-        # Process the message using the agent's specific implementation
-        # Use instance configuration but allow overrides from parameters
-        override_kwargs = {}
-        if timeout is not None:
-            override_kwargs["processing_timeout"] = timeout
-        if stream is not None:
-            override_kwargs["stream"] = stream
-        if stream_callback is not None:
-            override_kwargs["stream_callback"] = stream_callback
+    def _get_available_tools(self) -> List[Dict[str, Any]]:
+        """Return the tool schema for the tools that are available to this agent."""
+        # System tools (always available), JSON schema
+        system_tools = self._get_system_tools()
+        
+        # Built-in tools from model config, string name only
+        built_in_tools = []
+        if self.tools:
+            for tool in self.tools:
+                if tool in ["live_search", "code_execution"]:
+                    built_in_tools.append(tool)
+        
+        # Register tools from the global registry, JSON schema
+        custom_tools = []
+        from .tools import register_tool
+        for tool_name, tool_func in register_tool.items():
+            if tool_name in self.tools:
+                tool_schema = function_to_json(tool_func)
+                custom_tools.append(tool_schema)
+
+        return {"system_tools": system_tools, "built_in_tools": built_in_tools, "custom_tools": custom_tools}
+
+    def deduplicate_function_calls(self, function_calls: List[Dict]):
+        """Deduplicate function calls by their name and arguments."""
+        deduplicated_function_calls = []
+        for func_call in function_calls:
+            if func_call not in deduplicated_function_calls:
+                deduplicated_function_calls.append(func_call)
+        return deduplicated_function_calls
+    
+    def _execute_function_calls(self, function_calls: List[Dict]):
+        """Execute function calls and return function outputs."""
+        from .tools import register_tool
+        function_outputs = []
+        
+        # DEBUGGING
+        with open("function_calls.txt", "a") as f:
+            # Write the function calls to the file
+            # Include the agent id, agent model name, time, and function calls
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
+            f.write(f"{json.dumps(function_calls, indent=2)}\n")
+        
+        for func_call in function_calls:
+            func_call_id = func_call.get("call_id")
+            func_name = func_call.get("name")
+            func_args = func_call.get("arguments", {})
+            if isinstance(func_args, str):
+                func_args = json.loads(func_args)
             
-        response = self.process_message(messages, **override_kwargs)
-
-        return response
-
-    def _get_available_tools(self) -> List[str]:
+            try:
+                if func_name == "update_summary":
+                    result = self.update_summary(func_args.get("new_content", ""))
+                elif func_name == "vote":
+                    result = self.vote(func_args.get("agent_id", func_args.get("target_agent_id")), "")
+                elif func_name in register_tool:
+                    result = register_tool[func_name](**func_args)
+                else:
+                    result = {
+                        "type": "function_call_output",
+                        "call_id": func_call_id,
+                        "output": f"Error: Function '{func_name}' not found in tool mapping"
+                    }
+                    
+                # Add function call and result to messages
+                function_output = {
+                    "type": "function_call_output",
+                    "call_id": func_call_id,
+                    "output": str(result)
+                }
+                function_outputs.append(function_output)
+                
+                # DEBUGGING
+                with open("function_outputs.txt", "a") as f:
+                    f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
+                    f.write(f"{json.dumps(function_output, indent=2)}\n")
+                
+            except Exception as e:
+                # Handle execution errors
+                error_output = {
+                    "type": "function_call_output", 
+                    "call_id": func_call_id,
+                    "output": f"Error executing function: {str(e)}"
+                }
+                function_outputs.append(error_output)
+                print(f"Error executing function {func_name}: {e}")
+                
+                # DEBUGGING
+                with open("function_outputs.txt", "a") as f:
+                    f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
+                    f.write(f"{json.dumps(error_output, indent=2)}\n")
+                
+        return function_outputs
+      
+    @abstractmethod
+    def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]], restart_instruction: Optional[str] = None) -> List[Dict[str, str]]:
         """
-        Get list of tools available to this agent.
-
-        Note: Orchestration tools (update_summary, check_updates, vote) are NOT
-        exposed as tools to agents. They are called programmatically by the
-        workflow system at appropriate times.
+        Work on the task with conversation continuation.
+        
+        Args:
+            task: The task to work on
+            messages: Current conversation history
+            restart_instruction: Optional instruction for restarting work (e.g., updates from other agents)
+            
+        Returns:
+            Updated conversation history including agent's work
+            
+        This method should be implemented by concrete agent classes.
+        The agent continues the conversation until it votes or reaches max rounds.
         """
-        # Only live_search and code_execution are available as tools to agents for now
-        return ["live_search", "code_execution"]
+        pass

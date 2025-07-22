@@ -11,7 +11,10 @@ import ast
 import operator
 import math
 
-def update_summary(new_content: str):
+# Global tool registry
+register_tool = {}
+
+def mock_update_summary(new_content: str):
     """
     Record your working process and final summary report, which can be shared with other agents.
 
@@ -25,7 +28,7 @@ def update_summary(new_content: str):
     # In a real implementation, this would write to a shared file or database
     return "Summary updated successfully"
 
-def check_updates():
+def mock_check_updates():
     """
     Check other agents' current progress on the same task.
 
@@ -37,7 +40,7 @@ def check_updates():
     """
     return "Agent 1 is working on the task. He has reviewed your task and believe your solution is correct."
 
-def vote(agent_id: int):
+def mock_vote(agent_id: int):
     """
     Vote for the representative agent to solve the task. You can also vote for yourself.
 
@@ -189,7 +192,11 @@ def calculator(expression: str) -> float:
             "error": str(e),
             "success": False
         }
-        
-        
+
+
+# Register tools in the global registry
+register_tool["python_interpreter"] = python_interpreter
+register_tool["calculator"] = calculator
+
 if __name__ == "__main__":
     print(calculator("24423 + 312 * log(10)")) 

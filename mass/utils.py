@@ -11,14 +11,15 @@ import ast
 import operator
 import math
 
-# Model mappings and constants (originally from constants.py)
+# Model mappings and constants
 MODEL_MAPPINGS = {
     "openai": [
         # GPT-4 variants
-        "gpt-4o",  # -> gpt-4o-2024-08-06
-        "gpt-4o-2024-11-20",
-        # GPT-4 Mini variants
-        "gpt-4o-mini",  # -> gpt-4o-mini-2024-07-18
+        "gpt-4o",
+        "gpt-4o-mini",
+        # GPT-4.1 variants
+        "gpt-4.1-mini",
+        "gpt-4.1",
         # o1
         "o1",  # -> o1-2024-12-17
         # o3
@@ -36,42 +37,43 @@ MODEL_MAPPINGS = {
         "o4-mini-low",
         "o4-mini-medium",
         "o4-mini-high",
-        # gpt-4.1
-        "gpt-4.1-mini",
-        "gpt-4.1",
     ],
-    "gemini": ["gemini-2.5-flash", "gemini-2.5-pro"],
+    "gemini": [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+    ],
     "grok": [
         "grok-3-mini",
+        "grok-3-fast",
         "grok-3",
         "grok-4",
-    ],
+    ]
 }
 
 
-def get_agent_type_from_model(model_name: str) -> str:
+def get_agent_type_from_model(model: str) -> str:
     """
-    Get the agent type from a model name.
-
+    Determine the agent type based on the model name.
+    
     Args:
-        model_name: The specific model name (e.g., "gpt-4o", "gemini-2.5-flash")
-
+        model: The model name (e.g., "gpt-4", "gemini-pro", "grok-1")
+        
     Returns:
-        The agent type ("openai", "gemini", "grok")
-
-    Raises:
-        ValueError: If the model name is not found
+        Agent type string ("openai", "gemini", "grok")
     """
-    for agent_type, models in MODEL_MAPPINGS.items():
-        if model_name in models:
-            return agent_type
-
-    # Create a flat list of all available models for error message
-    all_models = []
-    for models in MODEL_MAPPINGS.values():
-        all_models.extend(models)
-
-    raise ValueError(f"Unknown model '{model_name}'. Available models: {', '.join(all_models)}")
+    if not model:
+        return "openai"  # Default to OpenAI
+    
+    model_lower = model.lower()
+    
+    if any(keyword in model_lower for keyword in ["gpt", "openai"]):
+        return "openai"
+    elif any(keyword in model_lower for keyword in ["gemini", "bard"]):
+        return "gemini"
+    elif any(keyword in model_lower for keyword in ["grok"]):
+        return "grok"
+    else:
+        return "openai"  # Default fallback
 
 
 def get_available_models() -> list:
@@ -84,52 +86,52 @@ def get_available_models() -> list:
 
 # Utility functions (originally from util.py)
 def execute_function_calls(function_calls, tool_mapping):
-        """Execute function calls and return formatted outputs for the conversation."""
-        function_outputs = []
-        for function_call in function_calls:
-            try:
-                # Get the function from tool mapping
-                target_function = None
-                function_name = function_call.get('name')
-                
-                # Look up function in tool_mapping
-                if function_name in tool_mapping:
-                    target_function = tool_mapping[function_name]
-                else:
-                    # Handle error case
-                    error_output = {
-                        "type": "function_call_output",
-                        "call_id": function_call.get('call_id'),
-                        "output": f"Error: Function '{function_name}' not found in tool mapping"
-                    }
-                    function_outputs.append(error_output)
-                    continue
-                
-                # Parse arguments and execute function
-                arguments = json.loads(function_call.get('arguments', '{}'))
-                result = target_function(**arguments)
-                
-                # Format the output according to Responses API requirements
-                function_output = {
+    """Execute function calls and return formatted outputs for the conversation."""
+    function_outputs = []
+    for function_call in function_calls:
+        try:
+            # Get the function from tool mapping
+            target_function = None
+            function_name = function_call.get('name')
+            
+            # Look up function in tool_mapping
+            if function_name in tool_mapping:
+                target_function = tool_mapping[function_name]
+            else:
+                # Handle error case
+                error_output = {
                     "type": "function_call_output",
                     "call_id": function_call.get('call_id'),
-                    "output": str(result)
-                }
-                function_outputs.append(function_output)
-                
-                print(f"Executed function: {function_name}({arguments}) -> {result}")
-                
-            except Exception as e:
-                # Handle execution errors
-                error_output = {
-                    "type": "function_call_output", 
-                    "call_id": function_call.get('call_id'),
-                    "output": f"Error executing function: {str(e)}"
+                    "output": f"Error: Function '{function_name}' not found in tool mapping"
                 }
                 function_outputs.append(error_output)
-                print(f"Error executing function {function_name}: {e}")
-                
-        return function_outputs
+                continue
+            
+            # Parse arguments and execute function
+            arguments = json.loads(function_call.get('arguments', '{}'))
+            result = target_function(**arguments)
+            
+            # Format the output according to Responses API requirements
+            function_output = {
+                "type": "function_call_output",
+                "call_id": function_call.get('call_id'),
+                "output": str(result)
+            }
+            function_outputs.append(function_output)
+            
+            # print(f"Executed function: {function_name}({arguments}) -> {result}")
+            
+        except Exception as e:
+            # Handle execution errors
+            error_output = {
+                "type": "function_call_output", 
+                "call_id": function_call.get('call_id'),
+                "output": f"Error executing function: {str(e)}"
+            }
+            function_outputs.append(error_output)
+            # print(f"Error executing function {function_name}: {e}")
+            
+    return function_outputs
 
 
 def function_to_json(func) -> dict:

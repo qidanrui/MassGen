@@ -1,0 +1,77 @@
+# MASS Configuration: Production
+#
+# Optimized for production use with reliable, high-quality results.
+# Uses robust models with strict consensus requirements and comprehensive logging.
+#
+# Usage:
+#   python -m mass --config examples/production.yaml "Production question"
+
+orchestrator:
+  max_duration: 900           # 15 minutes for thorough analysis
+  consensus_threshold: 0.8    # 80% agreement for high confidence
+  max_debate_rounds: 3        # Standard debate rounds
+  status_check_interval: 1.0  # Balanced responsiveness
+  thread_pool_timeout: 10     # Longer timeout for stability
+
+agents:
+  # Agent 1: OpenAI GPT-4o (Primary analyst)
+  - agent_id: 1
+    agent_type: "openai"
+    model_config:
+      model: "gpt-4o"
+      tools: ["live_search", "code_execution"]
+      max_retries: 15           # More retries for reliability
+      max_rounds: 35           # Allow thorough analysis
+      max_tokens: 8000         # Large context for detailed work
+      temperature: 0.3         # Low temperature for consistency
+      top_p: 0.9
+      processing_timeout: 300  # Longer timeout for complex tasks
+      stream: false
+
+  # Agent 2: Google Gemini Pro (Research specialist)
+  - agent_id: 2
+    agent_type: "gemini"
+    model_config:
+      model: "gemini-2.5-pro"
+      tools: ["live_search", "code_execution"]
+      max_retries: 15
+      max_rounds: 35
+      max_tokens: 8000
+      temperature: 0.2         # Very low temperature for accuracy
+      top_p: 0.9
+      processing_timeout: 300
+      stream: false
+
+  # Agent 3: xAI Grok (Alternative perspective)
+  - agent_id: 3
+    agent_type: "grok"
+    model_config:
+      model: "grok-3"
+      tools: ["live_search", "code_execution"]
+      max_retries: 12
+      max_rounds: 30
+      max_tokens: 6000
+      temperature: 0.4         # Balanced creativity and reliability
+      top_p: 0.9
+      processing_timeout: 250
+      stream: false
+
+streaming_display:
+  display_enabled: true
+  max_lines: 50               # More lines for detailed output
+  save_logs: true
+
+logging:
+  log_dir: "logs/production"
+  non_blocking: false         # Ensure all logs are saved
+
+task:
+  category: "production"
+  priority: "high"
+  expected_duration: 600
+  custom_instructions: |
+    This is a production task requiring high accuracy and reliability.
+    Please provide detailed analysis with supporting evidence.
+    Cross-verify information and cite sources when possible.
+  domain: "business"
+  complexity: "high" 

@@ -1,0 +1,34 @@
+OpenAI:
+- chat history keep adding assistant message, without adding user MESSAGES
+- Check the work_on_task function
+
+Grok:
+- chat history has new user messages, but not in correct order
+- Check the work_on_task function
+
+Gemini:
+- Tool swap not finished
+- Check the work_on_task function
+
+Prompt:
+- Make summary report complete, self-contained
+- Reuse the instructions
+
+Vote (fixed):
+- No unique votes for each agent
+- vote_counts is not correct: should be {"agent_id": "vote_count"}, start with 0
+- vote_distribution should be kept
+- voted_agents should be the number of agents whose current status is "voted"
+
+TODO:
+- Check work_on_task function for each agent (add notification)
+- Fix the bug for gemini tool conflict
+- logging file figured out (folder, log.txt)
+
+Display and loggings:
+- where are all the information stored?
+- Multi-region display:
+ - add border (上下左右) to every region
+ - region border should always be strict (but now it is not)
+ - for each region (agents and system), display their useful state information in real-time, like phase, status, vote_target, please refer to mass/types.py for useful agent and system state.
+ - in the bottom part where we display system events. Can you also add an emoji indicate the agent status change? Like before: Agent 2: working → voted, add an emoji
