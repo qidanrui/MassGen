@@ -19,6 +19,7 @@ Usage examples:
 
 import argparse
 import sys
+import os
 from pathlib import Path
 
 # Add mass package to path
@@ -180,6 +181,12 @@ Examples:
     
     args = parser.parse_args()
     
+    # DEBUGGING
+    for file in ["function_calls.txt", "function_outputs.txt", "errors.txt",
+                 "gemini_input.txt", "grok_input.txt", "openai_input.txt"]:
+        if os.path.exists(file):
+            os.remove(file)
+            
     # Load configuration
     try:
         if args.config:

@@ -252,71 +252,6 @@ class MassAgent(ABC):
         # Report the failure to the orchestrator for logging
         self.orchestrator.mark_agent_failed(self.agent_id, reason)
 
-    def _get_system_tools(self) -> List[Dict[str, Any]]:
-        """
-        The system tools available to this agent for orchestration:
-        - update_summary: Record your work on the task: your analysis, approach, solution, and reasoning. Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents.
-        - vote: Vote for the representative agent, who you believe has found the correct solution.
-        """
-        return [
-            {
-                "type": "function",
-                "name": "update_summary",
-                "description": "Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents. Your updated content should be fully self-contained, including your analysis, approach, solution, and reasoning on the task.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "new_content": {
-                            "type": "string",
-                            "description": "Your work on the task: problem analysis, solution approach, final answer, and reasoning. Include insights from other agents if relevant."
-                        }
-                    },
-                    "required": ["new_content"]
-                }
-            },
-            {
-                "type": "function",
-                "name": "vote",
-                "description": "Vote for the representative agent, who you believe has found the correct solution.",
-                "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "target_agent_id": {
-                                "type": "integer",
-                                "description": "The ID of the agent you believe has found the correct solution."
-                            },
-                            "response_text": {
-                                "type": "string",
-                                "description": "Your full explanation of why you voted for this agent."
-                            }
-                        },
-                        "required": ["target_agent_id", "response_text"]
-                    }
-                }
-        ]
-
-    def _get_available_tools(self) -> List[Dict[str, Any]]:
-        """Return the tool schema for the tools that are available to this agent."""
-        # System tools (always available), JSON schema
-        system_tools = self._get_system_tools()
-        
-        # Built-in tools from model config, string name only
-        built_in_tools = []
-        if self.tools:
-            for tool in self.tools:
-                if tool in ["live_search", "code_execution"]:
-                    built_in_tools.append(tool)
-        
-        # Register tools from the global registry, JSON schema
-        custom_tools = []
-        from .tools import register_tool
-        for tool_name, tool_func in register_tool.items():
-            if tool_name in self.tools:
-                tool_schema = function_to_json(tool_func)
-                custom_tools.append(tool_schema)
-
-        return {"system_tools": system_tools, "built_in_tools": built_in_tools, "custom_tools": custom_tools}
-
     def deduplicate_function_calls(self, function_calls: List[Dict]):
         """Deduplicate function calls by their name and arguments."""
         deduplicated_function_calls = []
@@ -388,6 +323,65 @@ class MassAgent(ABC):
                 
         return function_outputs
       
+    def _get_system_tools(self) -> List[Dict[str, Any]]:
+        """
+        The system tools available to this agent for orchestration:
+        - update_summary: Record your work on the task: your analysis, approach, solution, and reasoning. Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents.
+        - vote: Vote for the representative agent, who you believe has found the correct solution.
+        """
+        return [
+            {
+                "type": "function",
+                "name": "update_summary",
+                "description": "Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents. Your updated content should be fully self-contained, including your analysis, approach, solution, and reasoning on the task.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "new_content": {
+                            "type": "string",
+                            "description": "Your work on the task: problem analysis, solution approach, final answer, and reasoning. Include insights from other agents if relevant."
+                        }
+                    },
+                    "required": ["new_content"]
+                }
+            },
+            {
+                "type": "function",
+                "name": "vote",
+                "description": "Vote for the representative agent, who you believe has found the correct solution.",
+                "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "target_agent_id": {
+                                "type": "integer",
+                                "description": "The ID of the agent you believe has found the correct solution."
+                            },
+                            "response_text": {
+                                "type": "string",
+                                "description": "Your full explanation of why you voted for this agent."
+                            }
+                        },
+                        "required": ["target_agent_id", "response_text"]
+                    }
+                }
+        ]
+
+    def _get_registered_tools(self) -> List[Dict[str, Any]]:
+        """Return the tool schema for the tools that are available to this agent."""
+        # Register tools from the global registry, JSON schema
+        custom_tools = []
+        from .tools import register_tool
+        for tool_name, tool_func in register_tool.items():
+            if tool_name in self.tools:
+                tool_schema = function_to_json(tool_func)
+                custom_tools.append(tool_schema)
+        return custom_tools
+    
+    @abstractmethod
+    def _get_builtin_tools(self) -> List[Dict[str, Any]]:
+        """Return the built-in tools that are available to this agent."""
+        pass
+    
     @abstractmethod
     def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]], restart_instruction: Optional[str] = None) -> List[Dict[str, str]]:
         """

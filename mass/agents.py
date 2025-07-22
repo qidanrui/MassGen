@@ -9,7 +9,7 @@ import os
 import sys
 import copy
 import time
-from typing import Callable, Union, Optional, List, Dict
+from typing import Callable, Union, Optional, List, Dict, Any
 
 from dotenv import load_dotenv
 
@@ -40,6 +40,12 @@ class OpenAIMassAgent(MassAgent):
             **kwargs
         )
     
+    def _get_builtin_tools(self) -> List[Dict[str, Any]]:
+        """Return the built-in tools that are available to OpenAI models. 
+        live_search and code_execution are supported right now.
+        """
+        return ["live_search", "code_execution"]
+    
     def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]], restart_instruction: Optional[str] = None) -> List[Dict[str, str]]:
         """
         Work on the task using the OpenAI backend with conversation continuation.
@@ -65,8 +71,9 @@ class OpenAIMassAgent(MassAgent):
         
         # Get available tools (system tools + built-in tools + custom tools)
         all_tools = []
-        for tool_type, tools in self._get_available_tools().items():
-            all_tools.extend(tools)
+        all_tools.extend(self._get_builtin_tools())
+        all_tools.extend(self._get_registered_tools())
+        all_tools.extend(self._get_system_tools())
         
         # Start the task solving loop
         while self.state.chat_round < self.max_rounds and self.state.status == "working":
@@ -110,8 +117,17 @@ class OpenAIMassAgent(MassAgent):
                 
             except Exception as e:
                 print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")
+                
+                # DEBUGGING
+                with open("errors.txt", "a") as f:
+                    f.write(f"Agent {self.agent_id} error in round {self.state.chat_round}: {e}\n")
+                    f.write(traceback.format_exc())
+                    f.write("\n\n")
+                    
                 if self.orchestrator:
                     self.orchestrator.mark_agent_failed(self.agent_id, str(e))
+                self.state.chat_round += 1
+
                 break
         
         return working_messages
@@ -138,6 +154,13 @@ class GeminiMassAgent(OpenAIMassAgent):
             **kwargs
         )
     
+    def _get_builtin_tools(self) -> List[Dict[str, Any]]:
+        """Return the built-in tools that are available to Gemini models. 
+        live_search and code_execution are supported right now.
+        However, the built-in tools and function call are not supported at the same time.
+        """
+        return ["live_search", "code_execution"]
+    
     def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]], restart_instruction: Optional[str] = None) -> List[Dict[str, str]]:
         """
         Work on the task using the Gemini backend with conversation continuation.
@@ -155,9 +178,7 @@ class GeminiMassAgent(OpenAIMassAgent):
             
         Returns:
             Updated conversation history including agent's work
-        """
-        curr_round = 0
-        
+        """        
         # Start with provided messages
         working_messages = messages.copy()
         
@@ -166,10 +187,9 @@ class GeminiMassAgent(OpenAIMassAgent):
             working_messages.append({"role": "user", "content": restart_instruction})
         
         # Get available tools (system tools + built-in tools + custom tools)
-        all_tools = self._get_available_tools()
-        system_tools = all_tools["system_tools"]
-        built_in_tools = all_tools["built_in_tools"]
-        custom_tools = all_tools["custom_tools"]
+        system_tools = self._get_system_tools()
+        built_in_tools = self._get_builtin_tools()
+        custom_tools = self._get_registered_tools()
         
         # Gemini does not support built-in tools and function call at the same time.
         # If built-in tools are provided, we will switch to them in the next round.
@@ -182,7 +202,7 @@ class GeminiMassAgent(OpenAIMassAgent):
             available_tools = system_tools + custom_tools
         
         # Start the task solving loop
-        while curr_round < self.max_rounds and self.state.status == "working":
+        while self.state.chat_round < self.max_rounds and self.state.status == "working":
             try:
                 # Call LLM with current conversation
                 result = self.process_message(messages=working_messages, tools=available_tools)
@@ -208,7 +228,7 @@ class GeminiMassAgent(OpenAIMassAgent):
                         })
                     
                     # Important: Increment round after processing function calls
-                    curr_round += 1
+                    self.state.chat_round += 1  # Update the state chat_round to match local counter
                     
                     # If we have used custom tools, switch to built-in tools in the next round
                     if tool_switch:
@@ -236,14 +256,16 @@ class GeminiMassAgent(OpenAIMassAgent):
                     if tool_switch:
                         available_tools = system_tools + custom_tools
                         print(f"🔄 Agent {self.agent_id} (Gemini) switching to custom tools in the next round")
+                    
+                    # Increment round even when no function calls are made
+                    self.state.chat_round += 1  # Update the state chat_round to match local counter
 
             except Exception as e:
-                print(f"❌ Agent {self.agent_id} error in round {curr_round}: {e}")
+                print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")
                 if self.orchestrator:
                     self.orchestrator.mark_agent_failed(self.agent_id, str(e))
                 break
         
-        print(f"🏁 Agent {self.agent_id} finished work loop after {curr_round} rounds with status: {self.state.status}")
         return working_messages
 
 
@@ -268,6 +290,12 @@ class GrokMassAgent(OpenAIMassAgent):
             **kwargs
         )
     
+    def _get_builtin_tools(self) -> List[Dict[str, Any]]:
+        """Return the built-in tools that are available to Grok models. 
+        Only live_search is supported right now.
+        """
+        return ["live_search"]
+    
     def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]], restart_instruction: Optional[str] = None) -> List[Dict[str, str]]:
         """
         Work on the task using the Grok backend with conversation continuation.
@@ -284,9 +312,7 @@ class GrokMassAgent(OpenAIMassAgent):
             
         Returns:
             Updated conversation history including agent's work
-        """
-        curr_round = 0
-        
+        """        
         # Start with provided messages
         working_messages = messages.copy()
         
@@ -296,11 +322,12 @@ class GrokMassAgent(OpenAIMassAgent):
         
         # Get available tools (system tools + built-in tools + custom tools)
         all_tools = []
-        for tool_type, tools in self._get_available_tools().items():
-            all_tools.extend(tools)
+        all_tools.extend(self._get_builtin_tools())
+        all_tools.extend(self._get_registered_tools())
+        all_tools.extend(self._get_system_tools())
         
         # Start the task solving loop
-        while curr_round < self.max_rounds and self.state.status == "working":
+        while self.state.chat_round < self.max_rounds and self.state.status == "working":
             try:
                 # Call LLM with current conversation
                 result = self.process_message(messages=working_messages, tools=all_tools)
@@ -337,14 +364,14 @@ class GrokMassAgent(OpenAIMassAgent):
                         else:
                             working_messages.append({"role": "user", "content": NO_UPDATE_NOTIFICATION})
                         
-                curr_round += 1
+                self.state.chat_round += 1  # Update the state chat_round to match local counter
                 
                 # Check if agent voted or failed
                 if self.state.status in ["voted", "failed"]:
                     break
                 
             except Exception as e:
-                print(f"❌ Agent {self.agent_id} error in round {curr_round}: {e}")
+                print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")
                 if self.orchestrator:
                     self.orchestrator.mark_agent_failed(self.agent_id, str(e))
                 break

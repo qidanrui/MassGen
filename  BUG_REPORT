@@ -50,8 +50,11 @@ Border display issues (FIXED):
 - ✅ Terminal resize detection added to reset cached dimensions
 - ✅ Error handling improved with fallback display mode
 
+
 TODO:
-- change cli to accept user input
-- add the automatic removal of txt file at the beginning of cli
-- check their history and polish the prompt
-- check why round = 0
+
+1. change to simplified design
+2. log system (where the files are saved)
+3. Gemini/Grok Function Call Message Construction
+
+
