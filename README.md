@@ -29,10 +29,11 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 
 | Feature | Description |
 |---------|-------------|
-| **🤝 Cross-Model/Agent Synergy** | Scale up intelligence by combining strengths from diverse frontier model-powered agents |
+| **🤝 Cross-Model/Agent Synergy** | Harness strengths from diverse frontier model-powered agents |
 | **⚡ Parallel Processing** | Multiple agents tackle problems simultaneously |
 | **👥 Intelligence Sharing** | Agents share and learn from each other's work |
 | **🔄 Consensus Building** | Natural convergence through collaborative refinement |
+| **📊 Live Visualization** | See agents' working processes in real-time |
 
 ---
 
