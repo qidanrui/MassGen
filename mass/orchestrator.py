@@ -33,6 +33,7 @@ class MassOrchestrator:
         consensus_threshold: float = 1.0,
         max_debate_rounds: int = 2,
         status_check_interval: float = 2.0,
+        thread_pool_timeout: int = 5,
         streaming_orchestrator=None,
     ):
         """
@@ -43,6 +44,7 @@ class MassOrchestrator:
             consensus_threshold: Fraction of agents that must agree for consensus (1.0 = unanimous)
             max_debate_rounds: Maximum number of debate rounds before fallback
             status_check_interval: Interval for checking agent status (seconds)
+            thread_pool_timeout: Timeout for shutting down thread pool executor (seconds)
             streaming_orchestrator: Optional streaming orchestrator for real-time display
         """
         self.agents: Dict[int, Any] = {}  # agent_id -> MassAgent instance
@@ -53,6 +55,7 @@ class MassOrchestrator:
         self.consensus_threshold = consensus_threshold
         self.max_debate_rounds = max_debate_rounds
         self.status_check_interval = status_check_interval
+        self.thread_pool_timeout = thread_pool_timeout
         self.streaming_orchestrator = streaming_orchestrator
 
         # Simplified coordination
@@ -139,23 +142,6 @@ class MassOrchestrator:
         Get count of agents who currently have status "voted".
         """
         return len([s for s in self.agent_states.values() if s.status == "voted"])
-    
-    def _get_votes_cast_by_agent(self) -> Dict[int, int]:
-        """
-        Get count of votes cast by each agent (as voter).
-        Returns dict of agent_id -> vote_count.
-        """
-        votes_cast = {}
-        # Initialize all agents with 0 votes
-        for agent_id in self.agent_states.keys():
-            votes_cast[agent_id] = 0
-        
-        # Count votes in the permanent vote history
-        for vote in self.votes:
-            if vote.voter_id in votes_cast:
-                votes_cast[vote.voter_id] += 1
-        
-        return votes_cast
 
     def _get_voting_status(self) -> Dict[str, Any]:
         """Get current voting status and distribution."""
@@ -183,7 +169,7 @@ class MassOrchestrator:
             "agents": {
                 agent_id: {
                     "status": state.status,
-                    "update_times": len(state.update_history),
+                    "update_times": len(state.updated_answers),
                     "chat_round": state.chat_round,
                     "vote_target": state.curr_vote.target_id,
                     "execution_time": state.execution_time,
@@ -230,12 +216,15 @@ class MassOrchestrator:
                               target_id=target_id, 
                               reason=reason,
                               timestamp=time.time())
-            self.votes.append(vote)
-
+            
+            # record the vote in the system's vote history
+            self.votes.append(vote) 
+            
             # Update agent state
             old_status = self.agent_states[voter_id].status
             self.agent_states[voter_id].status = "voted"
             self.agent_states[voter_id].curr_vote = vote
+            self.agent_states[voter_id].cast_votes.append(vote)
             self.agent_states[voter_id].execution_end_time = time.time()
 
             # Update streaming display
@@ -243,12 +232,12 @@ class MassOrchestrator:
                 self.streaming_orchestrator.update_agent_status(voter_id, "voted")
                 self.streaming_orchestrator.update_agent_vote_target(voter_id, target_id)
                 # Update agent update count
-                update_count = len(self.agent_states[voter_id].update_history)
+                update_count = len(self.agent_states[voter_id].updated_answers)
                 self.streaming_orchestrator.update_agent_update_count(voter_id, update_count)
                 # Update vote cast counts for all agents
-                votes_cast_by_agent = self._get_votes_cast_by_agent()
-                for agent_id, votes_cast in votes_cast_by_agent.items():
-                    self.streaming_orchestrator.update_agent_votes_cast(agent_id, votes_cast)
+                for agent_id, agent_state in self.agent_states.items():
+                    vote_cast_count = len(agent_state.cast_votes)
+                    self.streaming_orchestrator.update_agent_votes_cast(agent_id, vote_cast_count)
                 vote_counts = self._get_current_vote_counts()
                 self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
                 vote_msg = f"🗳️ Agent {voter_id} voted for Agent {target_id}"
@@ -319,7 +308,7 @@ class MassOrchestrator:
             answer_msg = f"📝 Agent {agent_id} updated answer ({len(answer)} chars)"
             self.streaming_orchestrator.add_system_message(answer_msg)
             # Update agent update count
-            update_count = len(self.agent_states[agent_id].update_history)
+            update_count = len(self.agent_states[agent_id].updated_answers)
             self.streaming_orchestrator.update_agent_update_count(agent_id, update_count)
         
         # CRITICAL FIX: Restart voted agents when any agent shares new updates
@@ -345,7 +334,7 @@ class MassOrchestrator:
                         self.streaming_orchestrator.update_agent_status(other_agent_id, "working")
                         self.streaming_orchestrator.update_agent_vote_target(other_agent_id, None)  # Clear vote target in display
                         # Update agent update count for restarted agent
-                        update_count = len(self.agent_states[other_agent_id].update_history)
+                        update_count = len(self.agent_states[other_agent_id].updated_answers)
                         self.streaming_orchestrator.update_agent_update_count(other_agent_id, update_count)
                         restart_msg = f"🔄 Agent {other_agent_id} restarted due to new update"
                         self.streaming_orchestrator.add_system_message(restart_msg)
@@ -368,7 +357,7 @@ class MassOrchestrator:
                     vote_counts = self._get_current_vote_counts()
                     self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
                     # Update vote cast counts for all agents to ensure accuracy
-                    votes_cast_by_agent = self._get_votes_cast_by_agent()
+                    votes_cast_by_agent = len(self.agent_states[voter_id].cast_votes)
                     for agent_id, votes_cast in votes_cast_by_agent.items():
                         self.streaming_orchestrator.update_agent_votes_cast(agent_id, votes_cast)
             
@@ -547,20 +536,20 @@ class MassOrchestrator:
             "agent_details": {
                 agent_id: {
                     "status": state.status,
-                    "updates_count": len(state.update_history),
+                    "updates_count": len(state.updated_answers),
                     "chat_length": len(state.chat_history),
                     "chat_round": state.chat_round,
                     "vote_target": state.curr_vote.target_id,
                     "execution_time": state.execution_time,
                     "execution_start_time": state.execution_start_time,
                     "execution_end_time": state.execution_end_time,
-                    "update_history": [
+                    "updated_answers": [
                         {
                             "timestamp": update.timestamp,
                             "status": update.status,
                             "answer_length": len(update.answer)
                         }
-                        for update in state.update_history
+                        for update in state.updated_answers
                     ]
                 }
                 for agent_id, state in self.agent_states.items()
@@ -781,7 +770,7 @@ class MassOrchestrator:
             if self.streaming_orchestrator:
                 self.streaming_orchestrator.update_agent_chat_round(agent_id, agent.state.chat_round)
                 # Update agent update count
-                update_count = len(self.agent_states[agent_id].update_history)
+                update_count = len(self.agent_states[agent_id].updated_answers)
                 self.streaming_orchestrator.update_agent_update_count(agent_id, update_count)
             
             logger.info(f"✅ Agent {agent_id} completed work with status: {self.agent_states[agent_id].status}")
@@ -906,6 +895,16 @@ class MassOrchestrator:
             session_duration = (self.system_state.end_time - self.system_state.start_time 
                                if self.system_state.start_time else 0)
             
+            # Save final agent states to files
+            if self.log_manager:
+                self.log_manager.save_agent_states(self)
+                self.log_manager.log_task_completion({
+                    "final_answer": self.final_response,
+                    "consensus_reached": self.system_state.consensus_reached,
+                    "representative_agent_id": self.system_state.representative_agent_id,
+                    "session_duration": session_duration
+                })
+            
             # Prepare clean, user-facing result
             result = {
                 "answer": self.final_response or "No final answer generated",
@@ -933,6 +932,30 @@ class MassOrchestrator:
         """
         logger.info("🧹 Cleaning up orchestrator resources")
         self._stop_event.set()
+        
+        # Save final agent states before cleanup
+        if self.log_manager and self.agent_states:
+            try:
+                self.log_manager.save_agent_states(self)
+                logger.info("✅ Final agent states saved")
+            except Exception as e:
+                logger.warning(f"⚠️ Error saving final agent states: {e}")
+        
+        # Clean up logging manager
+        if self.log_manager:
+            try:
+                self.log_manager.cleanup()
+                logger.info("✅ Log manager cleaned up")
+            except Exception as e:
+                logger.warning(f"⚠️ Error cleaning up log manager: {e}")
+        
+        # Clean up streaming orchestrator if it exists
+        if self.streaming_orchestrator:
+            try:
+                self.streaming_orchestrator.cleanup()
+                logger.info("✅ Streaming orchestrator cleaned up")
+            except Exception as e:
+                logger.warning(f"⚠️ Error cleaning up streaming orchestrator: {e}")
         
         # No longer using _agent_threads since we use ThreadPoolExecutor in workflow methods
         # The executor is properly shut down in _run_all_agents_with_dynamic_restart

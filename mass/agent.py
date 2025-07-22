@@ -188,9 +188,9 @@ class MassAgent(ABC):
         """
         # Get updates from other agents since this agent last saw them
         for other_id, other_state in self.orchestrator.agent_states.items():
-            if other_id != self.agent_id and other_state.update_history:
+            if other_id != self.agent_id and other_state.updated_answers:
                 last_seen = self.state.seen_updates_timestamps.get(other_id, 0)
-                for update in other_state.update_history:
+                for update in other_state.updated_answers:
                     if update.timestamp > last_seen:
                         return True
         return False

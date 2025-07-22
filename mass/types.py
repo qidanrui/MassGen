@@ -87,10 +87,11 @@ class AgentState:
     agent_id: int
     status: str = "working"  # "working", "voted", "failed"
     curr_answer: str = "" # the latest answer of the agent's work
-    update_history: List[AnswerRecord] = field(default_factory=list) # a list of answer records
-    chat_history: List[Dict[str, Any]] = field(default_factory=list) # a list of conversation records
+    updated_answers: List[AnswerRecord] = field(default_factory=list) # a list of answer records
     curr_vote: Optional[VoteRecord] = None  # Which agent's solution this agent voted for
+    cast_votes: List[VoteRecord] = field(default_factory=list) # a list of vote records
     seen_updates_timestamps: Dict[int, float] = field(default_factory=dict)  # agent_id -> last_seen_timestamp
+    chat_history: List[Dict[str, Any]] = field(default_factory=list) # a list of conversation records
     chat_round: int = 0 # the number of chat rounds the agent has participated in
     execution_start_time: Optional[float] = None
     execution_end_time: Optional[float] = None
@@ -112,7 +113,7 @@ class AgentState:
             answer=answer,
             status=self.status,
         )
-        self.update_history.append(record)
+        self.updated_answers.append(record)
         self.curr_answer = answer
 
     def mark_updates_seen(self, agent_updates: Dict[int, float]):

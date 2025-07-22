@@ -1,11 +1,11 @@
 OpenAI:
 - gpt-4o-mini did not have response streaming
 
-Logging:
-- where the information are saved
-- what information will be saved
-
 Display:
 - Region border
 
-Max Round Termination
+Max Round:
+ - Max Round Termination
+ - chat_history
+
+Final Answer Fallback

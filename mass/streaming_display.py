@@ -11,6 +11,7 @@ import os
 import time
 import threading
 import unicodedata
+import sys
 from typing import Dict, List, Optional, Callable, Union
 from datetime import datetime
 
@@ -39,251 +40,242 @@ class MultiRegionDisplay:
         self._agent_update_counts: Dict[int, int] = {}  # Track update history count
         self._agent_votes_cast: Dict[int, int] = {}  # Track number of votes cast by each agent
         
-        # Border consistency tracking - improved tracking
-        self._terminal_width = None
-        self._actual_display_width = None
-        self._col_width = None
-        self._border_error_count = 0
+        # Simplified, consistent border tracking
+        self._display_cache = None  # Single cache object for all dimensions
+        self._last_agent_count = 0  # Track when to invalidate cache
+        
+        # CRITICAL FIX: Debounced display updates to prevent race conditions
+        self._update_timer = None
+        self._update_delay = 0.1  # 100ms debounce
+        self._display_updating = False
+        self._pending_update = False
         
         # Initialize logging directory and files
         if self.save_logs:
             self._setup_logging()
     
-    def _get_terminal_dimensions(self):
-        """Get and lock terminal dimensions for consistent display."""
-        if self._terminal_width is None:
-            try:
-                detected_width = os.get_terminal_size().columns
-            except:
-                detected_width = 120
-            
-            # Conservative width calculation to prevent overflow
-            self._terminal_width = max(80, min(detected_width - 4, 180))  # Extra margin
-        
-        return self._terminal_width
+    def _get_terminal_width(self):
+        """Get terminal width with conservative fallback."""
+        try:
+            return os.get_terminal_size().columns
+        except:
+            return 120  # Safe default
     
-    def _calculate_display_dimensions(self, num_agents: int):
-        """Calculate and lock all display dimensions."""
-        if self._actual_display_width is None or self._col_width is None:
-            terminal_width = self._get_terminal_dimensions()
+    def _calculate_layout(self, num_agents: int):
+        """
+        Calculate all layout dimensions in one place for consistency.
+        Returns: (col_width, total_width, terminal_width)
+        """
+        # Invalidate cache if agent count changed or no cache exists
+        if (self._display_cache is None or 
+            self._last_agent_count != num_agents):
             
-            # Calculate border characters needed: │ before each column + │ at end
-            border_chars = num_agents + 1
+            terminal_width = self._get_terminal_width()
             
-            # Calculate column width with safety margin
-            available_width = terminal_width - border_chars - 4  # Extra safety margin
-            col_width = max(30, available_width // num_agents)  # Minimum column width
+            # Conservative calculation to prevent overflow
+            # Each column needs: content + left border (│)
+            # Plus one final border (│) at the end
+            border_chars = num_agents + 1  # │col1│col2│col3│
+            safety_margin = 6  # Extra safety for terminal variations
             
-            # Lock the actual display width
-            actual_display_width = (col_width * num_agents) + border_chars
+            available_width = terminal_width - border_chars - safety_margin
+            col_width = max(25, available_width // num_agents)  # Minimum 25 chars per column
             
-            # Final safety check - ensure we don't exceed terminal width
-            if actual_display_width > terminal_width:
-                col_width = max(25, (terminal_width - border_chars) // num_agents)
-                actual_display_width = (col_width * num_agents) + border_chars
-                
-            # Additional safety check - if still too wide, use minimum values
-            if actual_display_width > terminal_width:
+            # Calculate actual total width used
+            total_width = (col_width * num_agents) + border_chars
+            
+            # Final safety check - ensure we don't exceed terminal
+            if total_width > terminal_width:
                 col_width = max(20, (terminal_width - border_chars - 2) // num_agents)
-                actual_display_width = (col_width * num_agents) + border_chars
+                total_width = (col_width * num_agents) + border_chars
             
-            self._col_width = col_width
-            self._actual_display_width = actual_display_width
+            # Cache the results
+            self._display_cache = {
+                'col_width': col_width,
+                'total_width': total_width,
+                'terminal_width': terminal_width,
+                'num_agents': num_agents,
+                'border_chars': border_chars
+            }
+            self._last_agent_count = num_agents
         
-        return self._col_width, self._actual_display_width
+        cache = self._display_cache
+        return cache['col_width'], cache['total_width'], cache['terminal_width']
     
-    def _get_display_width_unified(self, text: str) -> int:
-        """Unified, simplified width calculation with consistent behavior."""
+    def _simple_display_width(self, text: str) -> int:
+        """
+        Simplified, reliable width calculation that focuses on accuracy over complexity.
+        """
         if not text:
             return 0
         
-        # Strip ANSI escape sequences completely
+        # Remove ANSI escape sequences
         import re
-        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        clean_text = ansi_escape.sub('', text)
+        ansi_pattern = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        clean_text = ansi_pattern.sub('', text)
         
-        # Simple, reliable width calculation
         width = 0
         for char in clean_text:
+            # Handle common wide characters and emojis conservatively
             char_code = ord(char)
-            
-            # Handle emojis and wide characters conservatively
             if (
-                (char_code >= 0x1F000 and char_code <= 0x1FAFF) or  # Emoji blocks
-                (char_code >= 0x2600 and char_code <= 0x27BF) or   # Misc symbols  
-                (char_code >= 0x1F300 and char_code <= 0x1F5FF) or  # More emojis
-                (char_code >= 0x1F600 and char_code <= 0x1F64F) or  # Emoticons
-                (char_code >= 0x1F680 and char_code <= 0x1F6FF) or  # Transport & Map
-                (char_code >= 0x1F700 and char_code <= 0x1F77F) or  # Alchemical
-                (char_code >= 0x1F780 and char_code <= 0x1F7FF) or  # Geometric Shapes Extended
-                (char_code >= 0x1F800 and char_code <= 0x1F8FF) or  # Supplemental Arrows-C
-                (char_code >= 0x1F900 and char_code <= 0x1F9FF) or  # Supplemental symbols
-                (char_code >= 0x2190 and char_code <= 0x21FF) or   # Arrows
-                (char_code >= 0x2700 and char_code <= 0x27BF) or   # Dingbats
-                (char_code >= 0x25A0 and char_code <= 0x25FF) or   # Geometric shapes
-                unicodedata.east_asian_width(char) in ('F', 'W')    # Full-width
+                # Common emoji ranges
+                (0x1F600 <= char_code <= 0x1F64F) or  # Emoticons
+                (0x1F300 <= char_code <= 0x1F5FF) or  # Misc symbols
+                (0x1F680 <= char_code <= 0x1F6FF) or  # Transport
+                (0x1F1E6 <= char_code <= 0x1F1FF) or  # Flags
+                (0x2600 <= char_code <= 0x26FF) or   # Misc symbols
+                (0x2700 <= char_code <= 0x27BF) or   # Dingbats
+                # East Asian wide characters
+                unicodedata.east_asian_width(char) in ('F', 'W')
             ):
                 width += 2
-            elif char_code < 32 or char_code == 127:  # Control characters
-                width += 0
-            else:
+            elif char_code >= 32:  # Printable characters
                 width += 1
+            # Control characters add 0 width
         
         return width
     
-    def _pad_to_exact_width_safe(self, text: str, target_width: int, align: str = 'left') -> str:
-        """Safe, reliable padding function that guarantees exact width."""
+    def _pad_to_width(self, text: str, target_width: int, align: str = 'left') -> str:
+        """
+        Pad text to exact target width using simplified logic.
+        """
         if target_width <= 0:
             return ""
         
-        if not text:
-            return " " * target_width
+        current_width = self._simple_display_width(text)
         
-        current_width = self._get_display_width_unified(text)
-        
-        # Handle text that's too long - simple truncation
+        # Truncate if too long
         if current_width > target_width:
-            # Strip ANSI codes for safe truncation
+            # Simple truncation approach
             import re
-            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-            clean_text = ansi_escape.sub('', text)
+            ansi_pattern = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+            clean_text = ansi_pattern.sub('', text)
             
-            # Truncate character by character to be safe
             truncated = ""
             width = 0
             for char in clean_text:
-                char_width = self._get_display_width_unified(char)
-                if width + char_width > target_width - 1:  # Leave room for ellipsis
+                char_width = self._simple_display_width(char)
+                if width + char_width > target_width - 1:  # Save space for …
                     truncated += "…"
                     break
                 truncated += char
                 width += char_width
-            
             text = truncated
-            current_width = self._get_display_width_unified(text)
+            current_width = self._simple_display_width(text)
         
-        # Calculate padding needed
-        padding_needed = max(0, target_width - current_width)
+        # Add padding
+        padding = target_width - current_width
+        if padding > 0:
+            if align == 'center':
+                left_pad = padding // 2
+                right_pad = padding - left_pad
+                return " " * left_pad + text + " " * right_pad
+            elif align == 'right':
+                return " " * padding + text
+            else:  # left
+                return text + " " * padding
         
-        # Apply padding based on alignment
-        if align == 'center':
-            left_pad = padding_needed // 2
-            right_pad = padding_needed - left_pad
-            result = " " * left_pad + text + " " * right_pad
-        elif align == 'right':
-            result = " " * padding_needed + text
-        else:  # left align
-            result = text + " " * padding_needed
+        return text
+    
+    def _create_bordered_line(self, content_parts: List[str], total_width: int) -> str:
+        """
+        Create a single bordered line with guaranteed correct width.
+        """
+        # Join content with borders: │content1│content2│content3│
+        line = "│" + "│".join(content_parts) + "│"
         
-        # Final validation and correction - use simple character counting for final check
-        final_width = self._get_display_width_unified(result)
-        if final_width != target_width:
-            # Emergency correction - force exact width using simple padding
-            if final_width > target_width:
-                # Cut from the end, preserving important content at start
+        # Verify width matches expectation
+        actual_width = self._simple_display_width(line)
+        if actual_width != total_width:
+            # Simple fix: truncate or pad the entire line
+            if actual_width > total_width:
+                # Emergency truncation
                 import re
-                ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-                clean_result = ansi_escape.sub('', result)
-                if len(clean_result) >= target_width:
-                    clean_result = clean_result[:target_width-1] + "…"
-                result = clean_result + " " * max(0, target_width - len(clean_result))
+                ansi_pattern = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+                clean_line = ansi_pattern.sub('', line)
+                if len(clean_line) > total_width:
+                    clean_line = clean_line[:total_width-1] + "│"
+                line = clean_line
             else:
-                # Add simple spaces to reach exact width
-                result += " " * (target_width - final_width)
+                # Add padding to reach exact width
+                line += " " * (total_width - actual_width)
         
-        return result
+        return line
     
-    def _create_system_line_safe(self, content: str, width: int) -> str:
-        """Create a system region line with guaranteed proper borders and width."""
-        # Calculate content width (total width minus border characters)
-        content_width = width - 2  # Subtract 2 for the │ characters on each side
-        
+    def _create_system_bordered_line(self, content: str, total_width: int) -> str:
+        """
+        Create a system section line with borders.
+        """
+        content_width = total_width - 2  # Account for │ on each side
         if content_width <= 0:
-            return "│" + " " * max(0, width - 2) + "│"
+            return "│" + " " * max(0, total_width - 2) + "│"
         
-        # Pad content to exact width
-        padded_content = self._pad_to_exact_width_safe(content, content_width, 'left')
-        
-        # Create the line with borders
-        line = f"│{padded_content}│"
-        
-        # Final validation - ensure line is exactly the right width
-        actual_width = self._get_display_width_unified(line)
-        if actual_width != width:
-            # Emergency fallback - create a simple line with proper width
-            safe_content = self._pad_to_exact_width_safe(content[:max(0, content_width-3)] + "...", content_width, 'left')
-            line = f"│{safe_content}│"
-        
-        return line
+        padded_content = self._pad_to_width(content, content_width, 'left')
+        return f"│{padded_content}│"
     
-    def _wrap_and_print_system_message(self, message: str, width: int):
-        """Safely wrap and print a system message with consistent borders."""
-        max_content_width = width - 2  # Account for border characters
-        
-        if max_content_width <= 0:
-            return
-        
-        # Check if message fits on one line
-        if self._get_display_width_unified(message) <= max_content_width:
-            line = self._create_system_line_safe(message, width)
-            print(line)
-        else:
-            # Simple word wrapping
-            words = message.split()
-            current_line = ""
-            
-            for word in words:
-                test_line = f"{current_line} {word}".strip()
-                if self._get_display_width_unified(test_line) > max_content_width:
-                    # Print current line if it has content
-                    if current_line.strip():
-                        line = self._create_system_line_safe(current_line.strip(), width)
-                        print(line)
-                    current_line = word
-                else:
-                    current_line = test_line
-            
-            # Print final line if it has content
-            if current_line.strip():
-                line = self._create_system_line_safe(current_line.strip(), width)
-                print(line)
+    def _invalidate_display_cache(self):
+        """Reset display cache when terminal is resized."""
+        self._display_cache = None
     
-    def _validate_border_consistency(self, line: str, expected_width: int) -> str:
-        """Validate and correct border alignment issues using unified width calculation."""
-        actual_width = self._get_display_width_unified(line)
-        
-        if actual_width != expected_width:
-            self._border_error_count += 1
+    def cleanup(self):
+        """Clean up resources when display is no longer needed."""
+        with self._lock:
+            if self._update_timer:
+                self._update_timer.cancel()
+                self._update_timer = None
+            self._pending_update = False
+            self._display_updating = False
+    
+    def _clear_terminal_atomic(self):
+        """Atomically clear terminal using proper ANSI sequences."""
+        try:
+            # Use ANSI escape sequences for atomic terminal clearing
+            # This is more reliable than os.system('clear')
+            sys.stdout.write('\033[2J')  # Clear entire screen
+            sys.stdout.write('\033[H')   # Move cursor to home position
+            sys.stdout.flush()           # Ensure immediate execution
+        except Exception:
+            # Fallback to os.system if ANSI sequences fail
+            try:
+                os.system('clear' if os.name == 'posix' else 'cls')
+            except Exception:
+                pass  # Silent fallback if all clearing methods fail
+    
+    def _schedule_display_update(self):
+        """Schedule a debounced display update to prevent rapid refreshes."""
+        with self._lock:
+            if self._update_timer:
+                self._update_timer.cancel()
             
-            # Log border inconsistency for debugging (only occasionally to avoid spam)
-            if self._border_error_count % 50 == 1:
-                print(f"DEBUG: Border width mismatch #{self._border_error_count}: expected {expected_width}, got {actual_width}", flush=True)
+            # Set pending update flag
+            self._pending_update = True
             
-            # More robust border correction
-            if line.startswith('│') and line.endswith('│'):
-                # Extract content between borders
-                content = line[1:-1] if len(line) >= 2 else ""
+            # Schedule update after delay
+            self._update_timer = threading.Timer(self._update_delay, self._execute_display_update)
+            self._update_timer.start()
+    
+    def _execute_display_update(self):
+        """Execute the actual display update."""
+        with self._lock:
+            if not self._pending_update:
+                return
                 
-                # Use the safe line creation method for consistency
-                corrected_line = self._create_system_line_safe(content, expected_width)
-                
-                # Double-check the corrected line
-                corrected_width = self._get_display_width_unified(corrected_line)
-                if corrected_width == expected_width:
-                    return corrected_line
-                else:
-                    # Emergency fallback - create a simple bordered line with exact width
-                    content_width = expected_width - 2
-                    if content_width > 0:
-                        safe_content = self._pad_to_exact_width_safe("", content_width, 'left')
-                        return f"│{safe_content}│"
-                    else:
-                        return "│" * max(1, expected_width)
-            else:
-                # Fallback for non-bordered lines
-                return self._pad_to_exact_width_safe(line, expected_width, 'left')
+            # Prevent concurrent updates
+            if self._display_updating:
+                # Reschedule if another update is in progress
+                self._update_timer = threading.Timer(self._update_delay, self._execute_display_update)
+                self._update_timer.start()
+                return
+            
+            self._display_updating = True
+            self._pending_update = False
         
-        return line
+        try:
+            self._update_display_immediate()
+        finally:
+            with self._lock:
+                self._display_updating = False
     
     def set_agent_model(self, agent_id: int, model_name: str):
         """Set the model name for a specific agent."""
@@ -381,7 +373,7 @@ class MultiRegionDisplay:
         
         # Create timestamped subdirectory for this session
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.session_logs_dir = os.path.join(base_logs_dir, timestamp)
+        self.session_logs_dir = os.path.join(base_logs_dir, timestamp, "display")
         os.makedirs(self.session_logs_dir, exist_ok=True)
         
         # Initialize log file paths with simple names
@@ -453,7 +445,7 @@ class MultiRegionDisplay:
             print(f"Error writing to system log: {e}")
         
     def stream_output_sync(self, agent_id: int, content: str):
-        """Synchronous version for non-async code."""
+        """FIXED: Buffered streaming with debounced display updates."""
         if not self.display_enabled:
             return
             
@@ -483,17 +475,17 @@ class MultiRegionDisplay:
             if log_content:
                 self._write_agent_log(agent_id, log_content)
             
-            # Update display if there was display content
+            # CRITICAL FIX: Use debounced updates instead of immediate updates
             if display_content:
-                self._update_display()
+                self._schedule_display_update()
     
     def _handle_terminal_resize(self):
         """Handle terminal resize by resetting cached dimensions."""
         try:
             current_width = os.get_terminal_size().columns
-            if self._terminal_width and abs(current_width - self._terminal_width) > 5:
+            if self._display_cache and abs(current_width - self._display_cache['terminal_width']) > 5:
                 # Significant change detected, reset cache
-                self._reset_display_cache()
+                self._invalidate_display_cache()
                 return True
         except:
             pass
@@ -526,13 +518,8 @@ class MultiRegionDisplay:
         notification_msg = f"{emoji} Agent {agent_id} received {notification_type} notification"
         self.add_system_message(notification_msg)
     
-    def _reset_display_cache(self):
-        """Reset cached display dimensions to handle terminal resize."""
-        self._terminal_width = None
-        self._actual_display_width = None
-        self._col_width = None
-        
-    def _update_display(self):
+    def _update_display_immediate(self):
+        """Immediate display update - called by the debounced scheduler."""
         if not self.display_enabled:
             return
             
@@ -540,7 +527,8 @@ class MultiRegionDisplay:
             # Handle potential terminal resize
             self._handle_terminal_resize()
             
-            os.system('clear' if os.name == 'posix' else 'cls')
+            # Use atomic terminal clearing
+            self._clear_terminal_atomic()
             
             # Get sorted agent IDs for consistent ordering
             agent_ids = sorted(self.agent_outputs.keys())
@@ -549,7 +537,7 @@ class MultiRegionDisplay:
             
             # Get terminal dimensions and calculate display dimensions  
             num_agents = len(agent_ids)
-            col_width, actual_display_width = self._calculate_display_dimensions(num_agents)
+            col_width, total_width, terminal_width = self._calculate_layout(num_agents)
         except Exception as e:
             # Fallback to simple text output if display fails
             print(f"Display error: {e}")
@@ -569,7 +557,7 @@ class MultiRegionDisplay:
             max_lines = max(max_lines, len(lines))
         
         # Create horizontal border line - use the locked width
-        border_line = "─" * actual_display_width
+        border_line = "─" * total_width
         
         # Enhanced MASS system header with fixed width
         print("")
@@ -586,28 +574,28 @@ class MultiRegionDisplay:
         RESET = '\033[0m'
         
         # Header with exact width
-        header_top = f"{BRIGHT_CYAN}{BOLD}╔{'═' * (actual_display_width - 2)}╗{RESET}"
+        header_top = f"{BRIGHT_CYAN}{BOLD}╔{'═' * (total_width - 2)}╗{RESET}"
         print(header_top)
         
         # Empty line
-        header_empty = f"{BRIGHT_CYAN}║{' ' * (actual_display_width - 2)}║{RESET}"
+        header_empty = f"{BRIGHT_CYAN}║{' ' * (total_width - 2)}║{RESET}"
         print(header_empty)
         
         # Title line with exact centering
         title_text = "🚀 MASS - Multi-Agent Scaling System 🚀"
-        title_line_content = self._pad_to_exact_width_safe(title_text, actual_display_width - 2, 'center')
+        title_line_content = self._pad_to_width(title_text, total_width - 2, 'center')
         title_line = f"{BRIGHT_CYAN}║{BRIGHT_YELLOW}{BOLD}{title_line_content}{RESET}{BRIGHT_CYAN}║{RESET}"
         print(title_line)
         
         # Subtitle line
         subtitle_text = "🔬 Advanced Agent Collaboration Framework"
-        subtitle_line_content = self._pad_to_exact_width_safe(subtitle_text, actual_display_width - 2, 'center')
+        subtitle_line_content = self._pad_to_width(subtitle_text, total_width - 2, 'center')
         subtitle_line = f"{BRIGHT_CYAN}║{BRIGHT_GREEN}{subtitle_line_content}{RESET}{BRIGHT_CYAN}║{RESET}"
         print(subtitle_line)
         
         # Empty line and bottom border
         print(header_empty)
-        header_bottom = f"{BRIGHT_CYAN}{BOLD}╚{'═' * (actual_display_width - 2)}╝{RESET}"
+        header_bottom = f"{BRIGHT_CYAN}{BOLD}╚{'═' * (total_width - 2)}╝{RESET}"
         print(header_bottom)
         
         # Agent section with perfect alignment
@@ -637,12 +625,11 @@ class MultiRegionDisplay:
             else:
                 agent_header = f"{emoji} {BRIGHT_CYAN}Agent {agent_id}{RESET} {status_color}[{status}]{RESET}"
             
-            header_content = self._pad_to_exact_width_safe(agent_header, col_width, 'center')
+            header_content = self._pad_to_width(agent_header, col_width, 'center')
             header_parts.append(header_content)
         
         # Print agent header line with exact borders
-        header_line = "│" + "│".join(header_parts) + "│"
-        header_line = self._validate_border_consistency(header_line, actual_display_width)
+        header_line = self._create_bordered_line(header_parts, total_width)
         print(header_line)
         
         # Agent state information line
@@ -665,13 +652,11 @@ class MultiRegionDisplay:
             
             state_text = f"📊 {' | '.join(state_info)}"
             # Ensure exact column width with improved padding
-            state_content = self._pad_to_exact_width_safe(state_text, col_width, 'center')
+            state_content = self._pad_to_width(state_text, col_width, 'center')
             state_parts.append(state_content)
         
         # Validate state line consistency before printing
-        state_line = "│" + "│".join(state_parts) + "│"
-        expected_state_width = actual_display_width
-        state_line = self._validate_border_consistency(state_line, expected_state_width)
+        state_line = self._create_bordered_line(state_parts, total_width)
         print(state_line)
         
         # Log file information
@@ -687,19 +672,18 @@ class MultiRegionDisplay:
                     # Safe path truncation with better width handling
                     prefix = "📁 Log: "
                     # More conservative calculation
-                    max_path_len = max(10, col_width - self._get_display_width_unified(prefix) - 8)
+                    max_path_len = max(10, col_width - self._simple_display_width(prefix) - 8)
                     if len(display_path) > max_path_len:
                         display_path = "..." + display_path[-(max_path_len-3):]
                     
                     link_text = f"{prefix}{UNDERLINE}{display_path}{RESET}"
-                    link_content = self._pad_to_exact_width_safe(link_text, col_width, 'center')
+                    link_content = self._pad_to_width(link_text, col_width, 'center')
                 else:
-                    link_content = self._pad_to_exact_width_safe("", col_width, 'center')
+                    link_content = self._pad_to_width("", col_width, 'center')
                 link_parts.append(link_content)
             
             # Validate log line consistency
-            log_line = "│" + "│".join(link_parts) + "│"
-            log_line = self._validate_border_consistency(log_line, expected_state_width)
+            log_line = self._create_bordered_line(link_parts, total_width)
             print(log_line)
         
         print(border_line)
@@ -712,12 +696,11 @@ class MultiRegionDisplay:
                 content = lines[line_idx] if line_idx < len(lines) else ""
                 
                 # Ensure exact column width for each content piece
-                padded_content = self._pad_to_exact_width_safe(content, col_width, 'left')
+                padded_content = self._pad_to_width(content, col_width, 'left')
                 content_parts.append(padded_content)
             
             # Apply border validation to every content line for consistency
-            content_line = "│" + "│".join(content_parts) + "│"
-            content_line = self._validate_border_consistency(content_line, actual_display_width)
+            content_line = self._create_bordered_line(content_parts, total_width)
             print(content_line)
         
         # System status section with exact width
@@ -739,7 +722,7 @@ class MultiRegionDisplay:
                 system_state_info.append(f"{BRIGHT_WHITE}Representative Agent:{RESET} None")
             
             system_header_text = f"{BRIGHT_CYAN}📋 SYSTEM STATE{RESET} - {' | '.join(system_state_info)}"
-            system_header_line = self._create_system_line_safe(system_header_text, actual_display_width)
+            system_header_line = self._create_system_bordered_line(system_header_text, total_width)
             print(system_header_line)
             
             # System log file link
@@ -751,12 +734,12 @@ class MultiRegionDisplay:
                     
                     # Safe path truncation with consistent width handling
                     prefix = "📁 Log: "
-                    max_path_len = max(10, actual_display_width - self._get_display_width_unified(prefix) - 15)
+                    max_path_len = max(10, total_width - self._simple_display_width(prefix) - 15)
                     if len(display_path) > max_path_len:
                         display_path = "..." + display_path[-(max_path_len-3):]
                     
                     system_link_text = f"{prefix}{UNDERLINE}{display_path}{RESET}"
-                    system_link_line = self._create_system_line_safe(system_link_text, actual_display_width)
+                    system_link_line = self._create_system_bordered_line(system_link_text, total_width)
                     print(system_link_line)
             
             print(border_line)
@@ -764,7 +747,7 @@ class MultiRegionDisplay:
             # System messages with exact width and validation
             if self.consensus_reached and self.representative_agent_id is not None:
                 consensus_msg = f"🎉 CONSENSUS REACHED! Representative: Agent {self.representative_agent_id}"
-                consensus_line = self._create_system_line_safe(consensus_msg, actual_display_width)
+                consensus_line = self._create_system_bordered_line(consensus_msg, total_width)
                 print(consensus_line)
             
             # Vote distribution with validation
@@ -772,27 +755,64 @@ class MultiRegionDisplay:
                 vote_msg = "🗳️  Vote Distribution: " + ", ".join([f"Agent {k}→{v} votes" for k, v in self.vote_distribution.items()])
                 
                 # Use the new safe wrapping method
-                max_content_width = actual_display_width - 2
-                if self._get_display_width_unified(vote_msg) <= max_content_width:
-                    vote_line = self._create_system_line_safe(vote_msg, actual_display_width)
+                max_content_width = total_width - 2
+                if self._simple_display_width(vote_msg) <= max_content_width:
+                    vote_line = self._create_system_bordered_line(vote_msg, total_width)
                     print(vote_line)
                 else:
                     # Wrap vote distribution using safe method
                     vote_header = "🗳️  Vote Distribution:"
-                    header_line = self._create_system_line_safe(vote_header, actual_display_width)
+                    header_line = self._create_system_bordered_line(vote_header, total_width)
                     print(header_line)
                     
                     for agent_id, votes in self.vote_distribution.items():
                         vote_detail = f"   Agent {agent_id}: {votes} votes"
-                        detail_line = self._create_system_line_safe(vote_detail, actual_display_width)
+                        detail_line = self._create_system_bordered_line(vote_detail, total_width)
                         print(detail_line)
             
             # Regular system messages with validation
             for message in self.system_messages:
-                self._wrap_and_print_system_message(message, actual_display_width)
+                # The original _wrap_and_print_system_message used _get_display_width_unified,
+                # which was a simplified width calculation.
+                # Now we use _simple_display_width for consistency.
+                max_content_width = total_width - 2
+                if self._simple_display_width(message) <= max_content_width:
+                    line = self._create_system_bordered_line(message, total_width)
+                    print(line)
+                else:
+                    # Simple word wrapping
+                    words = message.split()
+                    current_line = ""
+                    
+                    for word in words:
+                        test_line = f"{current_line} {word}".strip()
+                        if self._simple_display_width(test_line) > max_content_width:
+                            # Print current line if it has content
+                            if current_line.strip():
+                                line = self._create_system_bordered_line(current_line.strip(), total_width)
+                                print(line)
+                            current_line = word
+                        else:
+                            current_line = test_line
+                    
+                    # Print final line if it has content
+                    if current_line.strip():
+                        line = self._create_system_bordered_line(current_line.strip(), total_width)
+                        print(line)
         
         # Final border
         print(border_line)
+        
+        # Force output to be written immediately
+        sys.stdout.flush()
+    
+    def force_update_display(self):
+        """Force an immediate display update (for status changes)."""
+        with self._lock:
+            if self._update_timer:
+                self._update_timer.cancel()
+            self._pending_update = True
+        self._execute_display_update()
 
 class StreamingOrchestrator:
     def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 30, save_logs: bool = True):
@@ -800,7 +820,7 @@ class StreamingOrchestrator:
         self.stream_callback = stream_callback
     
     def stream_output(self, agent_id: int, content: str):
-        """Synchronous version for non-async code."""
+        """Streaming content - uses debounced updates."""
         self.display.stream_output_sync(agent_id, content)
         if self.stream_callback:
             try:
@@ -809,50 +829,69 @@ class StreamingOrchestrator:
                 pass
     
     def set_agent_model(self, agent_id: int, model_name: str):
+        """Set agent model - immediate update."""
         self.display.set_agent_model(agent_id, model_name)
+        self.display.force_update_display()
     
     def update_agent_status(self, agent_id: int, status: str):
+        """Update agent status - immediate update for critical state changes."""
         self.display.update_agent_status(agent_id, status)
+        self.display.force_update_display()
     
     def update_phase(self, old_phase: str, new_phase: str):
+        """Update phase - immediate update for critical state changes."""
         self.display.update_phase(old_phase, new_phase)
+        self.display.force_update_display()
     
     def update_vote_distribution(self, vote_dist: Dict[int, int]):
+        """Update vote distribution - immediate update for critical state changes."""
         self.display.update_vote_distribution(vote_dist)
+        self.display.force_update_display()
     
     def update_consensus_status(self, representative_id: int, vote_dist: Dict[int, int]):
+        """Update consensus status - immediate update for critical state changes."""
         self.display.update_consensus_status(representative_id, vote_dist)
+        self.display.force_update_display()
     
     def reset_consensus(self):
+        """Reset consensus - immediate update for critical state changes."""
         self.display.reset_consensus()
+        self.display.force_update_display()
     
     def add_system_message(self, message: str):
-        """Add a custom system message to the display"""
+        """Add system message - immediate update for important messages."""
         self.display.add_system_message(message)
+        self.display.force_update_display()
     
     def update_agent_vote_target(self, agent_id: int, target_id: Optional[int]):
-        """Update which agent this agent voted for."""
+        """Update agent vote target - immediate update for critical state changes."""
         self.display.update_agent_vote_target(agent_id, target_id)
+        self.display.force_update_display()
     
     def update_agent_chat_round(self, agent_id: int, round_num: int):
-        """Update the chat round for an agent."""
+        """Update agent chat round - debounced update."""
         self.display.update_agent_chat_round(agent_id, round_num)
+        # Don't force immediate update for chat rounds
     
     def update_agent_update_count(self, agent_id: int, count: int):
-        """Update the update count for an agent."""
+        """Update agent update count - debounced update."""
         self.display.update_agent_update_count(agent_id, count)
+        # Don't force immediate update for update counts
     
     def update_agent_votes_cast(self, agent_id: int, votes_cast: int):
-        """Update the number of votes cast by an agent."""
+        """Update agent votes cast - immediate update for vote-related changes."""
         self.display.update_agent_votes_cast(agent_id, votes_cast)
+        self.display.force_update_display()
     
     def update_debate_rounds(self, rounds: int):
-        """Update the debate rounds count."""
+        """Update debate rounds - immediate update for critical state changes."""
         self.display.update_debate_rounds(rounds)
+        self.display.force_update_display()
     
     def format_agent_notification(self, agent_id: int, notification_type: str, content: str):
-        """Format agent notifications for display."""
+        """Format agent notifications - immediate update for notifications."""
         self.display.format_agent_notification(agent_id, notification_type, content)
+        self.display.force_update_display()
     
     def get_agent_log_path(self, agent_id: int) -> str:
         """Get the log file path for a specific agent."""
@@ -861,6 +900,10 @@ class StreamingOrchestrator:
     def get_system_log_path(self) -> str:
         """Get the system log file path."""
         return self.display.get_system_log_path_for_display()
+    
+    def cleanup(self):
+        """Clean up resources when orchestrator is no longer needed."""
+        self.display.cleanup()
 
 def create_streaming_display(display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 30, save_logs: bool = True) -> StreamingOrchestrator:
     """Create a streaming orchestrator with display capabilities."""

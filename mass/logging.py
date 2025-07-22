@@ -16,8 +16,9 @@ from typing import Dict, Any, List, Optional, Union
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from collections import Counter
+import textwrap
 
-from .types import LogEntry
+from .types import LogEntry, AnswerRecord, VoteRecord
 
 class MassLogManager:
     """
@@ -29,6 +30,19 @@ class MassLogManager:
     - Voting events and consensus decisions
     - Phase transitions (collaboration, debate, consensus)
     - System metrics and performance data
+    
+    New organized structure:
+    logs/
+    └── YYYYMMDD_HHMMSS/
+        ├── display/
+        │   ├── agent_0.txt, agent_1.txt, ...  # Real-time display logs
+        │   └── system.txt                     # System messages
+        ├── answers/
+        │   ├── agent_0.txt, agent_1.txt, ...  # Agent answer histories
+        ├── votes/
+        │   ├── agent_0.txt, agent_1.txt, ...  # Agent voting records
+        ├── events.jsonl                       # Structured event log
+        └── console.log                        # Python logging output
     """
     
     def __init__(self, log_dir: str = "logs", session_id: Optional[str] = None, non_blocking: bool = False):
@@ -40,32 +54,40 @@ class MassLogManager:
             session_id: Unique identifier for this session
             non_blocking: If True, disable file logging to prevent hanging issues
         """
-        self.log_dir = Path(log_dir)
+        self.base_log_dir = Path(log_dir)
         self.session_id = session_id or self._generate_session_id()
         self.non_blocking = non_blocking
         
         if self.non_blocking:
             print(f"⚠️  LOGGING: Non-blocking mode enabled - file logging disabled")
         
-        # Create log directory if it doesn't exist (unless non-blocking)
+        # Create main session directory
+        self.session_dir = self.base_log_dir / self.session_id
         if not self.non_blocking:
             try:
-                self.log_dir.mkdir(exist_ok=True)
+                self.session_dir.mkdir(parents=True, exist_ok=True)
             except Exception as e:
-                print(f"Warning: Failed to create log directory, enabling non-blocking mode: {e}")
+                print(f"Warning: Failed to create session directory, enabling non-blocking mode: {e}")
                 self.non_blocking = True
         
-        # Session-specific log file
-        self.session_log_file = self.log_dir / f"session_{self.session_id}.jsonl"
+        # Create subdirectories
+        self.display_dir = self.session_dir / "display"
+        self.answers_dir = self.session_dir / "answers"
+        self.votes_dir = self.session_dir / "votes"
         
-        # Agent-specific log files
-        self.agent_log_dir = self.log_dir / f"session_{self.session_id}_agents"
         if not self.non_blocking:
             try:
-                self.agent_log_dir.mkdir(exist_ok=True)
+                self.display_dir.mkdir(exist_ok=True)
+                self.answers_dir.mkdir(exist_ok=True)
+                self.votes_dir.mkdir(exist_ok=True)
             except Exception as e:
-                print(f"Warning: Failed to create agent log directory, enabling non-blocking mode: {e}")
+                print(f"Warning: Failed to create subdirectories, enabling non-blocking mode: {e}")
                 self.non_blocking = True
+        
+        # File paths
+        self.events_log_file = self.session_dir / "events.jsonl"
+        self.console_log_file = self.session_dir / "console.log"
+        self.system_log_file = self.display_dir / "system.txt"
         
         # In-memory log storage for real-time access
         self.log_entries: List[LogEntry] = []
@@ -87,18 +109,36 @@ class MassLogManager:
         # Initialize logging
         self._setup_logging()
         
+        # Initialize system log file
+        if not self.non_blocking:
+            self._initialize_system_log()
+        
         # Log session start
         self.log_event("session_started", data={
             "session_id": self.session_id,
             "timestamp": time.time(),
-            "log_dir": str(self.log_dir),
+            "session_dir": str(self.session_dir),
             "non_blocking_mode": self.non_blocking
         })
     
     def _generate_session_id(self) -> str:
         """Generate a unique session ID."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return f"mass_{timestamp}_{int(time.time() * 1000) % 10000}"
+        return f"{timestamp}"
+    
+    def _initialize_system_log(self):
+        """Initialize the system log file with header."""
+        if self.non_blocking:
+            return
+            
+        try:
+            with open(self.system_log_file, 'w', encoding='utf-8') as f:
+                f.write(f"MASS System Messages Log\n")
+                f.write(f"Session ID: {self.session_id}\n")
+                f.write(f"Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 80 + "\n\n")
+        except Exception as e:
+            print(f"Warning: Failed to initialize system log: {e}")
     
     def _setup_logging(self):
         """Set up file logging configuration."""
@@ -112,21 +152,19 @@ class MassLogManager:
         
         # Ensure log directory exists before creating file handler
         try:
-            self.log_dir.mkdir(parents=True, exist_ok=True)
+            self.session_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            print(f"Warning: Failed to create log directory {self.log_dir}, skipping file logging: {e}")
+            print(f"Warning: Failed to create session directory {self.session_dir}, skipping file logging: {e}")
             return
         
-        # Create session-specific log file handler
-        session_log_handler = logging.FileHandler(
-            self.log_dir / f"session_{self.session_id}.log"
-        )
-        session_log_handler.setFormatter(log_formatter)
-        session_log_handler.setLevel(logging.DEBUG)
+        # Create console log file handler
+        console_log_handler = logging.FileHandler(self.console_log_file)
+        console_log_handler.setFormatter(log_formatter)
+        console_log_handler.setLevel(logging.DEBUG)
         
         # Add handler to the mass logger
         mass_logger = logging.getLogger('mass')
-        mass_logger.addHandler(session_log_handler)
+        mass_logger.addHandler(console_log_handler)
         mass_logger.setLevel(logging.DEBUG)
         
         # Prevent duplicate console logs
@@ -138,6 +176,129 @@ class MassLogManager:
             console_handler.setFormatter(log_formatter)
             console_handler.setLevel(logging.INFO)
             mass_logger.addHandler(console_handler)
+    
+    def _format_timestamp(self, timestamp: float) -> str:
+        """Format timestamp to human-readable format."""
+        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+    
+    def _format_answer_record(self, record: AnswerRecord, agent_id: int) -> str:
+        """Format an AnswerRecord into human-readable text."""
+        timestamp_str = self._format_timestamp(record.timestamp)
+        
+        # Wrap long answers for better readability
+        wrapped_answer = textwrap.fill(
+            record.answer, 
+            width=80, 
+            initial_indent="    ", 
+            subsequent_indent="    "
+        )
+        
+        # Create properly aligned header
+        header_text = f"AGENT {agent_id} ANSWER UPDATE"
+        header_padding = max(0, 76 -len(header_text))  # 78 = 80 - 2 (for the ║ characters)
+        aligned_header = f"║ {header_text}{' ' * header_padding} ║"
+        
+        return f"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+{aligned_header}
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 Timestamp: {timestamp_str}
+🎯 Status: {record.status}
+📝 Answer Length: {len(record.answer)} characters
+
+💬 Answer Content:
+{wrapped_answer}
+
+{'═' * 80}
+"""
+    
+    def _format_vote_record(self, record: VoteRecord, agent_id: int) -> str:
+        """Format a VoteRecord into human-readable text."""
+        timestamp_str = self._format_timestamp(record.timestamp)
+        
+        # Wrap long reasoning for better readability
+        wrapped_reason = textwrap.fill(
+            record.reason, 
+            width=80, 
+            initial_indent="    ", 
+            subsequent_indent="    "
+        ) if record.reason else "    No reason provided"
+        
+        # Create properly aligned header
+        header_text = f"AGENT {agent_id} VOTE CAST"
+        header_padding = max(0, 76 -len(header_text))  # 78 = 80 - 2 (for the ║ characters)
+        aligned_header = f"║ {header_text}{' ' * header_padding} ║"
+        
+        return f"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+{aligned_header}
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 Timestamp: {timestamp_str}
+🗳️  Voter: Agent {record.voter_id}
+🎯 Target: Agent {record.target_id}
+📄 Reasoning Length: {len(record.reason)} characters
+
+💭 Vote Reasoning:
+{wrapped_reason}
+
+{'═' * 80}
+"""
+    
+    def _write_agent_answers(self, agent_id: int, answer_records: List[AnswerRecord]):
+        """Write agent's answer history to the answers folder."""
+        if self.non_blocking:
+            return
+            
+        try:
+            answers_file = self.answers_dir / f"agent_{agent_id}.txt"
+            
+            with open(answers_file, 'w', encoding='utf-8') as f:
+                f.write(f"MASS Agent {agent_id} Answer History\n")
+                f.write(f"Session: {self.session_id}\n")
+                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 80 + "\n\n")
+                
+                if not answer_records:
+                    f.write("No answer records found for this agent.\n")
+                else:
+                    f.write(f"Total Answer Updates: {len(answer_records)}\n\n")
+                    
+                    for i, record in enumerate(answer_records, 1):
+                        f.write(f"[Update #{i}]\n")
+                        f.write(self._format_answer_record(record, agent_id))
+                        f.write("\n")
+                        
+        except Exception as e:
+            print(f"Warning: Failed to write answers for agent {agent_id}: {e}")
+    
+    def _write_agent_votes(self, agent_id: int, vote_records: List[VoteRecord]):
+        """Write agent's vote history to the votes folder."""
+        if self.non_blocking:
+            return
+            
+        try:
+            votes_file = self.votes_dir / f"agent_{agent_id}.txt"
+            
+            with open(votes_file, 'w', encoding='utf-8') as f:
+                f.write(f"MASS Agent {agent_id} Vote History\n")
+                f.write(f"Session: {self.session_id}\n")
+                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 80 + "\n\n")
+                
+                if not vote_records:
+                    f.write("No vote records found for this agent.\n")
+                else:
+                    f.write(f"Total Votes Cast: {len(vote_records)}\n\n")
+                    
+                    for i, record in enumerate(vote_records, 1):
+                        f.write(f"[Vote #{i}]\n")
+                        f.write(self._format_vote_record(record, agent_id))
+                        f.write("\n")
+                        
+        except Exception as e:
+            print(f"Warning: Failed to write votes for agent {agent_id}: {e}")
     
     def log_event(self, event_type: str, agent_id: Optional[int] = None, 
                   phase: str = "unknown", data: Optional[Dict[str, Any]] = None):
@@ -188,13 +349,8 @@ class MassLogManager:
         
         self.log_event("agent_answer_update", agent_id, phase, data)
         
-        # Log to agent-specific file
-        self._write_agent_log(agent_id, {
-            "timestamp": time.time(),
-            "event": "answer_update",
-            "phase": phase,
-            "answer": answer,
-        })
+        # This will be handled by system state snapshots
+        # Individual answer updates are captured there
     
     def log_agent_status_change(self, agent_id: int, old_status: str, 
                                new_status: str, phase: str = "unknown"):
@@ -215,14 +371,7 @@ class MassLogManager:
         
         self.log_event("agent_status_change", agent_id, phase, data)
         
-        # Log to agent-specific file
-        self._write_agent_log(agent_id, {
-            "timestamp": time.time(),
-            "event": "status_change",
-            "phase": phase,
-            "old_status": old_status,
-            "new_status": new_status
-        })
+        # Status changes are captured in system state snapshots
     
     def log_system_state_snapshot(self, orchestrator, phase: str = "unknown"):
         """
@@ -243,9 +392,9 @@ class MassLogManager:
             agent_states[agent_id] = {
                 "status": agent_state.status,
                 "curr_answer": agent_state.curr_answer,
-                "vote_target": agent_state.curr_vote.target_id,
+                "vote_target": agent_state.curr_vote.target_id if agent_state.curr_vote else None,
                 "execution_time": agent_state.execution_time,
-                "update_count": len(agent_state.update_history),
+                "update_count": len(agent_state.updated_answers),
                 "seen_updates_timestamps": agent_state.seen_updates_timestamps
             }
             
@@ -258,7 +407,7 @@ class MassLogManager:
                         "answer": update.answer,
                         "status": update.status
                     }
-                    for update in agent_state.update_history
+                    for update in agent_state.updated_answers
                 ]
             }
         
@@ -302,8 +451,17 @@ class MassLogManager:
             "system_state": system_snapshot
         }
         
+        # Save individual agent states to answers and votes folders
+        for agent_id, agent_state in orchestrator.agent_states.items():
+            # Save answer history
+            self._write_agent_answers(agent_id, agent_state.updated_answers)
+            
+            # Save vote history  
+            self._write_agent_votes(agent_id, agent_state.cast_votes)
+        
+        # Write system state to each agent's display log file for complete context
         for agent_id in orchestrator.agents.keys():
-            self._write_agent_log(agent_id, system_state_entry)
+            self._write_agent_display_log(agent_id, system_state_entry)
         
         return system_snapshot
     
@@ -329,26 +487,8 @@ class MassLogManager:
         
         self.log_event("voting_event", voter_id, phase, data)
         
-        # Log to both voter and target agent files
-        vote_entry = {
-            "timestamp": time.time(),
-            "event": "vote_cast",
-            "phase": phase,
-            "voter_id": voter_id,
-            "target_id": target_id,
-            "reason": reason,
-            "reason_length": len(reason)
-        }
-        self._write_agent_log(voter_id, vote_entry)
-        if target_id != voter_id:
-            vote_received_entry = {
-                "timestamp": time.time(),
-                "event": "vote_received",
-                "phase": phase,
-                "from_agent": voter_id,
-                "reason_preview": reason[:200] + "..." if len(reason) > 200 else reason
-            }
-            self._write_agent_log(target_id, vote_received_entry)
+        # Vote events are captured in system state snapshots
+        # Individual votes will be saved when agent states are saved
     
     def log_consensus_reached(self, winning_agent_id: int, vote_distribution: Dict[int, int], 
                              is_fallback: bool = False, phase: str = "unknown"):
@@ -373,7 +513,7 @@ class MassLogManager:
         
         self.log_event("consensus_reached", winning_agent_id, phase, data)
         
-        # Log to all agent files
+        # Log to all agent display files
         consensus_entry = {
             "timestamp": time.time(),
             "event": "consensus_reached",
@@ -383,7 +523,7 @@ class MassLogManager:
             "is_fallback": is_fallback
         }
         for agent_id in vote_distribution.keys():
-            self._write_agent_log(agent_id, consensus_entry)
+            self._write_agent_display_log(agent_id, consensus_entry)
     
     def log_phase_transition(self, old_phase: str, new_phase: str, additional_data: Dict[str, Any] = None):
         """
@@ -425,7 +565,7 @@ class MassLogManager:
         
         self.log_event("notification_sent", agent_id, phase, data)
         
-        # Log to agent file
+        # Log to agent display file
         notification_entry = {
             "timestamp": time.time(),
             "event": "notification_received",
@@ -433,7 +573,7 @@ class MassLogManager:
             "notification_type": notification_type,
             "content": content_preview
         }
-        self._write_agent_log(agent_id, notification_entry)
+        self._write_agent_display_log(agent_id, notification_entry)
     
     def log_agent_restart(self, agent_id: int, reason: str, phase: str = "unknown"):
         """
@@ -454,14 +594,14 @@ class MassLogManager:
         
         self.log_event("agent_restart", agent_id, phase, data)
         
-        # Log to agent file
+        # Log to agent display file
         restart_entry = {
             "timestamp": time.time(),
             "event": "agent_restarted",
             "phase": phase,
             "reason": reason
         }
-        self._write_agent_log(agent_id, restart_entry)
+        self._write_agent_display_log(agent_id, restart_entry)
     
     def log_debate_started(self, phase: str = "unknown"):
         """
@@ -501,34 +641,61 @@ class MassLogManager:
         
         try:
             # Create directory if it doesn't exist
-            self.session_log_file.parent.mkdir(parents=True, exist_ok=True)
+            self.events_log_file.parent.mkdir(parents=True, exist_ok=True)
             
-            with open(self.session_log_file, 'a', buffering=1) as f:  # Line buffering
+            with open(self.events_log_file, 'a', buffering=1) as f:  # Line buffering
                 json_line = json.dumps(entry.to_dict(), default=str, ensure_ascii=False)
                 f.write(json_line + '\n')
                 f.flush()
         except Exception as e:
             print(f"Warning: Failed to write log entry: {e}")
     
-    def _write_agent_log(self, agent_id: int, data: Dict[str, Any]):
-        """Write agent-specific log entry."""
+    def _write_agent_display_log(self, agent_id: int, data: Dict[str, Any]):
+        """Write agent-specific display log entry."""
         # Skip file operations in non-blocking mode
         if self.non_blocking:
             return
         
         try:
-            agent_log_file = self.agent_log_dir / f"agent_{agent_id}.jsonl"
+            agent_log_file = self.display_dir / f"agent_{agent_id}.txt"
             
             # Create directory if it doesn't exist
             agent_log_file.parent.mkdir(parents=True, exist_ok=True)
             
-            # Write with explicit buffering
-            with open(agent_log_file, 'a', buffering=1) as f:  # Line buffering
-                json_line = json.dumps(data, default=str, ensure_ascii=False)
-                f.write(json_line + '\n')
+            # Initialize file if it doesn't exist
+            if not agent_log_file.exists():
+                with open(agent_log_file, 'w', encoding='utf-8') as f:
+                    f.write(f"MASS Agent {agent_id} Display Log\n")
+                    f.write(f"Session: {self.session_id}\n")
+                    f.write(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write("=" * 80 + "\n\n")
+            
+            # Write event entry
+            with open(agent_log_file, 'a', encoding='utf-8') as f:
+                timestamp_str = self._format_timestamp(data.get('timestamp', time.time()))
+                f.write(f"[{timestamp_str}] {data.get('event', 'unknown_event')}\n")
+                
+                # Write event details
+                for key, value in data.items():
+                    if key not in ['timestamp', 'event']:
+                        f.write(f"  {key}: {value}\n")
+                f.write("\n")
                 f.flush()
         except Exception as e:
-            print(f"Warning: Failed to write agent log: {e}")
+            print(f"Warning: Failed to write agent display log: {e}")
+    
+    def _write_system_log(self, message: str):
+        """Write a system message to the system log file."""
+        if self.non_blocking:
+            return
+            
+        try:
+            with open(self.system_log_file, 'a', encoding='utf-8') as f:
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                f.write(f"[{timestamp}] {message}\n")
+                f.flush()  # Ensure immediate write
+        except Exception as e:
+            print(f"Error writing to system log: {e}")
       
     def get_agent_history(self, agent_id: int) -> List[LogEntry]:
         """Get complete history for a specific agent."""
@@ -565,8 +732,12 @@ class MassLogManager:
                 "agent_activities": agent_activities,
                 "session_duration": self._calculate_session_duration(),
                 "log_files": {
-                    "session_log": str(self.session_log_file),
-                    "agent_logs_dir": str(self.agent_log_dir)
+                    "session_dir": str(self.session_dir),
+                    "events_log": str(self.events_log_file),
+                    "console_log": str(self.console_log_file),
+                    "display_dir": str(self.display_dir),
+                    "answers_dir": str(self.answers_dir),
+                    "votes_dir": str(self.votes_dir)
                 }
             }
     
@@ -579,6 +750,21 @@ class MassLogManager:
         end_time = max(entry.timestamp for entry in self.log_entries)
         return end_time - start_time
      
+    def save_agent_states(self, orchestrator):
+        """Save current agent states to answers and votes folders."""
+        if self.non_blocking:
+            return
+            
+        try:
+            for agent_id, agent_state in orchestrator.agent_states.items():
+                # Save answer history
+                self._write_agent_answers(agent_id, agent_state.updated_answers)
+                
+                # Save vote history  
+                self._write_agent_votes(agent_id, agent_state.cast_votes)
+        except Exception as e:
+            print(f"Warning: Failed to save agent states: {e}")
+    
     def cleanup(self):
         """Clean up and finalize the logging session."""
         self.log_event("session_ended", data={

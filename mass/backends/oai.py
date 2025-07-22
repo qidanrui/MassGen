@@ -140,6 +140,14 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
             else:
                 raise ValueError(f"Invalid tool type: {type(tool)}")
 
+        # DEBUGGING
+        with open("openai_input.txt", "a") as f:
+            import time  # Local import to ensure availability in threading context
+            inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OpenAI API Request:\n"
+            inference_log += f"Messages: {json.dumps(messages, indent=2)}\n"
+            inference_log += "\n\n"
+            f.write(inference_log)
+                    
         # Convert messages to the format expected by OpenAI responses API
         # For now, we'll use the last user message as input
         input_text = []
@@ -192,15 +200,7 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                         params["reasoning"] = {"effort": "low"}
                 params["model"] = model_name
                 
-                # DEBUGGING
-                with open("openai_input.txt", "a") as f:
-                    import time  # Local import to ensure availability in threading context
-                    inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OpenAI API Request:\n"
-                    inference_log += f"Instructions: {instructions}\n"
-                    inference_log += f"Messages: {json.dumps(input_text, indent=2)}\n"
-                    inference_log += "\n\n"
-                    f.write(inference_log)
-                    
+                # Inference        
                 response = client.responses.create(**params)
                 completion = response
                 break
