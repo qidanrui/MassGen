@@ -12,7 +12,7 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 ## 📋 Table of Contents
 
 - [✨ Key Features](#-key-features)
-- [🏗️ How It Works](#️-how-it-works)
+- [🏗️ System Design](#️-system-design)
 - [🚀 Quick Start](#-quick-start)
 - [🤝 Contributing](#-contributing)
 
@@ -30,7 +30,9 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ System Design
+
+MASS operates through a sophisticated architecture designed for **seamless multi-agent collaboration**:
 
 ```mermaid
 graph TB
@@ -70,9 +72,7 @@ graph TB
     class H hub
 ```
 
-## 🏗️ How It Works
-
-MASS operates through **seamless multi-agent collaboration**:
+The system's workflow is defined by the following key principles:
 
 **Parallel Processing** - Multiple agents tackle the same task simultaneously, each leveraging their unique capabilities (different models, tools, and specialized approaches).
 
@@ -153,7 +153,7 @@ MASS is currently in its foundational stage, with a focus on core multi-agent co
 
 ### Key Future Enhancements:
 
--   **Advanced Agent Collaboration:** Implementing more sophisticated communication and consensus-building protocols to improve agent synergy.
+-   **Advanced Agent Collaboration:** Exploring more communication and consensus-building protocols to improve agent synergy.
 -   **Expanded Model & Tool Integration:** Adding support for more models, including Claude, and integrating a wider range of tools like MCP Servers.
 -   **Improved Performance & Scalability:** Optimizing the streaming and logging mechanisms for better performance and resource management.
 -   **Enhanced Developer Experience:** Introducing a more modular agent design and a comprehensive benchmarking framework for easier extension and evaluation.
