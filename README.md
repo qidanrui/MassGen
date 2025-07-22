@@ -38,34 +38,21 @@ MASS operates through a sophisticated architecture designed for **seamless multi
 graph TB
     O[🚀 MASS Orchestrator<br/>📋 Task Distribution & Coordination]
 
-    A1[🤖 Agent 1<br/>🏗️ Anthropic/Claude<br/>📝 Working Summary]
-    A2[🤖 Agent 2<br/>🌟 Google/Gemini<br/>📝 Working Summary]
-    A3[🤖 Agent 3<br/>🤖 OpenAI/GPT + Tools<br/>📝 Working Summary]
-    A4[🤖 Agent 4<br/>⚡ xAI/Grok + Search<br/>📝 Working Summary]
+    subgraph Collaborative Agents
+        A1[Agent 1<br/>🏗️ Anthropic/Claude]
+        A2[Agent 2<br/>🌟 Google/Gemini]
+        A3[Agent 3<br/>🤖 OpenAI/GPT + Tools]
+        A4[Agent 4<br/>⚡ xAI/Grok + Search]
+    end
 
-    H[🔄 Shared Collaboration Hub<br/>📡 Real-time Notification System<br/>🎯 Convergence Detection<br/>🤝 Consensus Building]
+    H[🔄 Shared Collaboration Hub<br/>📡 Real-time Notification & Consensus]
 
-    O --> A1
-    O --> A2
-    O --> A3
-    O --> A4
-
-    A1 <--> H
-    A2 <--> H
-    A3 <--> H
-    A4 <--> H
-
-    A1 -.-> A2
-    A1 -.-> A3
-    A1 -.-> A4
-    A2 -.-> A3
-    A2 -.-> A4
-    A3 -.-> A4
+    O --> A1 & A2 & A3 & A4
+    A1 & A2 & A3 & A4 <--> H
 
     classDef orchestrator fill:#e1f5fe,stroke:#0288d1,stroke-width:3px
     classDef agent fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
     classDef hub fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
-    classDef collaboration stroke:#ff9800,stroke-width:1px,stroke-dasharray: 5 5
 
     class O orchestrator
     class A1,A2,A3,A4 agent
