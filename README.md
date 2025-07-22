@@ -3,6 +3,12 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+    <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg" alt="MASS Demo Video">
+  </a>
+</div>
+
 > 🧠 **Advanced multi-agent orchestrator that emulates Grok Heavy through intelligent collaboration**
 
 MASS is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result. This project is inspired by the ideas presented in [The Myth of Reasoning](https://docs.ag2.ai/latest/docs/blog/#the-myth-of-reasoning) and aims to emulate the power of systems like grok-4 heavy.
