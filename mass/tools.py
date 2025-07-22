@@ -14,7 +14,7 @@ import math
 # Global tool registry
 register_tool = {}
 
-def mock_update_summary(new_content: str):
+def mock_new_answer(new_content: str):
     """
     Record your working process and final summary report, which can be shared with other agents.
 

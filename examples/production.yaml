@@ -21,7 +21,7 @@ agents:
       model: "gpt-4o"
       tools: ["live_search", "code_execution"]
       max_retries: 15           # More retries for reliability
-      max_rounds: 35           # Allow thorough analysis
+      max_rounds: 10           # Allow thorough analysis
       max_tokens: 8000         # Large context for detailed work
       temperature: 0.3         # Low temperature for consistency
       top_p: 0.9
@@ -35,7 +35,7 @@ agents:
       model: "gemini-2.5-pro"
       tools: ["live_search", "code_execution"]
       max_retries: 15
-      max_rounds: 35
+      max_rounds: 10
       max_tokens: 8000
       temperature: 0.2         # Very low temperature for accuracy
       top_p: 0.9
@@ -49,7 +49,7 @@ agents:
       model: "grok-3"
       tools: ["live_search", "code_execution"]
       max_retries: 12
-      max_rounds: 30
+      max_rounds: 10
       max_tokens: 6000
       temperature: 0.4         # Balanced creativity and reliability
       top_p: 0.9

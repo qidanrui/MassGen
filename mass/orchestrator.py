@@ -10,13 +10,6 @@ import asyncio
 
 from .types import SystemState, AgentState, TaskInput, VoteRecord
 from .logging import get_log_manager
-from .agent import (
-    SYSTEM_INSTRUCTION,
-    UPDATE_NOTIFICATION, 
-    PRESENTATION_NOTIFICATION, 
-    DEBATE_NOTIFICATION, 
-    PROMPT_UPDATE_NOTIFICATION
-)
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -94,38 +87,36 @@ class MassOrchestrator:
         """Log an orchestrator event."""
         self.communication_log.append({"timestamp": time.time(), "event_type": event_type, "data": data})
 
-    def update_agent_summary(self, agent_id: int, summary: str):
+    def update_agent_answer(self, agent_id: int, answer: str):
         """
-        Update an agent's working summary.
+        Update an agent's running answer.
 
         Args:
-            agent_id: ID of the agent updating their summary
-            summary: New summary content
+            agent_id: ID of the agent updating their answer
+            answer: New answer content
         """
         with self._lock:
             if agent_id not in self.agent_states:
                 raise ValueError(f"Agent {agent_id} not registered")
 
-            old_summary_length = len(self.agent_states[agent_id].working_summary)
-            self.agent_states[agent_id].add_update(summary)
+            old_answer_length = len(self.agent_states[agent_id].curr_answer)
+            self.agent_states[agent_id].add_update(answer)
             
-
-
-            preview = summary[:100] + "..." if len(summary) > 100 else summary
-            print(f"📝 Agent {agent_id} summary updated ({old_summary_length} → {len(summary)} chars)")
+            preview = answer[:100] + "..." if len(answer) > 100 else answer
+            print(f"📝 Agent {agent_id} answer updated ({old_answer_length} → {len(answer)} chars)")
             print(f"   🔍 {preview}")
 
             # Log to the comprehensive logging system
             if self.log_manager:
-                self.log_manager.log_agent_summary_update(
+                self.log_manager.log_agent_answer_update(
                     agent_id=agent_id,
-                    summary=summary,
+                    answer=answer,
                     phase=self.system_state.phase,
                 )
 
             self._log_event(
-                "summary_updated",
-                {"agent_id": agent_id, "summary": summary, "timestamp": time.time()},
+                "answer_updated",
+                {"agent_id": agent_id, "answer": answer, "timestamp": time.time()},
             )
 
     def _get_current_vote_counts(self) -> Counter:
@@ -135,8 +126,8 @@ class MassOrchestrator:
         """
         current_votes = []
         for agent_id, state in self.agent_states.items():
-            if state.status == "voted" and state.vote_target is not None:
-                current_votes.append(state.vote_target)
+            if state.status == "voted" and state.curr_vote is not None:
+                current_votes.append(state.curr_vote.target_id)
         
         # Create counter from actual votes
         vote_counts = Counter(current_votes)
@@ -172,27 +163,6 @@ class MassOrchestrator:
             "leading_agent": vote_counts.most_common(1)[0] if vote_counts else None,
         }
         
-    def get_session_info(self) -> Dict[str, Any]:
-        """
-        Get the current session information, including all agent states, system status, and voting status.
-
-        Returns:
-            Dictionary containing agent states, system status, and voting status
-        """
-        with self._lock:
-            session_info = {
-                "agent_states": self.agent_states,
-                "system_status": {
-                    "phase": self.system_state.phase,
-                    "total_agents": len(self.agents),
-                    "voted_agents": len([s for s in self.agent_states.values() if s.status == "voted"]),
-                    "working_agents": len([s for s in self.agent_states.values() if s.status == "working"]),
-                    "failed_agents": len([s for s in self.agent_states.values() if s.status == "failed"]),
-                },
-                "voting_status": self._get_voting_status(),
-            }
-            return session_info
-    
     def get_system_status(self) -> Dict[str, Any]:
         """Get comprehensive system status information."""
         return {
@@ -202,9 +172,8 @@ class MassOrchestrator:
                 agent_id: {
                     "status": state.status,
                     "update_times": len(state.update_history),
-                    "chat_length": len(state.chat_history),
                     "chat_round": state.chat_round,
-                    "vote_target": state.vote_target,
+                    "vote_target": state.curr_vote.target_id,
                     "execution_time": state.execution_time,
                 }
                 for agent_id, state in self.agent_states.items()
@@ -213,21 +182,21 @@ class MassOrchestrator:
             "runtime": (time.time() - self.system_state.start_time) if self.system_state.start_time else 0,
         }
 
-    def cast_vote(self, voter_id: int, target_id: int, response_text: str = ""):
+    def cast_vote(self, voter_id: int, target_id: int, reason: str = ""):
         """
         Record a vote from one agent for another agent's solution.
 
         Args:
             voter_id: ID of the agent casting the vote
             target_id: ID of the agent being voted for
-            response_text: The full response text that led to this vote (optional)
+            reason: The reason for the vote (optional)
         """
         with self._lock:
             logger.info(f"🗳️ VOTING: Agent {voter_id} casting vote")
 
             print(f"🗳️  VOTE: Agent {voter_id} → Agent {target_id} ({self.system_state.phase})")
-            if response_text:
-                print(f"   📝 Voting reason: {len(response_text)} chars")
+            if reason:
+                print(f"   📝 Voting reason: {len(reason)} chars")
 
             if voter_id not in self.agent_states:
                 logger.error(f"   ❌ Invalid voter: Agent {voter_id} not registered")
@@ -237,24 +206,24 @@ class MassOrchestrator:
                 raise ValueError(f"Target agent {target_id} not registered")
 
             # Check current vote status
-            previous_vote = self.agent_states[voter_id].vote_target
+            previous_vote = self.agent_states[voter_id].curr_vote
             # Log vote change type
             if previous_vote:
-                logger.info(f"   🔄 Agent {voter_id} changed vote from Agent {previous_vote} to Agent {target_id}")
+                logger.info(f"   🔄 Agent {voter_id} changed vote from Agent {previous_vote.target_id} to Agent {target_id}")
             else:
                 logger.info(f"   ✨ Agent {voter_id} new vote for Agent {target_id}")
 
             # Add vote record to permanent history (only for actual changes)
             vote = VoteRecord(voter_id=voter_id, 
                               target_id=target_id, 
-                              reason=response_text,
+                              reason=reason,
                               timestamp=time.time())
             self.votes.append(vote)
 
             # Update agent state
             old_status = self.agent_states[voter_id].status
             self.agent_states[voter_id].status = "voted"
-            self.agent_states[voter_id].vote_target = target_id
+            self.agent_states[voter_id].curr_vote = vote
             self.agent_states[voter_id].execution_end_time = time.time()
 
             # Update streaming display
@@ -275,7 +244,7 @@ class MassOrchestrator:
                     voter_id=voter_id,
                     target_id=target_id,
                     phase=self.system_state.phase,
-                    response_text=response_text,
+                    reason=reason,
                 )
                 self.log_manager.log_agent_status_change(
                     agent_id=voter_id,
@@ -319,20 +288,20 @@ class MassOrchestrator:
 
             return consensus_reached
             
-    def notify_summary_update(self, agent_id: int, summary: str):
+    def notify_answer_update(self, agent_id: int, answer: str):
         """
-        Called when an agent updates their summary.
+        Called when an agent updates their answer.
         This should restart all voted agents who haven't seen this update yet.
         """
-        logger.info(f"📢 Agent {agent_id} updated summary")
+        logger.info(f"📢 Agent {agent_id} updated answer")
         
-        # Update the summary in agent state
-        self.update_agent_summary(agent_id, summary)
+        # Update the answer in agent state
+        self.update_agent_answer(agent_id, answer)
         
         # Update streaming display
         if self.streaming_orchestrator:
-            summary_msg = f"📝 Agent {agent_id} updated summary ({len(summary)} chars)"
-            self.streaming_orchestrator.add_system_message(summary_msg)
+            answer_msg = f"📝 Agent {agent_id} updated answer ({len(answer)} chars)"
+            self.streaming_orchestrator.add_system_message(answer_msg)
             # Update agent update count
             update_count = len(self.agent_states[agent_id].update_history)
             self.streaming_orchestrator.update_agent_update_count(agent_id, update_count)
@@ -348,7 +317,8 @@ class MassOrchestrator:
                     
                     # Restart the voted agent
                     state.status = "working"
-                    state.vote_target = None  # CRITICAL FIX: Clear vote target when restarting
+                    # This vote should be cleared as answers have been updated
+                    state.curr_vote = None
                     state.execution_start_time = time.time()
                     restarted_agents.append(other_agent_id)
                     
@@ -560,7 +530,7 @@ class MassOrchestrator:
                     "updates_count": len(state.update_history),
                     "chat_length": len(state.chat_history),
                     "chat_round": state.chat_round,
-                    "vote_target": state.vote_target,
+                    "vote_target": state.curr_vote.target_id,
                     "execution_time": state.execution_time,
                     "execution_start_time": state.execution_start_time,
                     "execution_end_time": state.execution_end_time,
@@ -568,7 +538,7 @@ class MassOrchestrator:
                         {
                             "timestamp": update.timestamp,
                             "status": update.status,
-                            "summary_length": len(update.summary)
+                            "answer_length": len(update.answer)
                         }
                         for update in state.update_history
                     ]
@@ -634,11 +604,8 @@ class MassOrchestrator:
             for agent_id, agent in self.agents.items():
                 agent.state = AgentState(agent_id=agent_id)
                 self.agent_states[agent_id] = agent.state
-                # Initialize conversation with task question
-                agent.state.chat_history = [
-                    {"role": "system", "content": self._get_system_instruction(agent_id)},
-                    {"role": "user", "content": task.question}
-                ]
+                # Initialize the saved chat
+                agent.state.chat_history = []
                 
                 # Initialize streaming display for each agent
                 if self.streaming_orchestrator:
@@ -687,6 +654,7 @@ class MassOrchestrator:
                 break
             
             # Run all agents with dynamic restart support
+            # Restart all agents if they have been updated
             logger.info(f"📢 Starting collaboration round {debate_rounds + 1}")
             self._run_all_agents_with_dynamic_restart(task)
             
@@ -697,7 +665,7 @@ class MassOrchestrator:
                 if self._check_consensus():
                     logger.info("🎉 Consensus reached!")
                     # Representative will present final answer
-                    self._run_final_presentation(task)
+                    self._present_final_answer(task)
                     break
                 else:
                     # No consensus - start debate round
@@ -758,7 +726,7 @@ class MassOrchestrator:
                         self.agent_states[agent_id].status == "working"):
                         self._start_agent_if_working(agent_id, task, executor, active_futures)
                 
-                time.sleep(0.5)  # Small delay to prevent busy waiting
+                time.sleep(0.1)  # Small delay to prevent busy waiting
                 
         finally:
             # Cancel any remaining futures
@@ -781,16 +749,12 @@ class MassOrchestrator:
         agent = self.agents[agent_id]
         try:
             logger.info(f"🤖 Agent {agent_id} starting work")
-            
-            # Get restart instruction if there are updates from other agents
-            restart_instruction = self._get_update_notification(agent_id)
-            
+    
             # Run agent's work_on_task with current conversation state
-            current_messages = self.agent_states[agent_id].chat_history.copy()
-            updated_messages = agent.work_on_task(task, current_messages, restart_instruction)
+            updated_messages = agent.work_on_task(task)
             
             # Update conversation state
-            self.agent_states[agent_id].chat_history = updated_messages
+            self.agent_states[agent_id].chat_history.append(updated_messages)
             self.agent_states[agent_id].chat_round = agent.state.chat_round
             
             # Update streaming display with chat round
@@ -817,14 +781,12 @@ class MassOrchestrator:
 
     def _restart_all_agents_for_debate(self):
         """
-        Restart all agents for debate by resetting their status and providing debate instructions.
-        Each agent gets the DEBATE_NOTIFICATION with current vote information.
+        Restart all agents for debate by resetting their status
+        We don't clear vote target when restarting for debate as answers are not updated
         """
         logger.info("🔄 Restarting all agents for debate")
         
         with self._lock:
-            # Get debate instruction before clearing votes
-            debate_instruction = self._get_debate_instruction()
             
             # Update streaming display
             if self.streaming_orchestrator:
@@ -847,16 +809,13 @@ class MassOrchestrator:
                 if state.status not in ["failed"]:
                     old_status = state.status
                     state.status = "working"
-                    state.vote_target = None  # CRITICAL FIX: Clear vote target when restarting for debate
+                    # We don't clear vote target when restarting for debate
+                    # state.curr_vote = None  
                     
                     # Update streaming display for each agent
                     if self.streaming_orchestrator:
                         self.streaming_orchestrator.update_agent_status(agent_id, "working")
-                        self.streaming_orchestrator.update_agent_vote_target(agent_id, None)  # Clear vote target in display
-                        # Update agent update count for debate restart
-                        update_count = len(self.agent_states[agent_id].update_history)
-                        self.streaming_orchestrator.update_agent_update_count(agent_id, update_count)
-                    
+
                     # Log agent restart
                     if self.log_manager:
                         self.log_manager.log_agent_restart(
@@ -864,23 +823,11 @@ class MassOrchestrator:
                             reason="debate_phase_restart",
                             phase="collaboration"
                         )
-                    
-                    # Add debate notification to conversation history
-                    if state.chat_history:
-                        state.chat_history.append({
-                            "role": "user", 
-                            "content": debate_instruction
-                        })
             
             # Update system phase
             self.system_state.phase = "collaboration"
-            
-            # Update vote distribution in streaming display after clearing all vote targets
-            if self.streaming_orchestrator:
-                vote_counts = self._get_current_vote_counts()
-                self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
 
-    def _run_final_presentation(self, task: TaskInput):
+    def _present_final_answer(self, task: TaskInput):
         """
         Run the final presentation by the representative agent.
         The representative agent receives PRESENTATION_NOTIFICATION with vote information.
@@ -894,26 +841,7 @@ class MassOrchestrator:
         
         try:
             agent = self.agents[representative_id]
-            agent_state = self.agent_states[representative_id]
-            
-            # Get presentation instruction using the template
-            presentation_instruction = self._get_presentation_instruction()
-            
-            # Add presentation instruction to conversation
-            current_messages = agent_state.chat_history.copy()
-            
-            # Restart the representative agent to present final answer
-            updated_messages = agent.work_on_task(task, current_messages, presentation_instruction)
-            
-            # Update conversation history
-            agent_state.chat_history = updated_messages
-            
-            # Extract final response from the last assistant message
-            for msg in reversed(updated_messages):
-                if msg.get("role") == "assistant":
-                    self.final_response = msg.get("content", "")
-                    break
-            
+            self.final_response = agent.state.curr_answer
             self.system_state.phase = "completed"
             self.system_state.end_time = time.time()
             
@@ -927,43 +855,6 @@ class MassOrchestrator:
         """Get system instruction for an agent."""
         peer_agents = [str(aid) for aid in self.agents.keys() if aid != agent_id]
         return SYSTEM_INSTRUCTION.format(agent_id=agent_id, peer_agents=peer_agents)
-    
-    def _get_update_notification(self, agent_id: int, latest_only: bool = True) -> Optional[str]:
-        """
-        Get restart instruction based on updates from other agents.
-        Uses proper notification templates for different scenarios.
-        If latest_only is True, only return the latest update.
-        """
-        agent_state = self.agent_states[agent_id]
-        
-        # Get updates from other agents since this agent last saw them
-        unseen_updates = []
-        for other_id, other_state in self.agent_states.items():
-            if other_id != agent_id and other_state.update_history:
-                last_seen = agent_state.seen_updates_timestamps.get(other_id, 0)
-                unseen_updates_from_this_agent = []
-                for update in other_state.update_history:
-                    if update.timestamp > last_seen:
-                        # Format: "Agent X (status): summary"
-                        unseen_updates_from_this_agent.append(f"**Agent {other_id} ({update.status}):** {update.summary}\n\n")
-                # Include only the latest update from each agent or all updates
-                if latest_only and unseen_updates_from_this_agent:
-                    unseen_updates.append(unseen_updates_from_this_agent[-1])
-                else:
-                    unseen_updates.extend(unseen_updates_from_this_agent)
-        
-        if unseen_updates:
-            # Mark updates as seen
-            for other_id, other_state in self.agent_states.items():
-                if other_id != agent_id and other_state.update_history:
-                    latest_timestamp = max(update.timestamp for update in other_state.update_history)
-                    agent_state.seen_updates_timestamps[other_id] = latest_timestamp
-        
-            # Use UPDATE_NOTIFICATION template
-            updates_text = "\n".join(unseen_updates)
-            return UPDATE_NOTIFICATION.format(updates=updates_text)
-        
-        return None
     
     def _get_current_vote_info(self) -> str:
         """

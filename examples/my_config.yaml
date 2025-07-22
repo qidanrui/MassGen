@@ -13,7 +13,7 @@ agents:
     - live_search
     - code_execution
     max_retries: 10
-    max_rounds: 25
+    max_rounds: 10
     temperature: 0.7
     processing_timeout: 150
     stream: true
@@ -25,7 +25,7 @@ agents:
     - live_search
     - code_execution
     max_retries: 10
-    max_rounds: 25
+    max_rounds: 10
     temperature: 0.7
     processing_timeout: 150
     stream: true

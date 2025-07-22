@@ -12,11 +12,11 @@ from abc import ABC, abstractmethod
 
 
 @dataclass
-class SummaryRecord:
-    """Represents a single summary record in an agent's update history."""
+class AnswerRecord:
+    """Represents a single answer record in an agent's update history."""
     
     timestamp: float
-    summary: str
+    answer: str
     status: str
     
     def __post_init__(self):
@@ -47,7 +47,7 @@ class ModelConfig:
     model: Optional[str] = None
     tools: Optional[List[str]] = None
     max_retries: int = 10 # max retries for each LLM call
-    max_rounds: int = 20 # max round for task
+    max_rounds: int = 10 # max round for task
     max_tokens: Optional[int] = None
     temperature: Optional[float] = None
     top_p: Optional[float] = None
@@ -73,7 +73,7 @@ class SystemState:
     """
 
     task: Optional[TaskInput] = None
-    phase: str = "collaboration"  # "collaboration", "completed"
+    phase: str = "collaboration"  # "collaboration", "debate", "completed"
     start_time: Optional[float] = None
     end_time: Optional[float] = None
     consensus_reached: bool = False
@@ -86,10 +86,10 @@ class AgentState:
 
     agent_id: int
     status: str = "working"  # "working", "voted", "failed"
-    working_summary: str = "" # the latest summary of the agent's work
-    update_history: List[SummaryRecord] = field(default_factory=list) # a list of summary records
+    curr_answer: str = "" # the latest answer of the agent's work
+    update_history: List[AnswerRecord] = field(default_factory=list) # a list of answer records
     chat_history: List[Dict[str, Any]] = field(default_factory=list) # a list of conversation records
-    vote_target: Optional[int] = None  # Which agent's solution this agent voted for
+    curr_vote: Optional[VoteRecord] = None  # Which agent's solution this agent voted for
     seen_updates_timestamps: Dict[int, float] = field(default_factory=dict)  # agent_id -> last_seen_timestamp
     chat_round: int = 0 # the number of chat rounds the agent has participated in
     execution_start_time: Optional[float] = None
@@ -102,18 +102,18 @@ class AgentState:
             return self.execution_end_time - self.execution_start_time
         return None
 
-    def add_update(self, summary: str, timestamp: Optional[float] = None):
+    def add_update(self, answer: str, timestamp: Optional[float] = None):
         """Add an update to the agent's history."""
         if timestamp is None:
             timestamp = time.time()
 
-        record = SummaryRecord(
+        record = AnswerRecord(
             timestamp=timestamp,
-            summary=summary,
+            answer=answer,
             status=self.status,
         )
         self.update_history.append(record)
-        self.working_summary = summary
+        self.curr_answer = answer
 
     def mark_updates_seen(self, agent_updates: Dict[int, float]):
         """Mark updates from other agents as seen."""
@@ -146,7 +146,7 @@ class LogEntry:
     """Represents a single log entry in the MASS system."""
     
     timestamp: float
-    event_type: str  # e.g., "agent_summary_update", "voting", "phase_change", etc.
+    event_type: str  # e.g., "agent_answer_update", "voting", "phase_change", etc.
     agent_id: Optional[int]
     phase: str
     data: Dict[str, Any]

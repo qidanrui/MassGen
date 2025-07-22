@@ -25,7 +25,7 @@ class MassLogManager:
     
     Records all significant events including:
     - Agent state changes (working, voted, failed)
-    - Summary updates and notifications  
+    - Answer updates and notifications  
     - Voting events and consensus decisions
     - Phase transitions (collaboration, debate, consensus)
     - System metrics and performance data
@@ -73,7 +73,7 @@ class MassLogManager:
         
         # MASS-specific event counters
         self.event_counters = {
-            "summary_updates": 0,
+            "answer_updates": 0,
             "votes_cast": 0,
             "consensus_reached": 0,
             "debates_started": 0,
@@ -171,29 +171,29 @@ class MassLogManager:
             # Write to file immediately
             self._write_log_entry(entry)
     
-    def log_agent_summary_update(self, agent_id: int, summary: str, 
+    def log_agent_answer_update(self, agent_id: int, answer: str, 
                                 phase: str = "unknown"):
         """
-        Log agent summary update with detailed information.
+        Log agent answer update with detailed information.
         
         Args:
             agent_id: Agent ID
-            summary: Updated summary content
+            answer: Updated answer content
             phase: Current workflow phase
         """
         data = {
-            "summary": summary,
-            "summary_length": len(summary),
+            "answer": answer,
+            "answer_length": len(answer),
         }
         
-        self.log_event("agent_summary_update", agent_id, phase, data)
+        self.log_event("agent_answer_update", agent_id, phase, data)
         
         # Log to agent-specific file
         self._write_agent_log(agent_id, {
             "timestamp": time.time(),
-            "event": "summary_update",
+            "event": "answer_update",
             "phase": phase,
-            "summary": summary,
+            "answer": answer,
         })
     
     def log_agent_status_change(self, agent_id: int, old_status: str, 
@@ -226,7 +226,7 @@ class MassLogManager:
     
     def log_system_state_snapshot(self, orchestrator, phase: str = "unknown"):
         """
-        Log a complete system state snapshot including all agent summaries and voting status.
+        Log a complete system state snapshot including all agent answers and voting status.
         
         Args:
             orchestrator: The MassOrchestrator instance
@@ -235,27 +235,27 @@ class MassLogManager:
         
         # Collect all agent states
         agent_states = {}
-        all_agent_summaries = {}
+        all_agent_answers = {}
         vote_records = []
         
         for agent_id, agent_state in orchestrator.agent_states.items():
             # Full agent state information
             agent_states[agent_id] = {
                 "status": agent_state.status,
-                "working_summary": agent_state.working_summary,
-                "vote_target": agent_state.vote_target,
+                "curr_answer": agent_state.curr_answer,
+                "vote_target": agent_state.curr_vote.target_id,
                 "execution_time": agent_state.execution_time,
                 "update_count": len(agent_state.update_history),
                 "seen_updates_timestamps": agent_state.seen_updates_timestamps
             }
             
-            # Summary history for each agent
-            all_agent_summaries[agent_id] = {
-                "current_summary": agent_state.working_summary,
-                "summary_history": [
+            # Answer history for each agent
+            all_agent_answers[agent_id] = {
+                "current_answer": agent_state.curr_answer,
+                "answer_history": [
                     {
                         "timestamp": update.timestamp,
-                        "summary": update.summary,
+                        "answer": update.answer,
                         "status": update.status
                     }
                     for update in agent_state.update_history
@@ -284,7 +284,7 @@ class MassLogManager:
         # Complete system state snapshot
         system_snapshot = {
             "agent_states": agent_states,
-            "agent_summaries": all_agent_summaries,
+            "agent_answers": all_agent_answers,
             "voting_records": vote_records,
             "voting_status": voting_status,
             "system_phase": phase,
@@ -307,7 +307,7 @@ class MassLogManager:
         
         return system_snapshot
     
-    def log_voting_event(self, voter_id: int, target_id: int, phase: str = "unknown", response_text: str = ""):
+    def log_voting_event(self, voter_id: int, target_id: int, phase: str = "unknown", reason: str = ""):
         """
         Log a voting event with detailed information.
         
@@ -315,7 +315,7 @@ class MassLogManager:
             voter_id: ID of the agent casting the vote
             target_id: ID of the agent being voted for
             phase: Current workflow phase
-            response_text: Full response text that led to the vote
+            reason: Reason for the vote
         """
         with self._lock:
             self.event_counters["votes_cast"] += 1
@@ -323,7 +323,7 @@ class MassLogManager:
         data = {
             "voter_id": voter_id,
             "target_id": target_id,
-            "response_text_length": len(response_text),
+            "reason": reason,
             "total_votes_cast": self.event_counters["votes_cast"]
         }
         
@@ -336,7 +336,8 @@ class MassLogManager:
             "phase": phase,
             "voter_id": voter_id,
             "target_id": target_id,
-            "response_text": response_text[:500] + "..." if len(response_text) > 500 else response_text
+            "reason": reason,
+            "reason_length": len(reason)
         }
         self._write_agent_log(voter_id, vote_entry)
         if target_id != voter_id:
@@ -345,7 +346,7 @@ class MassLogManager:
                 "event": "vote_received",
                 "phase": phase,
                 "from_agent": voter_id,
-                "reason_preview": response_text[:200] + "..." if len(response_text) > 200 else response_text
+                "reason_preview": reason[:200] + "..." if len(reason) > 200 else reason
             }
             self._write_agent_log(target_id, vote_received_entry)
     

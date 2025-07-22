@@ -82,7 +82,7 @@ def create_config_from_models(
             model=model,
             tools=["live_search", "code_execution"],  # Default tools
             max_retries=10,
-            max_rounds=20,
+            max_rounds=10,
             temperature=0.7,
             processing_timeout=150
         )

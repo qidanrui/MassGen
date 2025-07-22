@@ -9,13 +9,14 @@ import os
 import sys
 import copy
 import time
+import traceback
 from typing import Callable, Union, Optional, List, Dict, Any
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from .agent import MassAgent, NO_UPDATE_NOTIFICATION
+from .agent import MassAgent, SYSTEM_INSTRUCTION, AGENT_ANSWER_MESSAGE, AGENT_ANSWER_AND_VOTE_MESSAGE
 from .types import ModelConfig, TaskInput
 from .tools import register_tool
 
@@ -46,7 +47,7 @@ class OpenAIMassAgent(MassAgent):
         """
         return ["live_search", "code_execution"]
     
-    def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]], restart_instruction: Optional[str] = None) -> List[Dict[str, str]]:
+    def work_on_task(self, task: TaskInput) -> List[Dict[str, str]]:
         """
         Work on the task using the OpenAI backend with conversation continuation.
         
@@ -56,18 +57,11 @@ class OpenAIMassAgent(MassAgent):
         
         Args:
             task: The task to work on
-            messages: Current conversation history
-            restart_instruction: Optional instruction for restarting work (e.g., updates from other agents)
+            messages: Starting conversation history
             
         Returns:
             Updated conversation history including agent's work
-        """        
-        # Start with provided messages
-        working_messages = messages.copy()
-        
-        # Add restart instruction if provided
-        if restart_instruction:
-            working_messages.append({"role": "user", "content": restart_instruction})
+        """    
         
         # Get available tools (system tools + built-in tools + custom tools)
         all_tools = []
@@ -75,11 +69,16 @@ class OpenAIMassAgent(MassAgent):
         all_tools.extend(self._get_registered_tools())
         all_tools.extend(self._get_system_tools())
         
+        # Initialize working messages
+        curr_round = 0
+        working_messages = self._get_task_input_messages(task)
+        
         # Start the task solving loop
-        while self.state.chat_round < self.max_rounds and self.state.status == "working":
+        while curr_round < self.max_rounds and self.state.status == "working":
             try:
                 # Call LLM with current conversation
-                result = self.process_message(messages=working_messages, tools=all_tools)
+                result = self.process_message(messages=working_messages, 
+                                              tools=all_tools)
                 
                 # Add assistant response
                 if result.text:
@@ -103,33 +102,31 @@ class OpenAIMassAgent(MassAgent):
                         break
                     else:
                         # Check if there is any update from other agents that are unseen by this agent
-                        update_notification = self.orchestrator._get_update_notification(self.agent_id)
-                        if update_notification:
-                            working_messages.append({"role": "user", "content": update_notification})
-                        else:
-                            working_messages.append({"role": "user", "content": NO_UPDATE_NOTIFICATION})
-                        
-                self.state.chat_round += 1
+                        has_update = self.check_update()
+                        if has_update: 
+                            # Renew the conversation within the loop
+                            working_messages = self._get_task_input_messages(task)
+                        else: # Continue the current conversation and prompting checkin
+                            working_messages.append({"role": "user", "content": "Please use either `add_answer` or `vote` tool once your analysis is done."})
+                 
+                curr_round += 1
+                self.state.chat_round += 1        
                 
                 # Check if agent voted or failed
                 if self.state.status in ["voted", "failed"]:
                     break
                 
             except Exception as e:
-                print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")
-                
+                print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")                   
+                if self.orchestrator:
+                    self.orchestrator.mark_agent_failed(self.agent_id, str(e))
+                self.state.chat_round += 1
                 # DEBUGGING
                 with open("errors.txt", "a") as f:
                     f.write(f"Agent {self.agent_id} error in round {self.state.chat_round}: {e}\n")
                     f.write(traceback.format_exc())
                     f.write("\n\n")
-                    
-                if self.orchestrator:
-                    self.orchestrator.mark_agent_failed(self.agent_id, str(e))
-                self.state.chat_round += 1
-
-                break
-        
+                           
         return working_messages
 
 
@@ -161,7 +158,7 @@ class GeminiMassAgent(OpenAIMassAgent):
         """
         return ["live_search", "code_execution"]
     
-    def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]], restart_instruction: Optional[str] = None) -> List[Dict[str, str]]:
+    def work_on_task(self, task: TaskInput) -> List[Dict[str, str]]:
         """
         Work on the task using the Gemini backend with conversation continuation.
         
@@ -179,13 +176,7 @@ class GeminiMassAgent(OpenAIMassAgent):
         Returns:
             Updated conversation history including agent's work
         """        
-        # Start with provided messages
-        working_messages = messages.copy()
-        
-        # Add restart instruction if provided
-        if restart_instruction:
-            working_messages.append({"role": "user", "content": restart_instruction})
-        
+    
         # Get available tools (system tools + built-in tools + custom tools)
         system_tools = self._get_system_tools()
         built_in_tools = self._get_builtin_tools()
@@ -197,13 +188,26 @@ class GeminiMassAgent(OpenAIMassAgent):
         
         # We provide built-in tools in the first round, and then custom tools in the next round.
         if tool_switch:
+            function_call_enabled = False
             available_tools = built_in_tools
         else:
+            function_call_enabled = True
             available_tools = system_tools + custom_tools
         
+        # Initialize working messages
+        curr_round = 0
+        working_messages = self._get_task_input_messages(task)
+        
         # Start the task solving loop
-        while self.state.chat_round < self.max_rounds and self.state.status == "working":
+        while curr_round < self.max_rounds and self.state.status == "working":
             try:
+                # If function call is enabled or not, add a notification to the user
+                if working_messages[-1].get("role", "") == "user":
+                    if not function_call_enabled:
+                        working_messages[-1]["content"] += "\n\n" + "Note that the `new_answer` and `vote` tools are not enabled now. Please prioritize using the built-in tools to analyze the task first."
+                    else:
+                        working_messages[-1]["content"] += "\n\n" + "Note that the `new_answer` and `vote` tools are enabled now."
+                
                 # Call LLM with current conversation
                 result = self.process_message(messages=working_messages, tools=available_tools)
                 
@@ -218,21 +222,12 @@ class GeminiMassAgent(OpenAIMassAgent):
                     function_outputs = self._execute_function_calls(result.function_calls)
                     # Add function call results to conversation (Gemini format)
                     for function_call, function_output in zip(result.function_calls, function_outputs):
-                        # Add function call result as user message
-                        working_messages.append({
-                            "role": "user",
-                            "content": (
-                                f"You have called function `{function_call['name']}` with arguments: {function_call['arguments']}.\n"
-                                f"The return is:\n{function_output['output']}"
-                            )
-                        })
-                    
-                    # Important: Increment round after processing function calls
-                    self.state.chat_round += 1  # Update the state chat_round to match local counter
+                        working_messages.extend([function_call, function_output])
                     
                     # If we have used custom tools, switch to built-in tools in the next round
                     if tool_switch:
                         available_tools = built_in_tools
+                        function_call_enabled = False
                         print(f"🔄 Agent {self.agent_id} (Gemini) switching to built-in tools in the next round")
                     
                     # Check if agent voted or failed after function calls
@@ -246,25 +241,36 @@ class GeminiMassAgent(OpenAIMassAgent):
                         break
                     else:
                         # Check if there is any update from other agents that are unseen by this agent
-                        update_notification = self.orchestrator._get_update_notification(self.agent_id)
-                        if update_notification:
-                            working_messages.append({"role": "user", "content": update_notification})
-                        else:
-                            working_messages.append({"role": "user", "content": NO_UPDATE_NOTIFICATION})
+                        has_update = self.check_update()
+                        if has_update: 
+                            # Renew the conversation within the loop
+                            working_messages = self._get_task_input_messages(task)
+                        else: # Continue the current conversation and prompting checkin
+                            working_messages.append({"role": "user", "content": "Please use either `add_answer` or `vote` tool once your analysis is done."})
 
                     # Switch to custom tools in the next round
                     if tool_switch:
                         available_tools = system_tools + custom_tools
+                        function_call_enabled = True
                         print(f"🔄 Agent {self.agent_id} (Gemini) switching to custom tools in the next round")
                     
-                    # Increment round even when no function calls are made
-                    self.state.chat_round += 1  # Update the state chat_round to match local counter
+                    curr_round += 1
+                    self.state.chat_round += 1 
+                    
+                    # Check if agent voted or failed
+                    if self.state.status in ["voted", "failed"]:
+                        break
 
             except Exception as e:
-                print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")
+                print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")                   
                 if self.orchestrator:
                     self.orchestrator.mark_agent_failed(self.agent_id, str(e))
-                break
+                self.state.chat_round += 1
+                # DEBUGGING
+                with open("errors.txt", "a") as f:
+                    f.write(f"Agent {self.agent_id} error in round {self.state.chat_round}: {e}\n")
+                    f.write(traceback.format_exc())
+                    f.write("\n\n")
         
         return working_messages
 
@@ -296,29 +302,21 @@ class GrokMassAgent(OpenAIMassAgent):
         """
         return ["live_search"]
     
-    def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]], restart_instruction: Optional[str] = None) -> List[Dict[str, str]]:
+    def work_on_task(self, task: TaskInput) -> List[Dict[str, str]]:
         """
         Work on the task using the Grok backend with conversation continuation.
         
         NOTE:
-        Grok is much flexible than OpenAI and Gemini.
-        You can provide built-in tools and function call at the same time.
-        You can have consecutive user messages to represent the function call results.
+        OpenAI's function call can not have id, otherwise it will require related reasoning items which we did not maintain.
+        You must provide function call and function call output in consecutive messages.
         
         Args:
             task: The task to work on
-            messages: Current conversation history
-            restart_instruction: Optional instruction for restarting work (e.g., updates from other agents)
+            messages: Starting conversation history
             
         Returns:
             Updated conversation history including agent's work
-        """        
-        # Start with provided messages
-        working_messages = messages.copy()
-        
-        # Add restart instruction if provided
-        if restart_instruction:
-            working_messages.append({"role": "user", "content": restart_instruction})
+        """    
         
         # Get available tools (system tools + built-in tools + custom tools)
         all_tools = []
@@ -326,11 +324,16 @@ class GrokMassAgent(OpenAIMassAgent):
         all_tools.extend(self._get_registered_tools())
         all_tools.extend(self._get_system_tools())
         
+        # Initialize working messages
+        curr_round = 0
+        working_messages = self._get_task_input_messages(task)
+        
         # Start the task solving loop
-        while self.state.chat_round < self.max_rounds and self.state.status == "working":
+        while curr_round < self.max_rounds and self.state.status == "working":
             try:
                 # Call LLM with current conversation
-                result = self.process_message(messages=working_messages, tools=all_tools)
+                result = self.process_message(messages=working_messages, 
+                                              tools=all_tools)
                 
                 # Add assistant response
                 if result.text:
@@ -343,14 +346,8 @@ class GrokMassAgent(OpenAIMassAgent):
                     function_outputs = self._execute_function_calls(result.function_calls)
                     # Add function call results to conversation
                     for function_call, function_output in zip(result.function_calls, function_outputs):
-                        # Add function call result as user message
-                        working_messages.append({
-                            "role": "user",
-                            "content": (
-                                f"You have called function `{function_call['name']}` with arguments: {function_call['arguments']}.\n"
-                                f"The return is:\n{function_output['output']}"
-                            )
-                        })
+                        # [OpenAI] Remove id to avoid the requirements of related reasoning items
+                        working_messages.extend([function_call, function_output])
                 else:
                     # No function calls - check if we should continue or stop
                     if self.state.status == "voted":
@@ -358,24 +355,31 @@ class GrokMassAgent(OpenAIMassAgent):
                         break
                     else:
                         # Check if there is any update from other agents that are unseen by this agent
-                        update_notification = self.orchestrator._get_update_notification(self.agent_id)
-                        if update_notification:
-                            working_messages.append({"role": "user", "content": update_notification})
-                        else:
-                            working_messages.append({"role": "user", "content": NO_UPDATE_NOTIFICATION})
-                        
-                self.state.chat_round += 1  # Update the state chat_round to match local counter
+                        has_update = self.check_update()
+                        if has_update: 
+                            # Renew the conversation within the loop
+                            working_messages = self._get_task_input_messages(task)
+                        else: # Continue the current conversation and prompting checkin
+                            working_messages.append({"role": "user", "content": "Please use either `add_answer` or `vote` tool once your analysis is done."})
+                 
+                curr_round += 1
+                self.state.chat_round += 1        
                 
                 # Check if agent voted or failed
                 if self.state.status in ["voted", "failed"]:
                     break
                 
             except Exception as e:
-                print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")
+                print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")                   
                 if self.orchestrator:
                     self.orchestrator.mark_agent_failed(self.agent_id, str(e))
-                break
-        
+                self.state.chat_round += 1
+                # DEBUGGING
+                with open("errors.txt", "a") as f:
+                    f.write(f"Agent {self.agent_id} error in round {self.state.chat_round}: {e}\n")
+                    f.write(traceback.format_exc())
+                    f.write("\n\n")
+                           
         return working_messages
 
 

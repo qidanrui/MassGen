@@ -14,99 +14,39 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Union, Optional, List, Dict
 from .backends import oai, gemini, grok
 
-
 SYSTEM_INSTRUCTION = """
-You are an expert agent equipped with tools to work as part of a collaborative team to solve complex tasks.
+You are evaluating answers from multiple agents for final response to a message. Does the best CURRENT ANSWER address the ORIGINAL MESSAGE?
 
-You are Agent {agent_id}, working collaboratively with Peer Agents {peer_agents} to solve complex tasks.
-
-**Communication:** You can only use the `update_summary` tool to communicate with other agents. All information shared through this tool is visible to the entire team.
-
-### Core Workflow
-
-**1. Task Execution**
-- Use your available tools (search, code analysis, etc.) to investigate and solve the assigned task
-- Apply expertise to search for information, analyze data, identify patterns, and develop solutions
-
-**2. Progress Documentation**
-- Use the `update_summary` tool regularly to record your findings, hypotheses, and progress
-- Document your reasoning process so other agents can understand and build upon your work
-- Ensure that you include supporting evidence including:
-  - Information sources and URLs
-  - Data analysis or code execution results
-  - Key insights and discoveries
-  - Promising solutions and approaches
-
-**3. Collaboration & Information Sharing**
-- When sharing insights: 
-  - Always provide supporting evidence (sources, URLs, calculations)
-  - Ensure that other agents can understand and build upon your work
-- When receiving updates: 
-  - Critically evaluate information from other agents
-  - Verify their claims with your tools and expertise
-  - Identify gaps, inconsistencies, or errors in collective analysis
-- If no updates received yet:
-  - Continue working on the task
-  - Verify your own progress with your tools and expertise
-  - Find missing pieces in the analysis or other perspectives
-  - Use the `update_summary` tool to update the team on your progress
-
-**4. Solution Validation**
-  - Continuously verify information accuracy
-  - Cross-check findings against multiple sources
-  - Challenge assumptions and test hypotheses
-  - Look for missing pieces in the analysis
-
-**5. Consensus Building**
-- Use the `vote` tool to nominate an agent as representative to present the solution
-- Vote only when confident the solution is accurate and complete
-- Continue working until the team reaches consensus on the best answer
-
-**Key Principles**
-- Collaborative mindset: This is a team effort - share knowledge generously and build on others' work
-- Evidence-based reasoning: Always support your claims with verifiable sources and data
-- Quality over speed: Prioritize accuracy and thoroughness over quick answers
-- Continuous verification: Question and verify information, even from trusted team members
-- You are Agent {agent_id}. That is your identifier in the team. 
+If YES, use the `vote` tool to record your vote and skip the `new_answer` tool.
+IF NO, do additional work first, then use the `new_answer` tool to record a better answer to the ORIGINAL MESSAGE. Make sure you actually call the tool.
+Any new answer you add via the `new_answer` tool must be self-contained, complete, and ready to serve as the definitive final response to the user's request.
 """
 
-PROMPT_UPDATE_NOTIFICATION = """
-If you have any valuable information that have not been shared with the team, please use the `update_summary` tool to record your work on the task: your analysis, approach, solution, and reasoning. 
-Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents. 
-If you have found any agents that have found the correct solution (include yourself), use the `vote` tool to vote for them.
-Or you can choose to continue working on the task and then share your progress with the team.
+AGENT_ANSWER_MESSAGE = """
+<ORIGINAL MESSAGE> {task} <END OF ORIGINAL MESSAGE>
+
+<CURRENT ANSWERS FROM THE AGENTS>
+{agent_answers}
+<END OF CURRENT ANSWERS>
 """
 
-UPDATE_NOTIFICATION = """
-[NOTIFICATION] Below are the recent updates from other agents:
+AGENT_ANSWER_AND_VOTE_MESSAGE = """
+<ORIGINAL MESSAGE> {task} <END OF ORIGINAL MESSAGE>
 
-{updates}
-"""
+<CURRENT ANSWERS FROM THE AGENTS>
+{agent_answers}
+<END OF CURRENT ANSWERS>
 
-NO_UPDATE_NOTIFICATION = """
-There are no updates from other agents right now. 
-You can continue working on the task and share your progress with the team using the `update_summary` tool.
-Or you can vote for the representative agent and stop working using the `vote` tool.
-"""
+<OTHERS' VOTES>
+{agent_votes}
+<END OF OTHERS' VOTES>
 
-PRESENTATION_NOTIFICATION = """
-You have been nominated as the representative agent to present the solution.
+Please use your expertise and tools (if available) to analyze the answers and votes.
+Does the best CURRENT ANSWER address the ORIGINAL MESSAGE?
 
-Below are the vote information of the team:
-
-{votes}
-
-Please incorporate all useful information from the team to present the final answer.
-"""
-
-DEBATE_NOTIFICATION = """
-The team has different opinions on the representative agent to present the solution.
-
-Below are the vote information of the team:
-
-{votes}
-
-Please share your opinion via `update_summary` tool, or vote again with the `vote` tool.
+If YES, use the `vote` tool to record your vote and skip the `new_answer` tool.
+IF NO, do additional work first, then use the `new_answer` tool to record a better answer to the ORIGINAL MESSAGE. Make sure you actually call the tool.
+Any new answer you add via the `new_answer` tool must be self-contained, complete, and ready to serve as the definitive final response to the user's request.
 """
 
 class MassAgent(ABC):
@@ -220,27 +160,40 @@ class MassAgent(ABC):
                 function_calls=[],
             )
 
-    def update_summary(self, new_content: str):
+    def new_answer(self, answer: str):
         """
         Record your work on the task: your analysis, approach, solution, and reasoning. Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents.
 
         Args:
-            new_content: Comprehensive progress report
+            answer: The new answer, which should be self-contained, complete, and ready to serve as the definitive final response.
         """
-        # Use the orchestrator to update the summary and notify other agents to restart
-        self.orchestrator.notify_summary_update(self.agent_id, new_content)
-        return f"Your summary report has been updated and shared with other agents."
+        # Use the orchestrator to update the answer and notify other agents to restart
+        self.orchestrator.notify_answer_update(self.agent_id, answer)
+        return f"The new answer has been added."
     
-    def vote(self, target_agent_id: int, response_text: str = ""):
+    def vote(self, agent_id: int, reason: str = ""):
         """
         Vote for the representative agent, who you believe has found the correct solution.
 
         Args:
-            target_agent_id: ID of the voted representative agent
-            response_text: Your full explanation of why you voted for this agent
+            agent_id: ID of the voted agent
+            reason: Your full explanation of why you voted for this agent
         """
-        self.orchestrator.cast_vote(self.agent_id, target_agent_id, response_text)
-        return f"Your vote for Agent {target_agent_id} has been cast."
+        self.orchestrator.cast_vote(self.agent_id, agent_id, reason)
+        return f"Your vote for Agent {agent_id} has been cast."
+    
+    def check_update(self) -> bool:
+        """
+        Check if there are any updates from other agents since this agent last saw them.
+        """
+        # Get updates from other agents since this agent last saw them
+        for other_id, other_state in self.orchestrator.agent_states.items():
+            if other_id != self.agent_id and other_state.update_history:
+                last_seen = self.state.seen_updates_timestamps.get(other_id, 0)
+                for update in other_state.update_history:
+                    if update.timestamp > last_seen:
+                        return True
+        return False
     
     def mark_failed(self, reason: str = ""):
         """
@@ -280,10 +233,10 @@ class MassAgent(ABC):
                 func_args = json.loads(func_args)
             
             try:
-                if func_name == "update_summary":
-                    result = self.update_summary(func_args.get("new_content", ""))
+                if func_name == "new_answer":
+                    result = self.new_answer(func_args.get("answer", ""))
                 elif func_name == "vote":
-                    result = self.vote(func_args.get("agent_id", func_args.get("target_agent_id")), "")
+                    result = self.vote(func_args.get("agent_id"), func_args.get("reason", ""))
                 elif func_name in register_tool:
                     result = register_tool[func_name](**func_args)
                 else:
@@ -326,42 +279,42 @@ class MassAgent(ABC):
     def _get_system_tools(self) -> List[Dict[str, Any]]:
         """
         The system tools available to this agent for orchestration:
-        - update_summary: Record your work on the task: your analysis, approach, solution, and reasoning. Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents.
+        - new_answer: Your added new answer, which should be self-contained, complete, and ready to serve as the definitive final response.
         - vote: Vote for the representative agent, who you believe has found the correct solution.
         """
         return [
             {
                 "type": "function",
-                "name": "update_summary",
-                "description": "Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents. Your updated content should be fully self-contained, including your analysis, approach, solution, and reasoning on the task.",
+                "name": "new_answer",
+                "description": "Add your new answer if you believe it is better than the current answers.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "new_content": {
+                        "answer": {
                             "type": "string",
-                            "description": "Your work on the task: problem analysis, solution approach, final answer, and reasoning. Include insights from other agents if relevant."
+                            "description": "Your new answer, which should be self-contained, complete, and ready to serve as the definitive final response."
                         }
                     },
-                    "required": ["new_content"]
+                    "required": ["answer"]
                 }
             },
             {
                 "type": "function",
                 "name": "vote",
-                "description": "Vote for the representative agent, who you believe has found the correct solution.",
+                "description": "Vote for the agent whose answer you believe is the best and addresses the original message.",
                 "parameters": {
                         "type": "object",
                         "properties": {
-                            "target_agent_id": {
+                            "agent_id": {
                                 "type": "integer",
-                                "description": "The ID of the agent you believe has found the correct solution."
+                                "description": "The ID of the agent you believe has found the best answer that addresses the original message."
                             },
-                            "response_text": {
+                            "reason": {
                                 "type": "string",
                                 "description": "Your full explanation of why you voted for this agent."
                             }
                         },
-                        "required": ["target_agent_id", "response_text"]
+                        "required": ["agent_id", "reason"]
                     }
                 }
         ]
@@ -377,13 +330,68 @@ class MassAgent(ABC):
                 custom_tools.append(tool_schema)
         return custom_tools
     
+    def _get_all_answers(self) -> List[str]:
+        """Get all answers from all agents.
+        Format:
+        **Agent 1**: Answer 1
+        **Agent 2**: Answer 2
+        ...
+        """
+        # Case 1: Initial round without running answer
+        agent_answers = []
+        for agent_id, agent_state in self.orchestrator.agent_states.items():
+            if agent_state.curr_answer:
+                agent_answers.append(f"**Agent {agent_id}**: {agent_state.curr_answer}")
+        return agent_answers
+    
+    def _get_all_votes(self) -> List[str]:
+        """Get all votes from all agents.
+        Format:
+        **Vote for Agent 1**: Reason 1
+        **Vote for Agent 2**: Reason 2
+        ...
+        """
+        agent_votes = []
+        for agent_id, agent_state in self.orchestrator.agent_states.items():
+            if agent_state.curr_vote:
+                agent_votes.append(f"**Vote for Agent {agent_state.curr_vote.target_id}**: {agent_state.curr_vote.reason}")
+        return agent_votes
+    
+    def _get_task_input(self, task: TaskInput) -> str:
+        """Get the initial task input as the user message."""
+        # Case 1: Initial round without running answer
+        if not self.state.curr_answer:
+            return AGENT_ANSWER_MESSAGE.format(task=task.question, agent_answers="None") + \
+                   "There are no current answers right now. Please use your expertise and tools (if available) to provide a new answer and submit it using the `add_answer` tool first."
+    
+        all_agent_answers = self._get_all_answers()
+        all_agent_answers_str = "\n\n".join(all_agent_answers)
+        # Check if in debate mode or not
+        voted_agents = [agent_id for agent_id, agent_state in self.orchestrator.agent_states.items() if agent_state.curr_vote is not None]
+        if len(voted_agents) == len(self.orchestrator.agent_states):
+            # Case 2: All agents have voted and are debating. Can not use agent status to check as they have been updated to 'working/debate'
+            all_agent_votes = self._get_all_votes()
+            all_agent_votes_str = "\n\n".join(all_agent_votes)
+            return AGENT_ANSWER_AND_VOTE_MESSAGE.format(task=task.question, agent_answers=all_agent_answers_str, agent_votes=all_agent_votes_str)
+        else:
+            # Case 3: All agents are working and not in debating
+            return AGENT_ANSWER_MESSAGE.format(task=task.question, agent_answers=all_agent_answers_str)
+    
+    def _get_task_input_messages(self, task: TaskInput) -> List[Dict[str, str]]:
+        """Get the task input messages for the agent."""
+        return [
+            {"role": "system", "content": SYSTEM_INSTRUCTION},
+            {"role": "user", "content": self._get_task_input(task)}
+        ]
+            
+        
     @abstractmethod
     def _get_builtin_tools(self) -> List[Dict[str, Any]]:
-        """Return the built-in tools that are available to this agent."""
+        """Return the built-in tools that are available to different agent backends."""
         pass
     
     @abstractmethod
-    def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]], restart_instruction: Optional[str] = None) -> List[Dict[str, str]]:
+    def work_on_task(self, task: TaskInput, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """
         Work on the task with conversation continuation.
         

@@ -21,7 +21,7 @@ agents:
       model: "gpt-4o"
       tools: ["live_search", "code_execution"]
       max_retries: 10
-      max_rounds: 20            # Fewer rounds for simple processing
+      max_rounds: 10            # Fewer rounds for simple processing
       max_tokens: 4000          # Reasonable token limit
       temperature: 0.7          # Balanced creativity
       top_p: 0.9

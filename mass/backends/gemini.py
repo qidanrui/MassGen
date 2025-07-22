@@ -12,7 +12,7 @@ load_dotenv()
 
 # Import utility functions and tools
 from mass.utils import function_to_json, execute_function_calls, generate_random_id
-from mass.tools import mock_update_summary, mock_check_updates, mock_vote
+from mass.tools import mock_new_answer, mock_check_updates, mock_vote
 from mass.types import AgentResponse
 
 def add_citations_to_response(response):
@@ -564,7 +564,7 @@ You are Agent 0 - an expert agent equipped with search and code tools working as
 - Apply your expertise to analyze information, identify patterns, and draw insights
 
 2. Progress Documentation
-- Use the `update_summary` tool regularly to record your findings, hypotheses, and progress
+- Use the `new_answer` tool regularly to record your findings, hypotheses, and progress
 - Document your reasoning process so other agents can understand and build upon your work
 - Include specific evidence such as:
   - Information sources and URLs
@@ -602,7 +602,7 @@ You are Agent 0 - an expert agent equipped with search and code tools working as
 Who was the thinker?"""
     
     notification_message = """
-If you have anything that you want to share with other agents, you can use the `update_summary` tool to update the summary.
+If you have anything that you want to share with other agents, you can use the `new_answer` tool to update the summary.
 The summary should include all necessary information and evidence to support your claims.
 If you believe anyone has found the solution (including yourself), you can use the `vote` tool to vote for them.
 """
@@ -616,14 +616,14 @@ Below are the recent updates from other agents:
     built_in_tools = ["live_search", "code_execution"]
     built_in_tools = []
     # customized functions
-    customized_functions = [function_to_json(mock_update_summary), function_to_json(mock_vote)]
+    customized_functions = [function_to_json(mock_new_answer), function_to_json(mock_vote)]
     
     # Combine tools for Gemini (note: Gemini can't use both native and custom tools simultaneously)
     tools = built_in_tools + customized_functions
 
     # Create tool mapping from the provided tools
     tool_mapping = {
-        "mock_update_summary": mock_update_summary,
+        "mock_new_answer": mock_new_answer,
         "mock_check_updates": mock_check_updates,
         "mock_vote": mock_vote,
     }

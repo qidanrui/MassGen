@@ -12,7 +12,7 @@ from xai_sdk.search import SearchParameters
 
 # Import utility functions and tools  
 from mass.utils import function_to_json, execute_function_calls
-from mass.tools import mock_update_summary, mock_check_updates, mock_vote
+from mass.tools import mock_new_answer, mock_check_updates, mock_vote
 from mass.types import AgentResponse
 
 load_dotenv()
@@ -450,7 +450,7 @@ You are Agent 0 - an expert agent equipped with search and code tools working as
 - Apply your expertise to analyze information, identify patterns, and draw insights
 
 2. Progress Documentation
-- Use the `update_summary` tool regularly to record your findings, hypotheses, and progress
+- Use the `new_answer` tool regularly to record your findings, hypotheses, and progress
 - Document your reasoning process so other agents can understand and build upon your work
 - Include specific evidence such as:
   - Information sources and URLs
@@ -478,7 +478,7 @@ You are Agent 0 - an expert agent equipped with search and code tools working as
 - Evidence-based reasoning: Always support your claims with verifiable sources and data
 - Quality over speed: Prioritize accuracy and thoroughness over quick answers
 - Continuous verification: Question and verify information, even from trusted team members
-- Any of your response can not be seen by other agents. You can only share your thoughts with other agents by using the `update_summary` tool.
+- Any of your response can not be seen by other agents. You can only share your thoughts with other agents by using the `new_answer` tool.
 - You are Agent 0. That is your identifier in the team. 
 """
 
@@ -489,7 +489,7 @@ You are Agent 0 - an expert agent equipped with search and code tools working as
 Who was the thinker?"""
     
     notification_message = """
-If you have anything that you want to share with other agents, you can use the `update_summary` tool to update the summary.
+If you have anything that you want to share with other agents, you can use the `new_answer` tool to update the summary.
 The summary should include all necessary information and evidence to support your claims.
 If you believe anyone has found the solution (including yourself), you can use the `vote` tool to vote for them.
 """
@@ -501,7 +501,7 @@ Below are the recent updates from other agents:
 
     # Custom functions (converted to X.AI tool format)
     customized_functions = [
-        function_to_json(mock_update_summary), 
+        function_to_json(mock_new_answer), 
         function_to_json(mock_vote)
     ]
     
@@ -510,7 +510,7 @@ Below are the recent updates from other agents:
 
     # Create tool mapping from the provided tools
     tool_mapping = {
-        "mock_update_summary": mock_update_summary,
+        "mock_new_answer": mock_new_answer,
         "mock_check_updates": mock_check_updates,
         "mock_vote": mock_vote,
     }
