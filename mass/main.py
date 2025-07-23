@@ -26,13 +26,14 @@ import sys
 import os
 import logging
 import time
+import json
 from typing import List, Dict, Any, Optional, Union
 from pathlib import Path
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(__file__))
 
-from .types import TaskInput, MassConfig
+from .types import TaskInput, MassConfig, ModelConfig, AgentConfig
 from .config import create_config_from_models
 from .orchestrator import MassOrchestrator  
 from .agents import create_agent
@@ -60,6 +61,13 @@ def _run_single_agent_simple(question: str, config: MassConfig) -> Dict[str, Any
     
     logger.info(f"🤖 Running single agent mode with {agent_config.model_config.model}")
     logger.info(f"   Question: {question}")
+    
+    # Create log manager for single agent mode to ensure result.json is saved
+    log_manager = MassLogManager(
+        log_dir=config.logging.log_dir,
+        session_id=config.logging.session_id,
+        non_blocking=config.logging.non_blocking
+    )
     
     try:
         # Create the single agent without orchestrator (None)
@@ -110,6 +118,16 @@ def _run_single_agent_simple(question: str, config: MassConfig) -> Dict[str, Any
             "single_agent_mode": True
         }
         
+        # Save result to result.json in the session directory
+        if log_manager and not log_manager.non_blocking:
+            try:
+                result_file = log_manager.session_dir / "result.json"
+                with open(result_file, 'w', encoding='utf-8') as f:
+                    json.dump(response, f, indent=2, ensure_ascii=False, default=str)
+                logger.info(f"💾 Single agent result saved to {result_file}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to save result.json: {e}")
+        
         logger.info(f"✅ Single agent completed in {session_duration:.1f}s")
         return response
         
@@ -118,7 +136,7 @@ def _run_single_agent_simple(question: str, config: MassConfig) -> Dict[str, Any
         logger.error(f"❌ Single agent failed: {e}")
         
         # Return error response in same format
-        return {
+        error_response = {
             "answer": f"Error in single agent processing: {str(e)}",
             "consensus_reached": False,
             "representative_agent_id": None,
@@ -135,6 +153,25 @@ def _run_single_agent_simple(question: str, config: MassConfig) -> Dict[str, Any
             "single_agent_mode": True,
             "error": str(e)
         }
+        
+        # Save error result to result.json in the session directory
+        if log_manager and not log_manager.non_blocking:
+            try:
+                result_file = log_manager.session_dir / "result.json"
+                with open(result_file, 'w', encoding='utf-8') as f:
+                    json.dump(error_response, f, indent=2, ensure_ascii=False, default=str)
+                logger.info(f"💾 Single agent error result saved to {result_file}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to save result.json: {e}")
+        
+        return error_response
+    finally:
+        # Cleanup log manager
+        if log_manager:
+            try:
+                log_manager.cleanup()
+            except Exception as e:
+                logger.warning(f"⚠️ Error cleaning up log manager: {e}")
 
 
 def run_mass_with_config(question: str, config: MassConfig) -> Dict[str, Any]:

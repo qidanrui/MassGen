@@ -30,7 +30,7 @@ Please use your expertise and tools (if available) to fully verify if the best C
 If YES, use the `vote` tool to record your vote and skip the `new_answer` tool.
 
 If NO, please propose a new BETTER answer to the ORIGINAL MESSAGE than the CURRENT answers. 
-Your new answer is self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response. 
+Your new answer is self-contained, process-complete, well-sourced, compelling, and ready to serve as the definitive final response. 
 Make sure you call the tool `new_answer` to submit your new answer for further evaluation.
 """
 

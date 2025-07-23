@@ -1,6 +1,7 @@
 import logging
 import threading
 import time
+import json
 from collections import Counter
 from datetime import datetime
 from typing import Any, Optional, Dict, List
@@ -945,6 +946,16 @@ The final answer must be self-contained, complete, well-sourced, compelling, and
                 },
                 "system_logs": self.export_detailed_session_log()
             }
+            
+            # Save result to result.json in the session directory
+            if self.log_manager and not self.log_manager.non_blocking:
+                try:
+                    result_file = self.log_manager.session_dir / "result.json"
+                    with open(result_file, 'w', encoding='utf-8') as f:
+                        json.dump(result, f, indent=2, ensure_ascii=False, default=str)
+                    logger.info(f"💾 Result saved to {result_file}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to save result.json: {e}")
             
             logger.info(f"✅ Session completed in {session_duration:.2f} seconds")
             logger.info(f"   Consensus: {result['consensus_reached']}")

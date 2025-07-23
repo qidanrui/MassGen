@@ -1,5 +1,8 @@
 OpenAI:
 - gpt-4o-mini did not have response streaming
+- o4-mini 大部分是item
+
+Grok-4: No streaming display for function call, only TEXT
 
 Display:
 - Region border
@@ -7,5 +10,3 @@ Display:
 Max Round:
  - Max Round Termination
  - chat_history
-
-Final Answer Fallback
