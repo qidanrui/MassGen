@@ -660,6 +660,8 @@ class MassOrchestrator:
             if time.time() - start_time > self.max_duration:
                 logger.warning("⏰ Maximum duration reached - forcing consensus")
                 self._force_consensus_by_timeout()
+                # Representative will present final answer
+                self._present_final_answer(task)
                 break
         
             # Run all agents with dynamic restart support
@@ -686,6 +688,8 @@ class MassOrchestrator:
                     if debate_rounds > self.max_debate_rounds:
                         logger.warning(f"⚠️ Maximum debate rounds ({self.max_debate_rounds}) reached")
                         self._force_consensus_by_timeout()
+                        # Representative will present final answer
+                        self._present_final_answer(task)
                         break
                     
                     logger.info(f"🗣️ No consensus - starting debate round {debate_rounds}")
@@ -848,8 +852,30 @@ class MassOrchestrator:
         logger.info(f"🎯 Agent {representative_id} presenting final answer")
         
         try:
-            agent = self.agents[representative_id]
-            self.final_response = agent.state.curr_answer
+            representative_agent = self.agents[representative_id]
+            if self.final_response:
+                logger.info(f"✅ Final response already exists")
+                return
+            
+            if representative_agent.state.curr_answer:
+                self.final_response = representative_agent.state.curr_answer
+            else:
+                # Run one more inference
+                messages = [
+                    {"role": "system", "content": """
+You are given a task and multiple agents' answers and their votes. 
+Please provide the final answer to the task based on the votes.
+The final answer must be self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response.
+"""},
+                    {"role": "user", "content": representative_agent._get_task_input_messages(task) + """
+Please provide the final answer to the task based on these evaluations.
+The final answer must be self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response.
+"""}
+                ]
+                result = representative_agent.process_message(messages)
+                self.final_response = result.text
+            
+            # Mark
             self.system_state.phase = "completed"
             self.system_state.end_time = time.time()
             
