@@ -176,22 +176,25 @@ class MassAgent(ABC):
         self.orchestrator.notify_answer_update(self.agent_id, answer)
         return f"The new answer has been added."
     
-    def vote(self, agent_id: int, reason: str = ""):
+    def vote(self, agent_id: int, reason: str = "", invalid_vote_options: List[int]=[]):
         """
         Vote for the representative agent, who you believe has found the correct solution.
 
         Args:
             agent_id: ID of the voted agent
             reason: Your full explanation of why you voted for this agent
+            invalid_vote_options: The list of agent IDs that are invalid to vote for (have new updates)
         """
+        if agent_id in invalid_vote_options:
+            return f"Error: Voting for agent {agent_id} is not allowed as its answer has been updated!"
         self.orchestrator.cast_vote(self.agent_id, agent_id, reason)
         return f"Your vote for Agent {agent_id} has been cast."
     
-    def check_update(self) -> bool:
+    def check_update(self) -> List[int]:
         """
         Check if there are any updates from other agents since this agent last saw them.
         """
-        has_update = False
+        agents_with_update = set()
         # Get updates from other agents since this agent last saw them
         for other_id, other_state in self.orchestrator.agent_states.items():
             if other_id != self.agent_id and other_state.updated_answers:
@@ -201,8 +204,8 @@ class MassAgent(ABC):
                     if update.timestamp > last_seen:
                         # update the last seen timestamp
                         self.state.seen_updates_timestamps[other_id] = update.timestamp
-                        has_update = True
-        return has_update
+                        agents_with_update.add(other_id)
+        return list(agents_with_update)
     
     def mark_failed(self, reason: str = ""):
         """
@@ -222,10 +225,11 @@ class MassAgent(ABC):
                 deduplicated_function_calls.append(func_call)
         return deduplicated_function_calls
     
-    def _execute_function_calls(self, function_calls: List[Dict]):
+    def _execute_function_calls(self, function_calls: List[Dict], invalid_vote_options: List[int]=[]):
         """Execute function calls and return function outputs."""
         from .tools import register_tool
         function_outputs = []
+        successful_called = []
         
         # DEBUGGING
         with open("function_calls.txt", "a") as f:
@@ -245,7 +249,7 @@ class MassAgent(ABC):
                 if func_name == "new_answer":
                     result = self.new_answer(func_args.get("answer", ""))
                 elif func_name == "vote":
-                    result = self.vote(func_args.get("agent_id"), func_args.get("reason", ""))
+                    result = self.vote(func_args.get("agent_id"), func_args.get("reason", ""), invalid_vote_options)
                 elif func_name in register_tool:
                     result = register_tool[func_name](**func_args)
                 else:
@@ -262,11 +266,13 @@ class MassAgent(ABC):
                     "output": str(result)
                 }
                 function_outputs.append(function_output)
+                successful_called.append(True)
                 
                 # DEBUGGING
                 with open("function_calls.txt", "a") as f:
                     f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
                     f.write(f"{json.dumps(function_output, indent=2)}\n")
+                    f.write(f"Successful called: {True}\n")
                 
             except Exception as e:
                 # Handle execution errors
@@ -276,23 +282,24 @@ class MassAgent(ABC):
                     "output": f"Error executing function: {str(e)}"
                 }
                 function_outputs.append(error_output)
+                successful_called.append(False)
                 print(f"Error executing function {func_name}: {e}")
                 
                 # DEBUGGING
                 with open("function_calls.txt", "a") as f:
                     f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
                     f.write(f"{json.dumps(error_output, indent=2)}\n")
+                    f.write(f"Successful called: {False}\n")
                 
-        return function_outputs
+        return function_outputs, successful_called
       
     def _get_system_tools(self) -> List[Dict[str, Any]]:
         """
         The system tools available to this agent for orchestration:
         - new_answer: Your added new answer, which should be self-contained, complete, and ready to serve as the definitive final response.
         - vote: Vote for the representative agent, who you believe has found the correct solution.
-        """
-        return [
-            {
+        """            
+        new_answer_schema = {
                 "type": "function",
                 "name": "new_answer",
                 "description": "Add your new answer if you believe it is better than the current answers.",
@@ -306,17 +313,17 @@ class MassAgent(ABC):
                     },
                     "required": ["answer"]
                 }
-            },
-            {
+            }
+        vote_schema = {
                 "type": "function",
                 "name": "vote",
-                "description": "Vote for the agent whose answer you believe is the best and addresses the original message.",
+                "description": "Vote for the best agent to present final answer. Submit its agent_id (integer) and reason for your vote.",
                 "parameters": {
                         "type": "object",
                         "properties": {
                             "agent_id": {
                                 "type": "integer",
-                                "description": "The ID of the agent you believe has found the best answer that addresses the original message."
+                                "description": "The ID of the agent you believe has found the best answer that addresses the original message.",
                             },
                             "reason": {
                                 "type": "string",
@@ -326,7 +333,9 @@ class MassAgent(ABC):
                         "required": ["agent_id", "reason"]
                     }
                 }
-        ]
+        # Check if there are any available options to vote for. If not, only return the new_answer schema.
+        available_options = [agent_id for agent_id, agent_state in self.orchestrator.agent_states.items() if agent_state.curr_answer]
+        return [new_answer_schema, vote_schema] if available_options else [new_answer_schema]
 
     def _get_registered_tools(self) -> List[Dict[str, Any]]:
         """Return the tool schema for the tools that are available to this agent."""
@@ -365,14 +374,17 @@ class MassAgent(ABC):
             if agent_state.curr_vote:
                 agent_votes.append(f"**Vote for Agent {agent_state.curr_vote.target_id}**: {agent_state.curr_vote.reason}")
         return agent_votes
-    
+        
     def _get_task_input(self, task: TaskInput) -> str:
-        """Get the initial task input as the user message."""
+        """Get the initial task input as the user message. Return Both the current status and the task input."""
         # Case 1: Initial round without running answer
         if not self.state.curr_answer:
-            return AGENT_ANSWER_MESSAGE.format(task=task.question, agent_answers="None") + \
+            status = "initial"
+            task_input = AGENT_ANSWER_MESSAGE.format(task=task.question, agent_answers="None") + \
                    "There are no current answers right now. Please use your expertise and tools (if available) to provide a new answer and submit it using the `new_answer` tool first."
-    
+            return status, task_input
+        
+        # Not the initial round
         all_agent_answers = self._get_all_answers()
         all_agent_answers_str = "\n\n".join(all_agent_answers)
         # Check if in debate mode or not
@@ -381,16 +393,20 @@ class MassAgent(ABC):
             # Case 2: All agents have voted and are debating. Can not use agent status to check as they have been updated to 'working/debate'
             all_agent_votes = self._get_all_votes()
             all_agent_votes_str = "\n\n".join(all_agent_votes)
-            return AGENT_ANSWER_AND_VOTE_MESSAGE.format(task=task.question, agent_answers=all_agent_answers_str, agent_votes=all_agent_votes_str)
+            status = "debate"
+            task_input = AGENT_ANSWER_AND_VOTE_MESSAGE.format(task=task.question, agent_answers=all_agent_answers_str, agent_votes=all_agent_votes_str)
         else:
             # Case 3: All agents are working and not in debating
-            return AGENT_ANSWER_MESSAGE.format(task=task.question, agent_answers=all_agent_answers_str)
+            status = "working"
+            task_input = AGENT_ANSWER_MESSAGE.format(task=task.question, agent_answers=all_agent_answers_str)
+        
+        return status, task_input
     
-    def _get_task_input_messages(self, task: TaskInput) -> List[Dict[str, str]]:
+    def _get_task_input_messages(self, user_input: str) -> List[Dict[str, str]]:
         """Get the task input messages for the agent."""
         return [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
-            {"role": "user", "content": self._get_task_input(task)}
+            {"role": "user", "content": user_input}
         ]
                
     @abstractmethod
@@ -398,6 +414,17 @@ class MassAgent(ABC):
         """Return the built-in tools that are available to different agent backends."""
         pass
     
+    def _get_curr_messages_and_tools(self, task: TaskInput):
+        """Get the current messages and tools for the agent."""
+        working_status, user_input = self._get_task_input(task)
+        working_messages = self._get_task_input_messages(user_input)
+        # Get available tools (system tools + built-in tools + custom tools)
+        all_tools = []
+        all_tools.extend(self._get_builtin_tools())
+        all_tools.extend(self._get_registered_tools())
+        all_tools.extend(self._get_system_tools())
+        return working_status, working_messages, all_tools
+        
     def work_on_task(self, task: TaskInput) -> List[Dict[str, str]]:
         """
         Work on the task with conversation continuation.
@@ -414,15 +441,9 @@ class MassAgent(ABC):
         The agent continues the conversation until it votes or reaches max rounds.
         """  
         
-        # Get available tools (system tools + built-in tools + custom tools)
-        all_tools = []
-        all_tools.extend(self._get_builtin_tools())
-        all_tools.extend(self._get_registered_tools())
-        all_tools.extend(self._get_system_tools())
-        
         # Initialize working messages
         curr_round = 0
-        working_messages = self._get_task_input_messages(task)
+        working_status, working_messages, all_tools = self._get_curr_messages_and_tools(task)
         
         # Start the task solving loop
         while curr_round < self.max_rounds and self.state.status == "working":
@@ -431,6 +452,13 @@ class MassAgent(ABC):
                 result = self.process_message(messages=working_messages, 
                                               tools=all_tools)
                 
+                # Before Making the new result into effect, check if there is any update from other agents that are unseen by this agent
+                agents_with_update = self.check_update()
+                has_update = len(agents_with_update) > 0
+                # Case 1: if vote() is called and there are new update: make it invalid and renew the conversation
+                # Case 2: if new_answer() is called and there are new update: make it valid and renew the conversation
+                # Case 3: if no function call is made and there are new update: renew the conversation
+                                
                 # Add assistant response
                 if result.text:
                     working_messages.append({"role": "assistant", "content": result.text})
@@ -439,25 +467,27 @@ class MassAgent(ABC):
                 if result.function_calls:
                     # Deduplicate function calls by their name
                     result.function_calls = self.deduplicate_function_calls(result.function_calls)
-                    function_outputs = self._execute_function_calls(result.function_calls)
+                    # Not voting if there is any update
+                    function_outputs, successful_called = self._execute_function_calls(result.function_calls, 
+                                                                                      invalid_vote_options=agents_with_update)
 
-                    continue_loop = True
-                    for function_call, function_output in zip(result.function_calls, function_outputs):
+                    renew_conversation = False
+                    for function_call, function_output, successful_called in zip(result.function_calls, function_outputs, successful_called):
                         # If call `new_answer`, we need to rebuild the conversation history with new answers
-                        if function_call.get("name") == "new_answer":
-                            working_messages = self._get_task_input_messages(task)
-                            continue_loop = False
+                        if function_call.get("name") == "new_answer" and successful_called:
+                            renew_conversation = True
                             break
                     
                         # If call `vote`, we need to break the loop
-                        if function_call.get("name") == "vote":
-                            continue_loop = False
+                        if function_call.get("name") == "vote" and successful_called:
+                            renew_conversation = True
                             break
                         
-                    if continue_loop:
-                        # Add all function call results to the current conversation
+                    if not renew_conversation: # Add all function call results to the current conversation and continue the loop
                         for function_call, function_output in zip(result.function_calls, function_outputs):
                             working_messages.extend([function_call, function_output])
+                    else: # Renew the conversation
+                        working_status, working_messages, all_tools = self._get_curr_messages_and_tools(task)
                 else:
                     # No function calls - check if we should continue or stop
                     if self.state.status == "voted":
@@ -465,12 +495,11 @@ class MassAgent(ABC):
                         break
                     else:
                         # Check if there is any update from other agents that are unseen by this agent
-                        has_update = self.check_update()
-                        if has_update: 
-                            # Renew the conversation within the loop
-                            working_messages = self._get_task_input_messages(task)
+                        if has_update and working_status != "initial": 
+                            # The vote option has changed, thus we need to renew the conversation within the loop
+                            working_status, working_messages, all_tools = self._get_curr_messages_and_tools(task)
                         else: # Continue the current conversation and prompting checkin
-                            working_messages.append({"role": "user", "content": "Please use either `new_answer` or `vote` tool once your analysis is done."})
+                            working_messages.append({"role": "user", "content": "Finish your work above by making a tool call of `vote` or `new_answer`. Make sure you actually call the tool."})
                  
                 curr_round += 1
                 self.state.chat_round += 1        
@@ -490,7 +519,7 @@ class MassAgent(ABC):
                 # DEBUGGING
                 with open("errors.txt", "a") as f:
                     f.write(f"Agent {self.agent_id} error in round {self.state.chat_round}: {e}\n")
-                    f.write(traceback.format_exc())
+                    f.write(f"Error caused by:\n{e}\n")
                     f.write("\n\n")
                     
                 break

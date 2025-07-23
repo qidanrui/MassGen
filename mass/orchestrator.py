@@ -32,7 +32,7 @@ class MassOrchestrator:
         self,
         max_duration: int = 600,
         consensus_threshold: float = 1.0,
-        max_debate_rounds: int = 2,
+        max_debate_rounds: int = 1,
         status_check_interval: float = 2.0,
         thread_pool_timeout: int = 5,
         streaming_orchestrator=None,
@@ -862,13 +862,15 @@ class MassOrchestrator:
                 self.final_response = representative_agent.state.curr_answer
             else:
                 # Run one more inference
+                _, user_input = representative_agent._get_task_input(task)
+                
                 messages = [
                     {"role": "system", "content": """
 You are given a task and multiple agents' answers and their votes. 
 Please provide the final answer to the task based on the votes.
 The final answer must be self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response.
 """},
-                    {"role": "user", "content": representative_agent._get_task_input_messages(task) + """
+                    {"role": "user", "content": user_input + """
 Please provide the final answer to the task based on these evaluations.
 The final answer must be self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response.
 """}

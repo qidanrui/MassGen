@@ -1,12 +1,4 @@
-OpenAI:
-- gpt-4o-mini did not have response streaming
-- o4-mini 大部分是item
-
-Grok-4: No streaming display for function call, only TEXT
-
 Display:
 - Region border
-
-Max Round:
- - Max Round Termination
- - chat_history
+- flush to the top
+- all the debugging file writing part should be removed

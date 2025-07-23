@@ -241,24 +241,30 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
             has_shown_search_indicator = False
 
             try:
+                has_delta_content = False
                 for response, chunk in completion:
                     # Handle XAI SDK streaming format: (response, chunk)
-                    # According to docs: chunk contains text deltas, response accumulates
+                    # The XAI SDK follows OpenAI-like streaming format
                     delta_content = None
 
-                    # Extract delta content from chunk
-                    if hasattr(chunk, "content") and chunk.content:
-                        delta_content = chunk.content
-                    elif hasattr(chunk, "choices") and chunk.choices:
+                    # Extract delta content from chunk - XAI SDK specific format
+                    # Primary method: check for choices structure and extract content directly
+                    if hasattr(chunk, "choices") and chunk.choices and len(chunk.choices) > 0:
                         choice = chunk.choices[0]
+                        # XAI SDK stores content directly in choice.content, not choice.delta.content
                         if hasattr(choice, "content") and choice.content:
                             delta_content = choice.content
-                        elif hasattr(choice, "delta") and hasattr(choice.delta, "content"):
-                            delta_content = choice.delta.content
-                    elif hasattr(chunk, "text"):
+                    
+                    # Fallback method: direct content attribute on chunk
+                    elif hasattr(chunk, "content") and chunk.content:
+                        delta_content = chunk.content
+                    
+                    # Additional fallback: text attribute
+                    elif hasattr(chunk, "text") and chunk.text:
                         delta_content = chunk.text
-
+                            
                     if delta_content:
+                        has_delta_content = True
                         # Check if this is a "Thinking..." chunk (indicates processing/search)
                         if delta_content.strip() == "Thinking...":
                             thinking_count += 1
@@ -287,37 +293,45 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                     if hasattr(response, "tool_calls") and response.tool_calls:
                         for tool_call in response.tool_calls:
                             if hasattr(tool_call, 'function'):
-                                function_calls.append({
+                                _func_call = {
                                     "type": "function_call",
                                     "call_id": tool_call.id,
                                     "name": tool_call.function.name,
                                     "arguments": tool_call.function.arguments
-                                })
+                                }
+                                if _func_call not in function_calls:
+                                    function_calls.append(_func_call)
                             elif hasattr(tool_call, 'name') and hasattr(tool_call, 'arguments'):
-                                function_calls.append({
+                                _func_call = {
                                     "type": "function_call",
                                     "call_id": tool_call.id,
                                     "name": tool_call.name,
                                     "arguments": tool_call.arguments
-                                })
+                                }
+                                if _func_call not in function_calls:
+                                    function_calls.append(_func_call)
                     elif hasattr(response, 'choices') and response.choices:
                         for choice in response.choices:
                             if hasattr(choice, 'message') and hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
                                 for tool_call in choice.message.tool_calls:
                                     if hasattr(tool_call, 'function'):
-                                        function_calls.append({
+                                        _func_call = {
                                             "type": "function_call",
                                             "call_id": tool_call.id,
                                             "name": tool_call.function.name,
                                             "arguments": tool_call.function.arguments
-                                        })
+                                        }
+                                        if _func_call not in function_calls:
+                                            function_calls.append(_func_call)
                                     elif hasattr(tool_call, 'name') and hasattr(tool_call, 'arguments'):
-                                        function_calls.append({
+                                        _func_call = {
                                             "type": "function_call",
                                             "call_id": tool_call.id,
                                             "name": tool_call.name,
                                             "arguments": tool_call.arguments
-                                        })
+                                        }
+                                        if _func_call not in function_calls:
+                                            function_calls.append(_func_call)
 
                     # Check if this is the final chunk with citations
                     if hasattr(response, "citations") and response.citations:
@@ -339,6 +353,15 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                             except Exception as e:
                                 print(f"Stream callback error: {e}")
 
+                # Streaming the complete text response at the end if the above streaming fails
+                if not has_delta_content:
+                    if text:
+                        stream_callback(text)
+                    if function_calls:
+                        for function_call in function_calls:
+                            stream_callback(f"🔧 Calling function: {function_call['name']}\n")
+                            stream_callback(f"🔧 Arguments: {json.dumps(function_call['arguments'], indent=2)}\n")
+
             except Exception as e:
                 import traceback
                 print("Streaming error (full exception):")
@@ -349,7 +372,7 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                 completion = make_grok_request(stream=False)
                 result = parse_completion(completion, add_citations=True)
                 return result
-
+            
             with open("grok_streaming.txt", "a") as f:
                 import time  # Local import to ensure availability in threading context
                 f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Grok API Streaming:\n")
