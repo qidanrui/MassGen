@@ -14,12 +14,24 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Union, Optional, List, Dict
 from .backends import oai, gemini, grok
 
+# TASK_INSTRUCTION = """
+# Please use your expertise and tools (if available) to fully verify if the best CURRENT ANSWER addresses the ORIGINAL MESSAGE.
+# - If YES, use the `vote` tool to record your vote and skip the `new_answer` tool.
+# - If NO, do additional work first, then use the `new_answer` tool to record a better answer to the ORIGINAL MESSAGE. Make sure you actually call the tool.
+
+# Any answer must be self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response.
+# """
+
 SYSTEM_INSTRUCTION = """
-You are evaluating answers from multiple agents for final response to a message. Does the best CURRENT ANSWER address the ORIGINAL MESSAGE?
+You are evaluating answers from multiple agents for final response to a message. 
+
+Please use your expertise and tools (if available) to fully verify if the best CURRENT ANSWER addresses the ORIGINAL MESSAGE.
 
 If YES, use the `vote` tool to record your vote and skip the `new_answer` tool.
-IF NO, do additional work first, then use the `new_answer` tool to record a better answer to the ORIGINAL MESSAGE. Make sure you actually call the tool.
-Any new answer you add via the `new_answer` tool must be self-contained, complete, and ready to serve as the definitive final response to the user's request.
+
+If NO, please propose a new BETTER answer to the ORIGINAL MESSAGE than the CURRENT answers. 
+Your new answer is self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response. 
+Make sure you call the tool `new_answer` to submit your new answer for further evaluation.
 """
 
 AGENT_ANSWER_MESSAGE = """
@@ -40,13 +52,6 @@ AGENT_ANSWER_AND_VOTE_MESSAGE = """
 <OTHERS' VOTES>
 {agent_votes}
 <END OF OTHERS' VOTES>
-
-Please use your expertise and tools (if available) to analyze the answers and votes.
-Does the best CURRENT ANSWER address the ORIGINAL MESSAGE?
-
-If YES, use the `vote` tool to record your vote and skip the `new_answer` tool.
-IF NO, do additional work first, then use the `new_answer` tool to record a better answer to the ORIGINAL MESSAGE. Make sure you actually call the tool.
-Any new answer you add via the `new_answer` tool must be self-contained, complete, and ready to serve as the definitive final response to the user's request.
 """
 
 class MassAgent(ABC):
@@ -186,14 +191,18 @@ class MassAgent(ABC):
         """
         Check if there are any updates from other agents since this agent last saw them.
         """
+        has_update = False
         # Get updates from other agents since this agent last saw them
         for other_id, other_state in self.orchestrator.agent_states.items():
             if other_id != self.agent_id and other_state.updated_answers:
-                last_seen = self.state.seen_updates_timestamps.get(other_id, 0)
                 for update in other_state.updated_answers:
+                    last_seen = self.state.seen_updates_timestamps.get(other_id, 0)
+                    # Check if the update is newer than the last seen timestamp
                     if update.timestamp > last_seen:
-                        return True
-        return False
+                        # update the last seen timestamp
+                        self.state.seen_updates_timestamps[other_id] = update.timestamp
+                        has_update = True
+        return has_update
     
     def mark_failed(self, reason: str = ""):
         """
@@ -474,11 +483,16 @@ class MassAgent(ABC):
                 print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")                   
                 if self.orchestrator:
                     self.orchestrator.mark_agent_failed(self.agent_id, str(e))
+            
                 self.state.chat_round += 1
+                curr_round += 1
+
                 # DEBUGGING
                 with open("errors.txt", "a") as f:
                     f.write(f"Agent {self.agent_id} error in round {self.state.chat_round}: {e}\n")
                     f.write(traceback.format_exc())
                     f.write("\n\n")
+                    
+                break
                            
         return working_messages

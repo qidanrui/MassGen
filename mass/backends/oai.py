@@ -141,7 +141,7 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                 raise ValueError(f"Invalid tool type: {type(tool)}")
 
         # DEBUGGING
-        with open("openai_input.txt", "a") as f:
+        with open("openai_streaming.txt", "a") as f:
             import time  # Local import to ensure availability in threading context
             inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OpenAI API Request:\n"
             inference_log += f"tools: {formatted_tools}\n"
@@ -180,6 +180,11 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                     "max_output_tokens": max_tokens if max_tokens else None,
                     "stream": True if stream and stream_callback else False,
                 }
+                
+                # CRITICAL: Include code interpreter outputs for streaming
+                # Without this, code execution results (stdout/stderr) won't be available
+                if formatted_tools and any(tool.get("type") == "code_interpreter" for tool in formatted_tools):
+                    params["include"] = ["code_interpreter_call.outputs"]
 
                 # Only add temperature and top_p for models that support them
                 # All o-series models (o1, o3, o4, etc.) don't support temperature/top_p
@@ -355,6 +360,31 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                                 except Exception as e:
                                     print(f"Stream callback error: {e}")
                             elif hasattr(chunk.item, "type") and chunk.item.type == "code_interpreter_call":
+                                # CRITICAL: Capture code execution outputs (stdout/stderr)
+                                # This is the actual result of running the code
+                                if hasattr(chunk.item, "outputs") and chunk.item.outputs:
+                                    for output in chunk.item.outputs:
+                                        # Check if it's a dict-like object with a 'type' key (most common)
+                                        if hasattr(output, 'get') and output.get("type") == "logs":
+                                            logs_content = output.get("logs")
+                                            if logs_content:
+                                                # Add execution result to text output
+                                                execution_result = f"\n[Code Execution Output]\n{logs_content}\n"
+                                                text += execution_result
+                                                try:
+                                                    stream_callback(execution_result)
+                                                except Exception as e:
+                                                    print(f"Stream callback error: {e}")
+                                        # Also check for attribute-based access (fallback)
+                                        elif hasattr(output, "type") and output.type == "logs":
+                                            if hasattr(output, "logs") and output.logs:
+                                                # Add execution result to text output
+                                                execution_result = f"\n[Code Execution Output]\n{output.logs}\n"
+                                                text += execution_result
+                                                try:
+                                                    stream_callback(execution_result)
+                                                except Exception as e:
+                                                    print(f"Stream callback error: {e}")
                                 try:
                                     stream_callback("\n💻 Code interpreter completed\n")
                                 except Exception as e:
@@ -411,11 +441,12 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                             print(f"Stream callback error: {e}")
                             
             with open("openai_streaming.txt", "a") as f:
+                import time  # Local import to ensure availability in threading context
                 f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OpenAI API Streaming:\n")
-                f.write(f"text: {text}\n")
-                f.write(f"code: {code}\n")
-                f.write(f"citations: {citations}\n")
-                f.write(f"function_calls: {function_calls}\n")
+                f.write(f"TEXT: {text}\n\n")
+                f.write(f"CODE: {code}\n\n")
+                f.write(f"CITATIONS: {citations}\n\n")
+                f.write(f"FUNCTION CALLS: {function_calls}\n\n")
                 
             result = AgentResponse(
                 text=text,

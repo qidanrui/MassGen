@@ -661,7 +661,7 @@ class MassOrchestrator:
                 logger.warning("⏰ Maximum duration reached - forcing consensus")
                 self._force_consensus_by_timeout()
                 break
-            
+        
             # Run all agents with dynamic restart support
             # Restart all agents if they have been updated
             logger.info(f"📢 Starting collaboration round {debate_rounds + 1}")
@@ -683,7 +683,7 @@ class MassOrchestrator:
                     if self.streaming_orchestrator:
                         self.streaming_orchestrator.update_debate_rounds(debate_rounds)
                     
-                    if debate_rounds >= self.max_debate_rounds:
+                    if debate_rounds > self.max_debate_rounds:
                         logger.warning(f"⚠️ Maximum debate rounds ({self.max_debate_rounds}) reached")
                         self._force_consensus_by_timeout()
                         break

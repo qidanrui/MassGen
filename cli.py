@@ -183,7 +183,7 @@ Examples:
     
     # DEBUGGING
     for file in ["function_calls.txt", "errors.txt", "openai_streaming.txt",
-                 "gemini_input.txt", "grok_input.txt", "openai_input.txt"]:
+                 "gemini_streaming.txt", "grok_streaming.txt"]:
         if os.path.exists(file):
             os.remove(file)
             

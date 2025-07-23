@@ -229,13 +229,18 @@ class GeminiMassAgent(OpenAIMassAgent):
                 print(f"❌ Agent {self.agent_id} error in round {self.state.chat_round}: {e}")                   
                 if self.orchestrator:
                     self.orchestrator.mark_agent_failed(self.agent_id, str(e))
+            
                 self.state.chat_round += 1
+                curr_round += 1
+
                 # DEBUGGING
                 with open("errors.txt", "a") as f:
                     f.write(f"Agent {self.agent_id} error in round {self.state.chat_round}: {e}\n")
                     f.write(traceback.format_exc())
                     f.write("\n\n")
-        
+                    
+                break
+
         return working_messages
 
 

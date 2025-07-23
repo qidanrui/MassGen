@@ -203,7 +203,7 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                     chat.append(tool_result(content))
                     
             # DEBUGGING
-            with open("grok_input.txt", "a") as f:
+            with open("grok_streaming.txt", "a") as f:
                 import time  # Local import to ensure availability in threading context
                 inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Grok API Request:\n\n"
                 inference_log += f"Messages: {json.dumps(messages, indent=2)}\n"
@@ -350,6 +350,14 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                 result = parse_completion(completion, add_citations=True)
                 return result
 
+            with open("grok_streaming.txt", "a") as f:
+                import time  # Local import to ensure availability in threading context
+                f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Grok API Streaming:\n")
+                f.write(f"TEXT: {text}\n\n")
+                f.write(f"CODE: {code}\n\n")
+                f.write(f"CITATIONS: {citations}\n\n")
+                f.write(f"FUNCTION CALLS: {function_calls}\n\n")
+                
             result = AgentResponse(
                 text=text,
                 code=code,
