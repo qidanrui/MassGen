@@ -3,6 +3,7 @@ import sys
 import time
 import json
 from typing import Callable, Union, Optional, List, Dict
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 from dotenv import load_dotenv
 
@@ -142,20 +143,36 @@ class MassAgent(ABC):
             "temperature": self.temperature,
             "top_p": self.top_p,
             "api_key": None,  # Let backend use environment variable
-            "processing_timeout": self.processing_timeout,
             "stream": self.stream,
             "stream_callback": self.stream_callback
         }
         
         try:
-            result = self.process_message_impl(
-                messages=messages,
-                tools=tools,
-                **config
-            )
-
-            # Backend implementations now return AgentResponse objects directly
-            return result
+            # Use ThreadPoolExecutor to implement timeout
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    self.process_message_impl,
+                    messages=messages,
+                    tools=tools,
+                    **config
+                )
+                
+                try:
+                    # Wait for result with timeout
+                    result = future.result(timeout=self.processing_timeout)
+                    # Backend implementations now return AgentResponse objects directly
+                    return result
+                except FutureTimeoutError:
+                    # Mark agent as failed due to timeout
+                    timeout_msg = f"Agent {self.agent_id} timed out after {self.processing_timeout} seconds"
+                    self.mark_failed(timeout_msg)
+                    return AgentResponse(
+                        text=f"Agent processing timed out after {self.processing_timeout} seconds",
+                        code=[],
+                        citations=[],
+                        function_calls=[],
+                    )
+                    
         except Exception as e:
             # Return error response
             return AgentResponse(
