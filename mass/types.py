@@ -163,7 +163,7 @@ class StreamingDisplayConfig:
     """Configuration for streaming display system."""
     
     display_enabled: bool = True
-    max_lines: int = 30
+    max_lines: int = 20
     save_logs: bool = True
     stream_callback: Optional[Any] = None  # Callable, but avoid circular imports
 

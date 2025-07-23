@@ -233,10 +233,14 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
             code_lines_shown = 0
             current_code_chunk = ""
             truncation_message_sent = False
+            
+            # Function call arguments streaming tracking
+            current_function_call = None
+            current_function_arguments = ""
 
             for chunk in completion:
                 # Handle different event types from responses API streaming
-                if hasattr(chunk, "type"):
+                if hasattr(chunk, "type"):                       
                     if chunk.type == "response.output_text.delta":
                         # This is a text delta event
                         if hasattr(chunk, "delta") and chunk.delta:
@@ -334,7 +338,7 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                                 except Exception as e:
                                     print(f"Stream callback error: {e}")
                             elif hasattr(chunk.item, "type") and chunk.item.type == "function_call":
-                                # Capture function call information
+                                # Function call started - create initial function call object
                                 function_call_data = {
                                     "type": "function_call",
                                     "name": getattr(chunk.item, "name", None),
@@ -343,6 +347,15 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                                     "id": getattr(chunk.item, "id", None)
                                 }
                                 function_calls.append(function_call_data)
+                                current_function_call = function_call_data
+                                current_function_arguments = ""
+                                
+                                # Notify function call started
+                                function_name = function_call_data.get("name", "unknown")
+                                try:
+                                    stream_callback(f"\n🔧 Calling function '{function_name}'...\n")
+                                except Exception as e:
+                                    print(f"Stream callback error: {e}")
                     elif chunk.type == "response.output_item.done":
                         # Check if this is a completed web search with query or reasoning completion
                         if hasattr(chunk, "item") and chunk.item:
@@ -397,6 +410,21 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                                         if fc.get("id") == getattr(chunk.item, "id", None):
                                             fc["arguments"] = chunk.item.arguments
                                             break
+                                
+                                # Also update with accumulated arguments if available
+                                if current_function_call and current_function_arguments:
+                                    current_function_call["arguments"] = current_function_arguments
+                                
+                                # Reset tracking
+                                current_function_call = None
+                                current_function_arguments = ""
+                                
+                                # Notify function call completed
+                                function_name = getattr(chunk.item, "name", "unknown")
+                                try:
+                                    stream_callback(f"\n🔧 Function '{function_name}' completed\n")
+                                except Exception as e:
+                                    print(f"Stream callback error: {e}")
                     elif chunk.type == "response.web_search_call.in_progress":
                         try:
                             stream_callback("\n🔍 Search in progress...\n")
@@ -426,6 +454,15 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                             stream_callback("\n📚 Citation added\n")
                         except Exception as e:
                             print(f"Stream callback error: {e}")
+                    elif chunk.type == "response.function_call_arguments.delta":
+                        # Handle function call arguments streaming
+                        if hasattr(chunk, "delta") and chunk.delta:
+                            current_function_arguments += chunk.delta
+                            try:
+                                # Stream the function arguments as they're generated
+                                stream_callback(chunk.delta)
+                            except Exception as e:
+                                print(f"Stream callback error: {e}")
                     elif chunk.type == "response.function_call_arguments.done":
                         # Function arguments completed - update the function call
                         if hasattr(chunk, "arguments") and hasattr(chunk, "item_id"):
@@ -434,6 +471,19 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
                                 if fc.get("id") == chunk.item_id:
                                     fc["arguments"] = chunk.arguments
                                     break
+                        
+                        # Also update with accumulated arguments if available
+                        if current_function_call and current_function_arguments:
+                            current_function_call["arguments"] = current_function_arguments
+                        
+                        # Reset tracking
+                        current_function_call = None
+                        current_function_arguments = ""
+                        
+                        try:
+                            stream_callback("\n🔧 Function arguments complete\n")
+                        except Exception as e:
+                            print(f"Stream callback error: {e}")
                     elif chunk.type == "response.completed":
                         try:
                             stream_callback("\n✅ Response complete\n")
