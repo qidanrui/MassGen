@@ -17,42 +17,44 @@ from .backends import oai, gemini, grok
 
 # TASK_INSTRUCTION = """
 # Please use your expertise and tools (if available) to fully verify if the best CURRENT ANSWER addresses the ORIGINAL MESSAGE.
-# - If YES, use the `vote` tool to record your vote and skip the `new_answer` tool.
-# - If NO, do additional work first, then use the `new_answer` tool to record a better answer to the ORIGINAL MESSAGE. Make sure you actually call the tool.
+# - If YES, use the `vote` tool to record your vote and skip the `add_answer` tool.
+# - If NO, do additional work first, then use the `add_answer` tool to record a better answer to the ORIGINAL MESSAGE. Make sure you actually call the tool.
 
 # Any answer must be self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response.
 # """
 
 SYSTEM_INSTRUCTION = """
-You are evaluating answers from multiple agents for final response to a message. 
+You are evaluating answers from multiple agents for final response to a message. Does the best CURRENT ANSWER address the ORIGINAL MESSAGE?
 
-Please use your expertise and tools (if available) to fully verify if the best CURRENT ANSWER addresses the ORIGINAL MESSAGE.
+If YES, use the `vote` tool to record your vote and skip the `add_answer` tool.
 
-If YES, use the `vote` tool to record your vote and skip the `new_answer` tool.
-
-If NO, please propose a new BETTER answer to the ORIGINAL MESSAGE than the CURRENT answers. 
-Your new answer is self-contained, process-complete, well-sourced, compelling, and ready to serve as the definitive final response. 
-Make sure you call the tool `new_answer` to submit your new answer for further evaluation.
+If NO, do additional work first, then use the `add_answer` tool to record a better answer to the ORIGINAL MESSAGE.
+Your new answer should be self-contained, process-complete, well-sourced, compelling, and ready to serve as the final response. 
+Make sure you actually call the tool `add_answer` to submit your new answer for further evaluation.
 """
 
 AGENT_ANSWER_MESSAGE = """
-<ORIGINAL MESSAGE> {task} <END OF ORIGINAL MESSAGE>
+<ORIGINAL MESSAGE>
+{task}
+<END OF ORIGINAL MESSAGE>
 
-<CURRENT ANSWERS FROM THE AGENTS>
+<CURRENT ANSWERS>
 {agent_answers}
 <END OF CURRENT ANSWERS>
 """
 
 AGENT_ANSWER_AND_VOTE_MESSAGE = """
-<ORIGINAL MESSAGE> {task} <END OF ORIGINAL MESSAGE>
+<ORIGINAL MESSAGE>
+{task}
+<END OF ORIGINAL MESSAGE>
 
-<CURRENT ANSWERS FROM THE AGENTS>
+<CURRENT ANSWERS>
 {agent_answers}
 <END OF CURRENT ANSWERS>
 
-<OTHERS' VOTES>
+<CURRENT VOTES>
 {agent_votes}
-<END OF OTHERS' VOTES>
+<END OF CURRENT VOTES>
 """
 
 class MassAgent(ABC):
@@ -182,7 +184,7 @@ class MassAgent(ABC):
                 function_calls=[],
             )
 
-    def new_answer(self, answer: str):
+    def add_answer(self, new_answer: str):
         """
         Record your work on the task: your analysis, approach, solution, and reasoning. Update when you solve the problem, find better solutions, or incorporate valuable insights from other agents.
 
@@ -190,7 +192,7 @@ class MassAgent(ABC):
             answer: The new answer, which should be self-contained, complete, and ready to serve as the definitive final response.
         """
         # Use the orchestrator to update the answer and notify other agents to restart
-        self.orchestrator.notify_answer_update(self.agent_id, answer)
+        self.orchestrator.notify_answer_update(self.agent_id, new_answer)
         return f"The new answer has been added."
     
     def vote(self, agent_id: int, reason: str = "", invalid_vote_options: List[int]=[]):
@@ -263,8 +265,8 @@ class MassAgent(ABC):
                 func_args = json.loads(func_args)
             
             try:
-                if func_name == "new_answer":
-                    result = self.new_answer(func_args.get("answer", ""))
+                if func_name == "add_answer":
+                    result = self.add_answer(func_args.get("new_answer", ""))
                 elif func_name == "vote":
                     result = self.vote(func_args.get("agent_id"), func_args.get("reason", ""), invalid_vote_options)
                 elif func_name in register_tool:
@@ -313,22 +315,22 @@ class MassAgent(ABC):
     def _get_system_tools(self) -> List[Dict[str, Any]]:
         """
         The system tools available to this agent for orchestration:
-        - new_answer: Your added new answer, which should be self-contained, complete, and ready to serve as the definitive final response.
+        - add_answer: Your added new answer, which should be self-contained, complete, and ready to serve as the definitive final response.
         - vote: Vote for the representative agent, who you believe has found the correct solution.
         """            
-        new_answer_schema = {
+        add_answer_schema = {
                 "type": "function",
-                "name": "new_answer",
+                "name": "add_answer",
                 "description": "Add your new answer if you believe it is better than the current answers.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "answer": {
+                        "new_answer": {
                             "type": "string",
                             "description": "Your new answer, which should be self-contained, complete, and ready to serve as the definitive final response."
                         }
                     },
-                    "required": ["answer"]
+                    "required": ["new_answer"]
                 }
             }
         vote_schema = {
@@ -350,9 +352,9 @@ class MassAgent(ABC):
                         "required": ["agent_id", "reason"]
                     }
                 }
-        # Check if there are any available options to vote for. If not, only return the new_answer schema.
+        # Check if there are any available options to vote for. If not, only return the add_answer schema.
         available_options = [agent_id for agent_id, agent_state in self.orchestrator.agent_states.items() if agent_state.curr_answer]
-        return [new_answer_schema, vote_schema] if available_options else [new_answer_schema]
+        return [add_answer_schema, vote_schema] if available_options else [add_answer_schema]
 
     def _get_registered_tools(self) -> List[Dict[str, Any]]:
         """Return the tool schema for the tools that are available to this agent."""
@@ -398,7 +400,7 @@ class MassAgent(ABC):
         if not self.state.curr_answer:
             status = "initial"
             task_input = AGENT_ANSWER_MESSAGE.format(task=task.question, agent_answers="None") + \
-                   "There are no current answers right now. Please use your expertise and tools (if available) to provide a new answer and submit it using the `new_answer` tool first."
+                   "There are no current answers right now. Please use your expertise and tools (if available) to provide a new answer and submit it using the `add_answer` tool first."
             return status, task_input
         
         # Not the initial round
@@ -473,7 +475,7 @@ class MassAgent(ABC):
                 agents_with_update = self.check_update()
                 has_update = len(agents_with_update) > 0
                 # Case 1: if vote() is called and there are new update: make it invalid and renew the conversation
-                # Case 2: if new_answer() is called and there are new update: make it valid and renew the conversation
+                # Case 2: if add_answer() is called and there are new update: make it valid and renew the conversation
                 # Case 3: if no function call is made and there are new update: renew the conversation
                                 
                 # Add assistant response
@@ -490,8 +492,8 @@ class MassAgent(ABC):
 
                     renew_conversation = False
                     for function_call, function_output, successful_called in zip(result.function_calls, function_outputs, successful_called):
-                        # If call `new_answer`, we need to rebuild the conversation history with new answers
-                        if function_call.get("name") == "new_answer" and successful_called:
+                        # If call `add_answer`, we need to rebuild the conversation history with new answers
+                        if function_call.get("name") == "add_answer" and successful_called:
                             renew_conversation = True
                             break
                     
@@ -516,7 +518,7 @@ class MassAgent(ABC):
                             # The vote option has changed, thus we need to renew the conversation within the loop
                             working_status, working_messages, all_tools = self._get_curr_messages_and_tools(task)
                         else: # Continue the current conversation and prompting checkin
-                            working_messages.append({"role": "user", "content": "Finish your work above by making a tool call of `vote` or `new_answer`. Make sure you actually call the tool."})
+                            working_messages.append({"role": "user", "content": "Finish your work above by making a tool call of `vote` or `add_answer`. Make sure you actually call the tool."})
                  
                 curr_round += 1
                 self.state.chat_round += 1        
@@ -532,13 +534,6 @@ class MassAgent(ABC):
             
                 self.state.chat_round += 1
                 curr_round += 1
-
-                # DEBUGGING
-                with open("errors.txt", "a") as f:
-                    f.write(f"Agent {self.agent_id} error in round {self.state.chat_round}: {e}\n")
-                    f.write(f"Error caused by:\n{e}\n")
-                    f.write("\n\n")
-                    
                 break
                            
         return working_messages

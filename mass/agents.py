@@ -165,9 +165,9 @@ class GeminiMassAgent(OpenAIMassAgent):
                 # If function call is enabled or not, add a notification to the user
                 if working_messages[-1].get("role", "") == "user":
                     if not function_call_enabled:
-                        working_messages[-1]["content"] += "\n\n" + "Note that the `new_answer` and `vote` tools are not enabled now. Please prioritize using the built-in tools to analyze the task first."
+                        working_messages[-1]["content"] += "\n\n" + "Note that the `add_answer` and `vote` tools are not enabled now. Please prioritize using the built-in tools to analyze the task first."
                     else:
-                        working_messages[-1]["content"] += "\n\n" + "Note that the `new_answer` and `vote` tools are enabled now."
+                        working_messages[-1]["content"] += "\n\n" + "Note that the `add_answer` and `vote` tools are enabled now."
                 
                 # Call LLM with current conversation
                 result = self.process_message(messages=working_messages, tools=available_tools)
@@ -176,7 +176,7 @@ class GeminiMassAgent(OpenAIMassAgent):
                 agents_with_update = self.check_update()
                 has_update = len(agents_with_update) > 0
                 # Case 1: if vote() is called and there are new update: make it invalid and renew the conversation
-                # Case 2: if new_answer() is called and there are new update: make it valid and renew the conversation
+                # Case 2: if add_answer() is called and there are new update: make it valid and renew the conversation
                 # Case 3: if no function call is made and there are new update: renew the conversation
                                 
                 # Add assistant response
@@ -192,8 +192,8 @@ class GeminiMassAgent(OpenAIMassAgent):
                     
                     renew_conversation = False
                     for function_call, function_output, successful_called in zip(result.function_calls, function_outputs, successful_called):
-                        # If call `new_answer`, we need to rebuild the conversation history with new answers
-                        if function_call.get("name") == "new_answer" and successful_called:
+                        # If call `add_answer`, we need to rebuild the conversation history with new answers
+                        if function_call.get("name") == "add_answer" and successful_called:
                             renew_conversation = True
                             break                    
                     
@@ -228,7 +228,7 @@ class GeminiMassAgent(OpenAIMassAgent):
                             system_tools, custom_tools, built_in_tools, \
                             tool_switch, function_call_enabled = self._get_curr_messages_and_tools(task)
                         else: # Continue the current conversation and prompting checkin
-                            working_messages.append({"role": "user", "content": "Please use either `new_answer` or `vote` tool once your analysis is done."})
+                            working_messages.append({"role": "user", "content": "Please use either `add_answer` or `vote` tool once your analysis is done."})
 
                     # Switch to custom tools in the next round
                     if tool_switch:
@@ -250,13 +250,6 @@ class GeminiMassAgent(OpenAIMassAgent):
             
                 self.state.chat_round += 1
                 curr_round += 1
-
-                # DEBUGGING
-                with open("errors.txt", "a") as f:
-                    f.write(f"Agent {self.agent_id} error in round {self.state.chat_round}: {e}\n")
-                    f.write(traceback.format_exc())
-                    f.write("\n\n")
-                    
                 break
 
         return working_messages

@@ -12,7 +12,7 @@ load_dotenv()
 
 # Import utility functions and tools
 from mass.utils import function_to_json, execute_function_calls, generate_random_id
-from mass.tools import mock_new_answer, mock_check_updates, mock_vote
+from mass.tools import mock_add_answer, mock_check_updates, mock_vote
 from mass.types import AgentResponse
 
 def add_citations_to_response(response):
@@ -151,7 +151,16 @@ def parse_completion(completion, add_citations=True):
         function_calls=function_calls
     )
 
-def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "code_execution"], max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, stream=False, stream_callback=None):
+def process_message(messages, 
+                    model="gemini-2.5-flash", 
+                    tools=None, 
+                    max_retries=10, 
+                    max_tokens=None, 
+                    temperature=None, 
+                    top_p=None, 
+                    api_key=None, 
+                    stream=False, 
+                    stream_callback=None):
     """
     Generate content using Gemini API with the official google.genai SDK.
 
@@ -235,23 +244,24 @@ def process_message(messages, model="gemini-2.5-flash", tools=["live_search", "c
     has_native_tools = False
     custom_functions = []
     
-    for tool in tools:
-        if "live_search" == tool:
-            gemini_tools.append(types.Tool(googleSearch=types.GoogleSearch()))
-            has_native_tools = True
-        elif "code_execution" == tool:
-            gemini_tools.append(types.Tool(codeExecution=types.ToolCodeExecution()))
-            has_native_tools = True
-        else:
-            # Collect custom function declarations
-            # Old format: {"type": "function", "function": {...}}
-            if hasattr(tool, 'function'): 
-                function_declaration = tool["function"]
-            else: # New OpenAI format: {"type": "function", "name": ..., "description": ...}
-                function_declaration = copy.deepcopy(tool)
-                if "type" in function_declaration:
-                    del function_declaration["type"]
-            custom_functions.append(function_declaration)
+    if tools:
+        for tool in tools:
+            if "live_search" == tool:
+                gemini_tools.append(types.Tool(googleSearch=types.GoogleSearch()))
+                has_native_tools = True
+            elif "code_execution" == tool:
+                gemini_tools.append(types.Tool(codeExecution=types.ToolCodeExecution()))
+                has_native_tools = True
+            else:
+                # Collect custom function declarations
+                # Old format: {"type": "function", "function": {...}}
+                if hasattr(tool, 'function'): 
+                    function_declaration = tool["function"]
+                else: # New OpenAI format: {"type": "function", "name": ..., "description": ...}
+                    function_declaration = copy.deepcopy(tool)
+                    if "type" in function_declaration:
+                        del function_declaration["type"]
+                custom_functions.append(function_declaration)
     
     if custom_functions and has_native_tools:
         print(f"[WARNING] Gemini API doesn't support combining native tools with custom functions. Prioritizing built-in tools.")

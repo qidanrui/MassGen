@@ -172,7 +172,7 @@ class MassOrchestrator:
                     "status": state.status,
                     "update_times": len(state.updated_answers),
                     "chat_round": state.chat_round,
-                    "vote_target": state.curr_vote.target_id,
+                    "vote_target": state.curr_vote.target_id if state.curr_vote else None,
                     "execution_time": state.execution_time,
                 }
                 for agent_id, state in self.agent_states.items()
@@ -540,7 +540,7 @@ class MassOrchestrator:
                     "updates_count": len(state.updated_answers),
                     "chat_length": len(state.chat_history),
                     "chat_round": state.chat_round,
-                    "vote_target": state.curr_vote.target_id,
+                    "vote_target": state.curr_vote.target_id if state.curr_vote else None,
                     "execution_time": state.execution_time,
                     "execution_start_time": state.execution_start_time,
                     "execution_end_time": state.execution_end_time,
@@ -854,29 +854,29 @@ class MassOrchestrator:
         
         try:
             representative_agent = self.agents[representative_id]
-            if self.final_response:
-                logger.info(f"✅ Final response already exists")
-                return
+            # if self.final_response:
+            #     logger.info(f"✅ Final response already exists")
+            #     return
             
-            if representative_agent.state.curr_answer:
-                self.final_response = representative_agent.state.curr_answer
-            else:
-                # Run one more inference
-                _, user_input = representative_agent._get_task_input(task)
-                
-                messages = [
-                    {"role": "system", "content": """
+            # if representative_agent.state.curr_answer:
+            #     self.final_response = representative_agent.state.curr_answer
+            # else:
+            
+            # Run one more inference to generate the final answer
+            _, user_input = representative_agent._get_task_input(task)
+            
+            messages = [
+                {"role": "system", "content": """
 You are given a task and multiple agents' answers and their votes. 
-Please provide the final answer to the task based on the votes.
-The final answer must be self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response.
+Please incorporate these information and provide a final BEST answer to the original message.
 """},
-                    {"role": "user", "content": user_input + """
-Please provide the final answer to the task based on these evaluations.
+                {"role": "user", "content": user_input + """
+Please provide the final BEST answer to the original message by incorporating these information.
 The final answer must be self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response.
 """}
-                ]
-                result = representative_agent.process_message(messages)
-                self.final_response = result.text
+            ]
+            result = representative_agent.process_message(messages)
+            self.final_response = result.text
             
             # Mark
             self.system_state.phase = "completed"

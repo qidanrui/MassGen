@@ -11,7 +11,7 @@ from openai import OpenAI
 
 # Import utility functions
 from mass.utils import function_to_json, execute_function_calls
-from mass.tools import (mock_new_answer as new_answer, 
+from mass.tools import (mock_add_answer as add_answer, 
                         mock_check_updates as check_updates, 
                         mock_vote as vote)
 from mass.types import AgentResponse
@@ -87,7 +87,15 @@ def parse_completion(response, add_citations=True):
         function_calls=function_calls
     )
 
-def process_message(messages, model="o4-mini", tools=["live_search", "code_execution"], max_retries=10, max_tokens=None, temperature=None, top_p=None, api_key=None, stream=False, stream_callback=None):
+def process_message(messages, 
+                    model="gpt-4.1-mini", 
+                    tools=None, 
+                    max_retries=10, 
+                    max_tokens=None, 
+                    temperature=None, 
+                    top_p=None, 
+                    api_key=None, 
+                    stream=False, stream_callback=None):
     """
     Generate content using OpenAI API with optional streaming support.
 
@@ -126,17 +134,18 @@ def process_message(messages, model="o4-mini", tools=["live_search", "code_execu
     formatted_tools = []
 
     # Add other custom tools
-    for tool in tools:
-        if isinstance(tool, dict):
-            formatted_tools.append(tool)
-        elif callable(tool):
-            formatted_tools.append(function_to_json(tool))
-        elif tool == "live_search":  # built-in tools
-            formatted_tools.append({"type": "web_search_preview"})
-        elif tool == "code_execution":  # built-in tools
-            formatted_tools.append({"type": "code_interpreter", "container": {"type": "auto"}})
-        else:
-            raise ValueError(f"Invalid tool type: {type(tool)}")
+    if tools:
+        for tool in tools:
+            if isinstance(tool, dict):
+                formatted_tools.append(tool)
+            elif callable(tool):
+                formatted_tools.append(function_to_json(tool))
+            elif tool == "live_search":  # built-in tools
+                formatted_tools.append({"type": "web_search_preview"})
+            elif tool == "code_execution":  # built-in tools
+                formatted_tools.append({"type": "code_interpreter", "container": {"type": "auto"}})
+            else:
+                raise ValueError(f"Invalid tool type: {type(tool)}")
 
     # DEBUGGING
     with open("openai_streaming.txt", "a") as f:

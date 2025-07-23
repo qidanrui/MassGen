@@ -51,7 +51,7 @@ class ModelConfig:
     max_tokens: Optional[int] = None
     temperature: Optional[float] = None
     top_p: Optional[float] = None
-    processing_timeout: Optional[float] = 150 # seconds
+    processing_timeout: Optional[float] = 180 # seconds
     stream: bool = True # whether to stream the response
 
 

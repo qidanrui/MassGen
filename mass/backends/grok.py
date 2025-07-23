@@ -12,7 +12,7 @@ from xai_sdk.search import SearchParameters
 
 # Import utility functions and tools  
 from mass.utils import function_to_json, execute_function_calls
-from mass.tools import mock_new_answer, mock_check_updates, mock_vote
+from mass.tools import mock_add_answer, mock_check_updates, mock_vote
 from mass.types import AgentResponse
 
 load_dotenv()
@@ -63,7 +63,16 @@ def parse_completion(response, add_citations=True):
         function_calls=function_calls
     )
 
-def process_message(messages, model="grok-4", tools=None, max_retries=10, max_tokens=32000, temperature=None, top_p=None, api_key=None, stream=False, stream_callback=None):
+def process_message(messages,
+                    model="grok-3-mini", 
+                    tools=None, 
+                    max_retries=10, 
+                    max_tokens=None, 
+                    temperature=None, 
+                    top_p=None, 
+                    api_key=None, 
+                    stream=False, 
+                    stream_callback=None):
     """
     Generate content using Grok API with optional streaming support and custom tools.
     
@@ -358,7 +367,7 @@ def process_message(messages, model="grok-4", tools=None, max_retries=10, max_to
                 if function_calls:
                     for function_call in function_calls:
                         stream_callback(f"🔧 Calling function: {function_call['name']}\n")
-                        stream_callback(f"🔧 Arguments: {json.dumps(function_call['arguments'], indent=2)}\n")
+                        stream_callback(f"🔧 Arguments: {json.dumps(function_call['arguments'], indent=4)}\n\n")
 
         except Exception as e:
             import traceback
