@@ -1,169 +1,250 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Command Line Interface for MASS (Multi-Agent Scaling System)
+MASS (Multi-Agent Scaling System) - Command Line Interface
 
-This provides a simple command-line interface to run MASS tasks.
+This provides a clean command-line interface for the MASS system.
 
 Usage examples:
-    python cli.py --question "What is 2+2?" --agents gpt-4o,gemini-2.5-flash
-    python cli.py --question "test_case1.json" --agents gpt-4o,gemini-2.5-flash --output results.json
+    # Use YAML configuration file
+    python cli.py "What is 2+2?" --config examples/production.yaml
+    
+    # Use model names directly (single or multiple agents)
+    python cli.py "What is 2+2?" --models gpt-4o gemini-2.5-flash
+    python cli.py "What is 2+2?" --models gpt-4o  # Single agent mode
+    
+    # Interactive mode (no question provided)
+    python cli.py --models gpt-4o grok-4
 """
 
 import argparse
-import json
-import logging
 import sys
-from typing import List
+import os
+from pathlib import Path
 
-from mass import MassSystem
-from mass.utils import get_available_models
+# Add mass package to path
+sys.path.insert(0, str(Path(__file__).parent))
 
-def parse_arguments():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="MASS (Multi-Agent Scaling System) CLI")
+from mass import (
+    run_mass_with_config, load_config_from_yaml, create_config_from_models, 
+    ConfigurationError
+)
+
+
+def run_interactive_mode(config):
+    """Run MASS in interactive mode, asking for questions repeatedly."""
+    print("\n🤖 MASS Interactive Mode")
+    print("="*60)
     
-    parser.add_argument(
-        "--question", "-q",
-        type=str,
-        help="The question/task to solve (or path to .json/.txt file)"
+    # Display current configuration
+    print("📋 Current Configuration:")
+    print("-" * 30)
+    
+    # Show models/agents
+    if hasattr(config, 'agents') and config.agents:
+        print(f"🤖 Agents ({len(config.agents)}):")
+        for i, agent in enumerate(config.agents, 1):
+            model_name = getattr(agent.model_config, 'model', 'Unknown') if hasattr(agent, 'model_config') else 'Unknown'
+            agent_type = getattr(agent, 'agent_type', 'Unknown')
+            tools = getattr(agent.model_config, 'tools', []) if hasattr(agent, 'model_config') else []
+            tools_str = ', '.join(tools) if tools else 'None'
+            print(f"   {i}. {model_name} ({agent_type})")
+            print(f"      Tools: {tools_str}")
+    else:
+        print("🤖 Single Agent Mode")
+    
+    # Show orchestrator settings
+    if hasattr(config, 'orchestrator'):
+        orch = config.orchestrator
+        print(f"⚙️  Orchestrator:")
+        print(f"   • Duration: {getattr(orch, 'max_duration', 'Default')}s")
+        print(f"   • Consensus: {getattr(orch, 'consensus_threshold', 'Default')}")
+        print(f"   • Max Rounds: {getattr(orch, 'max_debate_rounds', 'Default')}")
+    
+    # Show model parameters (from first agent as representative)
+    if hasattr(config, 'agents') and config.agents and hasattr(config.agents[0], 'model_config'):
+        model_config = config.agents[0].model_config
+        print(f"🔧 Model Config:")
+        temp = getattr(model_config, 'temperature', 'Default')
+        timeout = getattr(model_config, 'processing_timeout', 'Default')
+        max_rounds = getattr(model_config, 'max_rounds', 'Default')
+        print(f"   • Temperature: {temp}")
+        print(f"   • Timeout: {timeout}s")
+        print(f"   • Max Rounds: {max_rounds}")
+    
+    # Show display settings
+    if hasattr(config, 'streaming_display'):
+        display = config.streaming_display
+        display_status = "✅ Enabled" if getattr(display, 'display_enabled', True) else "❌ Disabled"
+        logs_status = "✅ Enabled" if getattr(display, 'save_logs', True) else "❌ Disabled"
+        print(f"📺 Display: {display_status}")
+        print(f"📁 Logs: {logs_status}")
+    
+    print("-" * 30)
+    print("💬 Type your questions below. Type 'quit', 'exit', or press Ctrl+C to stop.")
+    print("="*60)
+    
+    try:
+        while True:
+            try:
+                question = input("\nUser: ").strip()
+                
+                if question.lower() in ['quit', 'exit', 'q']:
+                    print("👋 Goodbye!")
+                    break
+                
+                if not question:
+                    print("Please enter a question or type 'quit' to exit.")
+                    continue
+                
+                print("\n🔄 Processing your question...")
+                
+                # Run MASS
+                result = run_mass_with_config(question, config)
+                
+                # Display results
+                print("\n" + "="*60)
+                print("🎯 FINAL ANSWER:")
+                print("="*60)
+                print(result["answer"])
+                print("\n" + "="*60)
+                
+                # Show different metadata based on single vs multi-agent mode
+                if result.get("single_agent_mode", False):
+                    print("🤖 Single Agent Mode")
+                    print(f"✅ Model: {result.get('model_used', 'Unknown')}")
+                    print(f"⏱️  Duration: {result['session_duration']:.1f}s")
+                    if result.get("citations"):
+                        print(f"📚 Citations: {len(result['citations'])}")
+                    if result.get("code"):
+                        print(f"💻 Code blocks: {len(result['code'])}")
+                else:
+                    print(f"✅ Consensus: {result['consensus_reached']}")
+                    print(f"⏱️  Duration: {result['session_duration']:.1f}s")
+                    print(f"🗳️  Votes: {result['summary']['final_vote_distribution']}")
+                    print(f"🤖 Agents: {len(config.agents)}")
+                
+            except KeyboardInterrupt:
+                print("\n👋 Goodbye!")
+                break
+            except Exception as e:
+                print(f"❌ Error processing question: {e}")
+                print("Please try again or type 'quit' to exit.")
+                
+    except KeyboardInterrupt:
+        print("\n👋 Goodbye!")
+
+
+def main():
+    """Clean CLI interface for MASS."""
+    parser = argparse.ArgumentParser(
+        description="MASS (Multi-Agent Scaling System) - Clean CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Use YAML configuration
+  python cli.py "What is the capital of France?" --config examples/production.yaml
+  
+  # Use model names directly (single or multiple agents)
+  python cli.py "What is 2+2?" --models gpt-4o gemini-2.5-flash
+  python cli.py "What is 2+2?" --models gpt-4o  # Single agent mode
+  
+  # Interactive mode (no question provided)
+  python cli.py --models gpt-4o grok-4
+  
+  # Override parameters
+  python cli.py "Question" --models gpt-4o gemini-2.5-flash --max-duration 1200 --consensus 0.8
+        """
     )
     
-    parser.add_argument(
-        "--agents", "-a",
-        type=str,
-        help="Comma-separated list of model names (e.g., 'gpt-4o,gemini-2.5-flash,grok-4')"
-    )
+    # Task input (now optional for interactive mode)
+    parser.add_argument("question", nargs='?', help="Question to solve (optional - if not provided, enters interactive mode)")
     
-    parser.add_argument(
-        "--output", "-o",
-        type=str,
-        help="Path to output file for results (JSON format)"
-    )
+    # Configuration options (mutually exclusive)
+    config_group = parser.add_mutually_exclusive_group(required=True)
+    config_group.add_argument("--config", type=str,
+                             help="Path to YAML configuration file")
+    config_group.add_argument("--models", nargs="+",
+                             help="Model names (e.g., gpt-4o gemini-2.5-flash)")
     
-    parser.add_argument(
-        "--max-rounds",
-        type=int,
-        default=5,
-        help="Maximum collaboration rounds (default: 5)"
-    )
-    
-    parser.add_argument(
-        "--consensus-threshold",
-        type=float,
-        default=1.0,
-        help="Consensus threshold (0.0-1.0, default: 1.0 = unanimous)"
-    )
-    
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose logging"
-    )
-    
-    parser.add_argument(
-        "--list-models",
-        action="store_true",
-        help="List all available model names and exit"
-    )
+    # Configuration overrides
+    parser.add_argument("--max-duration", type=int, default=None,
+                       help="Max duration in seconds")
+    parser.add_argument("--consensus", type=float, default=None,
+                       help="Consensus threshold (0.0-1.0)")
+    parser.add_argument("--max-debates", type=int, default=None,
+                       help="Maximum debate rounds")
+    parser.add_argument("--no-display", action="store_true",
+                       help="Disable streaming display")
+    parser.add_argument("--no-logs", action="store_true",
+                       help="Disable file logging")
     
     args = parser.parse_args()
     
-    # Validate that question and agents are provided unless --list-models is used
-    if not args.list_models:
-        if not args.question:
-            parser.error("--question/-q is required when not using --list-models")
-        if not args.agents:
-            parser.error("--agents/-a is required when not using --list-models")
-    
-    return args
-
-def main():
-    """Main entry point for the CLI."""
-    args = parse_arguments()
-    
-    # Set up logging
-    log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    logger = logging.getLogger(__name__)
-    
-    # Handle list models command
-    if args.list_models:
-        try:
-            available_models = get_available_models()
-            print("Available models:")
-            for model in sorted(available_models):
-                print(f"  - {model}")
-        except Exception as e:
-            print(f"Error getting available models: {e}")
-            sys.exit(1)
-        return
-    
-    logger.info("MASS CLI Starting")
-    
-    # Parse model names
-    model_names = [model.strip() for model in args.agents.split(",")]
-    
-    # Validate model names
-    try:
-        available_models = get_available_models()
-        for model_name in model_names:
-            if model_name not in available_models:
-                logger.error(f"Invalid model name: {model_name}")
-                logger.error(f"Available models: {', '.join(available_models)}")
-                logger.error("Use --list-models to see all available models")
-                sys.exit(1)
-    except Exception as e:
-        logger.error(f"Error validating model names: {str(e)}")
-        sys.exit(1)
-    
-    # Create configuration
-    config = {
-        "max_rounds": args.max_rounds,
-        "consensus_threshold": args.consensus_threshold,
-    }
-    
-    # Create and run MASS system
-    try:
-        mass_system = MassSystem(config=config)
-        result = mass_system.run_mass_agents(args.question, model_names)
-    except Exception as e:
-        logger.error(f"Error running MASS system: {str(e)}")
-        sys.exit(1)
-    
-    # Print results
-    print("\n" + "="*60)
-    print("MASS EXECUTION COMPLETED")
-    print("="*60)
-    
-    if result["success"]:
-        print(f"✅ Workflow completed successfully")
-        print(f"🏆 Winning Agent: {result['agent_id']}")
-        
-        if result["answer"]:
-            print(f"\n📝 FINAL ANSWER:")
-            print(f"{result['answer']}")
-        else:
-            print(f"\n❌ No answer could be extracted")
+    # DEBUGGING
+    for file in ["function_calls.txt", "errors.txt", "openai_streaming.txt",
+                 "gemini_streaming.txt", "grok_streaming.txt"]:
+        if os.path.exists(file):
+            os.remove(file)
             
-        if result["summary"]:
-            print(f"\n📄 FULL SUMMARY:")
-            print(f"{result['summary']}")
+    # Load configuration
+    try:
+        if args.config:
+            config = load_config_from_yaml(args.config)
+        else:  # args.models
+            config = create_config_from_models(args.models)
         
-    else:
-        print(f"❌ Workflow failed: {result['error']}")
-    
-    # Save results if requested
-    if args.output:
-        try:
-            with open(args.output, 'w', encoding='utf-8') as f:
-                json.dump(result, f, indent=2, ensure_ascii=False)
-            print(f"\n📁 Results saved to: {args.output}")
-        except Exception as e:
-            logger.error(f"Failed to save results: {str(e)}")
-    
-    # Exit with appropriate code
-    exit_code = 0 if result["success"] else 1
-    sys.exit(exit_code)
+        # Apply command-line overrides
+        if args.max_duration is not None:
+            config.orchestrator.max_duration = args.max_duration
+        if args.consensus is not None:
+            config.orchestrator.consensus_threshold = args.consensus
+        if args.max_debates is not None:
+            config.orchestrator.max_debate_rounds = args.max_debates
+        if args.no_display:
+            config.streaming_display.display_enabled = False
+        if args.no_logs:
+            config.streaming_display.save_logs = False
+        
+        # Validate final configuration
+        config.validate()
+        
+        # Check if question was provided
+        if args.question:
+            # Single question mode
+            result = run_mass_with_config(args.question, config)
+            
+            # Display results
+            print("\n" + "="*60)
+            print(f"🎯 FINAL ANSWER (Agent {result['representative_agent_id']}):")
+            print("="*60)
+            print(result["answer"])
+            print("\n" + "="*60)
+            
+            # Show different metadata based on single vs multi-agent mode
+            if result.get("single_agent_mode", False):
+                print("🤖 Single Agent Mode")
+                print(f"✅ Model: {result.get('model_used', 'Unknown')}")
+                print(f"⏱️  Duration: {result['session_duration']:.1f}s")
+                if result.get("citations"):
+                    print(f"📚 Citations: {len(result['citations'])}")
+                if result.get("code"):
+                    print(f"💻 Code blocks: {len(result['code'])}")
+            else:
+                print(f"✅ Consensus: {result['consensus_reached']}")
+                print(f"⏱️  Duration: {result['session_duration']:.1f}s")
+                print(f"🗳️  Votes: {result['summary']['final_vote_distribution']}")
+                print(f"🤖 Agents: {len(config.agents)}")
+        else:
+            # Interactive mode
+            run_interactive_mode(config)
+        
+    except ConfigurationError as e:
+        print(f"❌ Configuration error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
