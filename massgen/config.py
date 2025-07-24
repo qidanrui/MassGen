@@ -1,7 +1,7 @@
 """
-MASS Configuration System
+MassGen Configuration System
 
-This module provides configuration management for the MASS system,
+This module provides configuration management for the MassGen system,
 supporting YAML file loading and programmatic configuration creation.
 """
 
@@ -24,7 +24,7 @@ class ConfigurationError(Exception):
 
 def load_config_from_yaml(config_path: Union[str, Path]) -> MassConfig:
     """
-    Load MASS configuration from a YAML file.
+    Load MassGen configuration from a YAML file.
     
     Args:
         config_path: Path to the YAML configuration file
@@ -61,7 +61,7 @@ def create_config_from_models(
     logging_config: Optional[Dict[str, Any]] = None
 ) -> MassConfig:
     """
-    Create a MASS configuration from a list of model names.
+    Create a MassGen configuration from a list of model names.
     
     Args:
         models: List of model names (e.g., ["gpt-4.1", "gemini-2.5-flash"])

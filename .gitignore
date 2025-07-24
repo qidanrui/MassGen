@@ -151,7 +151,7 @@ cython_debug/
 ehthumbs.db
 Thumbs.db
 
-# MASS specific files
+# MassGen specific files
 backends/.env
 swarm/.env
 *.log

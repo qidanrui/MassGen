@@ -37,7 +37,7 @@ agents:
     stream: true
 streaming_display:
   display_enabled: true
-  max_lines: 30
+  max_lines: 20
   save_logs: true
 logging:
   log_dir: logs

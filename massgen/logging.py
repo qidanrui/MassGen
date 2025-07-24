@@ -1,7 +1,7 @@
 """
-MASS Logging System
+MassGen Logging System
 
-This module provides comprehensive logging capabilities for the MASS system,
+This module provides comprehensive logging capabilities for the MassGen system,
 recording all agent state changes, orchestration events, and system activities
 to local files for detailed analysis.
 """
@@ -22,7 +22,7 @@ from .types import LogEntry, AnswerRecord, VoteRecord
 
 class MassLogManager:
     """
-    Comprehensive logging system for the MASS framework.
+    Comprehensive logging system for the MassGen framework.
     
     Records all significant events including:
     - Agent state changes (working, voted, failed)
@@ -93,7 +93,7 @@ class MassLogManager:
         self.log_entries: List[LogEntry] = []
         self.agent_logs: Dict[int, List[LogEntry]] = {}
         
-        # MASS-specific event counters
+        # MassGen-specific event counters
         self.event_counters = {
             "answer_updates": 0,
             "votes_cast": 0,
@@ -133,7 +133,7 @@ class MassLogManager:
             
         try:
             with open(self.system_log_file, 'w', encoding='utf-8') as f:
-                f.write(f"MASS System Messages Log\n")
+                f.write(f"MassGen System Messages Log\n")
                 f.write(f"Session ID: {self.session_id}\n")
                 f.write(f"Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write("=" * 80 + "\n\n")
@@ -214,7 +214,7 @@ Reason: {record.reason}
             answers_file = self.answers_dir / f"agent_{agent_id}.txt"
             
             with open(answers_file, 'w', encoding='utf-8') as f:
-                f.write(f"MASS Agent {agent_id} Answer History\n")
+                f.write(f"MassGen Agent {agent_id} Answer History\n")
                 f.write(f"Session: {self.session_id}\n")
                 f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write("=" * 80 + "\n\n")
@@ -241,7 +241,7 @@ Reason: {record.reason}
             votes_file = self.votes_dir / f"agent_{agent_id}.txt"
             
             with open(votes_file, 'w', encoding='utf-8') as f:
-                f.write(f"MASS Agent {agent_id} Vote History\n")
+                f.write(f"MassGen Agent {agent_id} Vote History\n")
                 f.write(f"Session: {self.session_id}\n")
                 f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write("=" * 80 + "\n\n")
@@ -630,7 +630,7 @@ Reason: {record.reason}
             # Initialize file if it doesn't exist
             if not agent_log_file.exists():
                 with open(agent_log_file, 'w', encoding='utf-8') as f:
-                    f.write(f"MASS Agent {agent_id} Display Log\n")
+                    f.write(f"MassGen Agent {agent_id} Display Log\n")
                     f.write(f"Session: {self.session_id}\n")
                     f.write(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                     f.write("=" * 80 + "\n\n")
@@ -770,9 +770,9 @@ def initialize_logging(log_dir: str = "logs", session_id: Optional[str] = None,
     global _log_manager
     
     # Check environment variable for non-blocking mode
-    env_non_blocking = os.getenv("MASS_NON_BLOCKING_LOGGING", "").lower() in ("true", "1", "yes")
+    env_non_blocking = os.getenv("MassGen_NON_BLOCKING_LOGGING", "").lower() in ("true", "1", "yes")
     if env_non_blocking:
-        print("🔧 MASS_NON_BLOCKING_LOGGING environment variable detected - enabling non-blocking mode")
+        print("🔧 MassGen_NON_BLOCKING_LOGGING environment variable detected - enabling non-blocking mode")
         non_blocking = True
     
     _log_manager = MassLogManager(log_dir, session_id, non_blocking)

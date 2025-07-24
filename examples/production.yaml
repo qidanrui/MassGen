@@ -1,4 +1,4 @@
-# MASS Configuration: Production
+# MassGen Configuration: Production
 #
 # Optimized for production use with reliable, high-quality results.
 # Uses robust models with strict consensus requirements and comprehensive logging.
@@ -57,7 +57,7 @@ agents:
 
 streaming_display:
   display_enabled: true
-  max_lines: 30               # More lines for detailed output
+  max_lines: 20               # More lines for detailed output
   save_logs: true
 
 logging:

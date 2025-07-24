@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-MASS (Multi-Agent Scaling System) - Programmatic Interface
+MassGen (Multi-Agent Scaling System) - Programmatic Interface
 
-This module provides programmatic interfaces for running the MASS system.
+This module provides programmatic interfaces for running the MassGen system.
 For command-line usage, use: python cli.py
 
 Programmatic usage examples:
@@ -176,7 +176,7 @@ def _run_single_agent_simple(question: str, config: MassConfig) -> Dict[str, Any
 
 def run_mass_with_config(question: str, config: MassConfig) -> Dict[str, Any]:
     """
-    Run MASS system with a complete configuration object.
+    Run MassGen system with a complete configuration object.
     
     Args:
         question: The question to solve
@@ -251,7 +251,7 @@ def run_mass_with_config(question: str, config: MassConfig) -> Dict[str, Any]:
         )
         orchestrator.register_agent(agent)
     
-    logger.info(f"🚀 Starting MASS with {len(config.agents)} agents")
+    logger.info(f"🚀 Starting MassGen with {len(config.agents)} agents")
     logger.info(f"   Question: {question}")
     logger.info(f"   Models: {[agent.model_config.model for agent in config.agents]}")
     logger.info(f"   Max duration: {config.orchestrator.max_duration}s")
@@ -260,11 +260,11 @@ def run_mass_with_config(question: str, config: MassConfig) -> Dict[str, Any]:
     # Start the task and get results
     try:
         result = orchestrator.start_task(task)
-        logger.info("✅ MASS completed successfully")
+        logger.info("✅ MassGen completed successfully")
         return result
         
     except Exception as e:
-        logger.error(f"❌ MASS failed: {e}")
+        logger.error(f"❌ MassGen failed: {e}")
         raise
     finally:
         # Cleanup
@@ -273,12 +273,12 @@ def run_mass_with_config(question: str, config: MassConfig) -> Dict[str, Any]:
 
 class MassSystem:
     """
-    Enhanced MASS system interface with configuration support.
+    Enhanced MassGen system interface with configuration support.
     """
     
     def __init__(self, config: MassConfig):
         """
-        Initialize the MASS system.
+        Initialize the MassGen system.
         
         Args:
             config: MassConfig object with complete configuration.
@@ -287,7 +287,7 @@ class MassSystem:
         
     def run(self, question: str) -> Dict[str, Any]:
         """
-        Run MASS system on a question using the configured setup.
+        Run MassGen system on a question using the configured setup.
         
         Args:
             question: The question to solve
@@ -323,7 +323,7 @@ def run_mass_agents(question: str,
                    streaming_display: bool = True,
                    **kwargs) -> Dict[str, Any]:
     """
-    Simple function to run MASS agents on a question (backward compatibility).
+    Simple function to run MassGen agents on a question (backward compatibility).
     
     Args:
         question: The question to solve

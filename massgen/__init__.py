@@ -1,5 +1,5 @@
 """
-MASS - Multi-Agent Scaling System
+MassGen - Multi-Agent Scaling System
 
 A powerful multi-agent collaboration framework that enables multiple AI agents
 to work together on complex tasks, share insights, vote on solutions, and reach

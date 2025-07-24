@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class MassOrchestrator:
     """
-    Central orchestrator for managing multiple agents in the MASS framework, and logging for all events.
+    Central orchestrator for managing multiple agents in the MassGen framework, and logging for all events.
 
     Simplified workflow:
     1. Agents work on task (status: "working")
@@ -515,7 +515,7 @@ class MassOrchestrator:
                 if self.system_state.start_time and self.system_state.end_time
                 else None,
                 "timestamp": datetime.now().isoformat(),
-                "system_version": "MASS v1.0",
+                "system_version": "MassGen v1.0",
             },
             "task_information": {
                 "question": self.system_state.task.question if self.system_state.task else None,
@@ -627,7 +627,7 @@ class MassOrchestrator:
                 self.streaming_orchestrator.update_phase("unknown", "collaboration")
                 # Initialize debate rounds to 0
                 self.streaming_orchestrator.update_debate_rounds(0)
-                init_msg = f"🚀 Starting MASS task with {len(self.agents)} agents"
+                init_msg = f"🚀 Starting MassGen task with {len(self.agents)} agents"
                 self.streaming_orchestrator.add_system_message(init_msg)
 
             self._log_event("task_started", {"task_id": task.task_id, "question": task.question})
@@ -638,14 +638,14 @@ class MassOrchestrator:
 
     def _run_mass_workflow(self, task: TaskInput) -> Dict[str, Any]:
         """
-        Run the MASS workflow with dynamic agent restart support:
+        Run the MassGen workflow with dynamic agent restart support:
         1. All agents work in parallel
         2. Agents restart when others share updates (if they had voted)
         3. When all have voted, check consensus
         4. If no consensus, restart all for debate
         5. If consensus, representative presents final answer
         """
-        logger.info("🚀 Starting MASS workflow")
+        logger.info("🚀 Starting MassGen workflow")
         
         debate_rounds = 0
         start_time = time.time()

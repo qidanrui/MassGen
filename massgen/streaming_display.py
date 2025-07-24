@@ -1,7 +1,7 @@
 """
-MASS Streaming Display System
+MassGen Streaming Display System
 
-Provides real-time multi-region display for MASS agents with:
+Provides real-time multi-region display for MassGen agents with:
 - Individual agent columns showing streaming conversations
 - System status panel with phase transitions and voting
 - File logging for all conversations and events
@@ -29,7 +29,7 @@ class MultiRegionDisplay:
         self.start_time = time.time()
         self._lock = threading.RLock()  # Use reentrant lock to prevent deadlock
         
-        # MASS-specific state tracking
+        # MassGen-specific state tracking
         self.current_phase = "collaboration"
         self.vote_distribution: Dict[int, int] = {}
         self.consensus_reached = False
@@ -491,7 +491,7 @@ class MultiRegionDisplay:
         
         # Initialize system log file
         with open(self.system_log_file, 'w', encoding='utf-8') as f:
-            f.write(f"MASS System Messages Log\n")
+            f.write(f"MassGen System Messages Log\n")
             f.write(f"Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write("=" * 80 + "\n\n")
     
@@ -503,7 +503,7 @@ class MultiRegionDisplay:
             
             # Initialize agent log file
             with open(self.agent_log_files[agent_id], 'w', encoding='utf-8') as f:
-                f.write(f"MASS Agent {agent_id} Output Log\n")
+                f.write(f"MassGen Agent {agent_id} Output Log\n")
                 f.write(f"Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write("=" * 80 + "\n\n")
         
@@ -681,7 +681,7 @@ class MultiRegionDisplay:
         # Create horizontal border line - use the locked width
         border_line = "─" * total_width
         
-        # Enhanced MASS system header with fixed width
+        # Enhanced MassGen system header with fixed width
         print("")
         
         # ANSI color codes
@@ -704,7 +704,7 @@ class MultiRegionDisplay:
         print(header_empty)
         
         # Title line with exact centering
-        title_text = "🚀 MASS - Multi-Agent Scaling System 🚀"
+        title_text = "🚀 MassGen - Multi-Agent Scaling System 🚀"
         title_line_content = self._pad_to_width(title_text, total_width - 2, 'center')
         title_line = f"{BRIGHT_CYAN}║{BRIGHT_YELLOW}{BOLD}{title_line_content}{RESET}{BRIGHT_CYAN}║{RESET}"
         print(title_line)

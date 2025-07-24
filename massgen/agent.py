@@ -26,7 +26,7 @@ from .backends import oai, gemini, grok
 SYSTEM_INSTRUCTION = f"""
 You are evaluating answers from multiple agents for final response to a message. 
 
-You should use your expertise, reasoning, and tools (if available) to fully verify and challenge the CURRENT ANSWER.
+You should use your expertise, reasoning, and tools (if available) to fully verify and challenge the CURRENT ANSWERS.
 
 If the CURRENT ANSWERS fully address the ORIGINAL MESSAGE, use the `vote` tool to record your vote and skip the `add_answer` tool from different aspects.
 
@@ -34,7 +34,8 @@ If the CURRENT ANSWERS do not fully address the ORIGINAL MESSAGE, do additional 
 Your new answer should be self-contained, process-complete, well-sourced, compelling, and ready to serve as the final response. 
 Make sure you actually call the tool `add_answer` to submit your new answer for further evaluation.
 
-The current time is {time.strftime("%Y-%m-%d %H:%M:%S")}.
+Note that the CURRENT TIME is **{time.strftime("%Y-%m-%d %H:%M:%S")}**.
+If you want the most recent information, try to use the search tool instead of relying on your own knowledge.
 """
 
 AGENT_ANSWER_MESSAGE = """
@@ -63,7 +64,7 @@ AGENT_ANSWER_AND_VOTE_MESSAGE = """
 
 class MassAgent(ABC):
     """
-    Abstract base class for all agents in the MASS system.
+    Abstract base class for all agents in the MassGen system.
 
     All agent implementations must inherit from this class and implement
     the required methods while following the standardized workflow.

@@ -1,6 +1,6 @@
-# Contributing to MASS
+# Contributing to MassGen
 
-Thank you for your interest in contributing to MASS (Multi-Agent Scaling System)! We welcome contributions from the community and are excited to see what you'll bring to the project.
+Thank you for your interest in contributing to MassGen (Multi-Agent Scaling System)! We welcome contributions from the community and are excited to see what you'll bring to the project.
 
 ## 🚀 Getting Started
 
@@ -53,7 +53,7 @@ Thank you for your interest in contributing to MASS (Multi-Agent Scaling System)
 ### Project Structure
 
 ```
-mass/
+massgen/
 ├── __init__.py          # Main package exports
 ├── agent.py             # Abstract base agent class
 ├── agents.py            # Concrete agent implementations
@@ -137,7 +137,7 @@ Use conventional commits format:
 When reporting bugs, please include:
 
 - Python version and operating system
-- MASS version or commit hash
+- MassGen version or commit hash
 - Complete error messages and stack traces
 - Steps to reproduce the issue
 - Expected vs. actual behavior
@@ -172,4 +172,4 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ---
 
-Thank you for contributing to MASS! 🚀
+Thank you for contributing to MassGen! 🚀

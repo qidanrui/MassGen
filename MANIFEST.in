@@ -3,7 +3,7 @@ include LICENSE
 include CONTRIBUTING.md
 include requirements.txt
 include examples/*.yaml
-include mass/backends/.env.example
+include massgen/backends/.env.example
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
 exclude .gitignore

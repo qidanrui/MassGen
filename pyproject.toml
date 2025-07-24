@@ -10,7 +10,7 @@ readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "MASS Team", email = "contact@massgen.dev" }
+    { name = "MassGen Team", email = "contact@massgen.dev" }
 ]
 keywords = ["ai", "multi-agent", "collaboration", "orchestration", "llm", "gpt", "claude", "gemini", "grok"]
 classifiers = [

@@ -1,8 +1,8 @@
 """
-MASS System Types
+MassGen System Types
 
 This module contains all the core type definitions and dataclasses 
-used throughout the MASS framework.
+used throughout the MassGen framework.
 """
 
 import time
@@ -57,7 +57,7 @@ class ModelConfig:
 
 @dataclass
 class TaskInput:
-    """Represents a task to be processed by the MASS system."""
+    """Represents a task to be processed by the MassGen system."""
 
     question: str
     context: Dict[str, Any] = field(default_factory=dict) # may support more information in the future, like images
@@ -66,7 +66,7 @@ class TaskInput:
 
 @dataclass
 class SystemState:
-    """Overall state of the MASS orchestrator.
+    """Overall state of the MassGen orchestrator.
     Simplified phases:
     - collaboration: agents are working together to solve the task
     - completed: the representative agent has presented the solution and the task is completed
@@ -82,7 +82,7 @@ class SystemState:
     
 @dataclass
 class AgentState:
-    """Represents the current state of an agent in the MASS system."""
+    """Represents the current state of an agent in the MassGen system."""
 
     agent_id: int
     status: str = "working"  # "working", "voted", "failed"
@@ -144,7 +144,7 @@ class AgentResponse:
 
 @dataclass
 class LogEntry:
-    """Represents a single log entry in the MASS system."""
+    """Represents a single log entry in the MassGen system."""
     
     timestamp: float
     event_type: str  # e.g., "agent_answer_update", "voting", "phase_change", etc.
@@ -179,7 +179,7 @@ class LoggingConfig:
 
 @dataclass
 class OrchestratorConfig:
-    """Configuration for MASS orchestrator."""
+    """Configuration for MassGen orchestrator."""
     
     max_duration: int = 600
     consensus_threshold: float = 1.0
@@ -204,7 +204,7 @@ class AgentConfig:
 
 @dataclass
 class MassConfig:
-    """Complete MASS system configuration."""
+    """Complete MassGen system configuration."""
     
     orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
     agents: List[AgentConfig] = field(default_factory=list)

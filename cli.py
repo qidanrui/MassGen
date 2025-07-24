@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-MASS (Multi-Agent Scaling System) - Command Line Interface
+MassGen (Multi-Agent Scaling System) - Command Line Interface
 
-This provides a clean command-line interface for the MASS system.
+This provides a clean command-line interface for the MassGen system.
 
 Usage examples:
     # Use YAML configuration file
@@ -38,9 +38,9 @@ def display_vote_distribution(vote_distribution):
         print(f"    * Agent {agent_id}: {vote_distribution[agent_id]} votes")
 
 def run_interactive_mode(config):
-    """Run MASS in interactive mode, asking for questions repeatedly."""
+    """Run MassGen in interactive mode, asking for questions repeatedly."""
     
-    print("\n🤖 MASS Interactive Mode")
+    print("\n🤖 MassGen Interactive Mode")
     print("="*60)
     
     # Display current configuration
@@ -108,7 +108,7 @@ def run_interactive_mode(config):
                 
                 print("\n🔄 Processing your question...")
                 
-                # Run MASS
+                # Run MassGen
                 result = run_mass_with_config(chat_history, config)
                 
                 response = result["answer"]
@@ -167,9 +167,9 @@ def run_interactive_mode(config):
 
 
 def main():
-    """Clean CLI interface for MASS."""
+    """Clean CLI interface for MassGen."""
     parser = argparse.ArgumentParser(
-        description="MASS (Multi-Agent Scaling System) - Clean CLI",
+        description="MassGen (Multi-Agent Scaling System) - Clean CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
