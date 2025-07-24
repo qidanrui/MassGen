@@ -119,10 +119,10 @@ More providers will be added soon.
 #### Simple Usage
 ```bash
 # Multi-agent mode with specific models
-python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gemini-2.5-flash gpt-4o
+python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gemini-2.5-flash gpt-4.1
 
 # Single agent mode
-python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gpt-4o
+python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gpt-4.1
 ```
 
 #### Configuration File Usage

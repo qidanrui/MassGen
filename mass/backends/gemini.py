@@ -224,6 +224,7 @@ def process_message(messages,
         import time  # Local import to ensure availability in threading context
         import json
         inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Gemini API Request:\n\n"
+        inference_log += f"Tools: {tools}\n"
         inference_log += f"Messages: {json.dumps(messages, indent=2)}\n"
         inference_log += "\n\n"
         f.write(inference_log)
@@ -246,10 +247,10 @@ def process_message(messages,
     if tools:
         for tool in tools:
             if "live_search" == tool:
-                gemini_tools.append(types.Tool(googleSearch=types.GoogleSearch()))
+                gemini_tools.append(types.Tool(google_search=types.GoogleSearch()))
                 has_native_tools = True
             elif "code_execution" == tool:
-                gemini_tools.append(types.Tool(codeExecution=types.ToolCodeExecution()))
+                gemini_tools.append(types.Tool(code_execution=types.ToolCodeExecution()))
                 has_native_tools = True
             else:
                 # Collect custom function declarations

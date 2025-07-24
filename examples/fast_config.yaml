@@ -1,6 +1,6 @@
 orchestrator:
   max_duration: 600
-  consensus_threshold: 0.7
+  consensus_threshold: 0.0
   max_debate_rounds: 1
   status_check_interval: 1.0
   thread_pool_timeout: 5
@@ -14,7 +14,6 @@ agents:
     - code_execution
     max_retries: 10
     max_rounds: 5
-    temperature: 0.7
     inference_timeout: 150
     stream: true
 - agent_id: 2
@@ -23,10 +22,8 @@ agents:
     model: gemini-2.5-flash
     tools:
     - live_search
-    - code_execution
     max_retries: 10
     max_rounds: 5
-    temperature: 0.7
     inference_timeout: 150
     stream: true
 - agent_id: 3
@@ -36,10 +33,8 @@ agents:
     tools: ["live_search"]
     max_retries: 10
     max_rounds: 5
-    temperature: 0.4         # Balanced creativity and reliability
-    top_p: 0.9
     inference_timeout: 150
-    stream: false
+    stream: true
 streaming_display:
   display_enabled: true
   max_lines: 30

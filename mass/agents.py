@@ -41,13 +41,6 @@ class OpenAIMassAgent(MassAgent):
             stream_callback=stream_callback,
             **kwargs
         )
-    
-    def _get_builtin_tools(self) -> List[Dict[str, Any]]:
-        """Return the built-in tools that are available to OpenAI models. 
-        live_search and code_execution are supported right now.
-        """
-        return ["live_search", "code_execution"]
-
 
 class GrokMassAgent(OpenAIMassAgent):
     """MassAgent wrapper for Grok agent implementation."""
@@ -69,12 +62,6 @@ class GrokMassAgent(OpenAIMassAgent):
             stream_callback=stream_callback,
             **kwargs
         )
-    
-    def _get_builtin_tools(self) -> List[Dict[str, Any]]:
-        """Return the built-in tools that are available to Grok models. 
-        Only live_search is supported right now.
-        """
-        return ["live_search"]
     
     
 class GeminiMassAgent(OpenAIMassAgent):
@@ -98,15 +85,6 @@ class GeminiMassAgent(OpenAIMassAgent):
             **kwargs
         )
     
-    def _get_builtin_tools(self) -> List[Dict[str, Any]]:
-        """
-        Override the parent method due to the Gemini's limitation.
-        Return the built-in tools that are available to Gemini models. 
-        live_search and code_execution are supported right now.
-        However, the built-in tools and function call are not supported at the same time.
-        """
-        return ["live_search", "code_execution"]
-    
     def _get_curr_messages_and_tools(self, task: TaskInput):
         """Get the current messages and tools for the agent."""
         # Get available tools (system tools + built-in tools + custom tools)
@@ -127,7 +105,6 @@ class GeminiMassAgent(OpenAIMassAgent):
             available_tools = system_tools + custom_tools
         
         # Initialize working messages
-        curr_round = 0
         working_status, user_input = self._get_task_input(task)
         working_messages = self._get_task_input_messages(user_input)
         
@@ -222,13 +199,13 @@ class GeminiMassAgent(OpenAIMassAgent):
                         break
                     else:
                         # Check if there is any update from other agents that are unseen by this agent
-                        if has_update and self.state.status != "initial": 
+                        if has_update and working_status != "initial": 
                             # Renew the conversation within the loop
                             working_status, working_messages, available_tools, \
                             system_tools, custom_tools, built_in_tools, \
                             tool_switch, function_call_enabled = self._get_curr_messages_and_tools(task)
                         else: # Continue the current conversation and prompting checkin
-                            working_messages.append({"role": "user", "content": "Please use either `add_answer` or `vote` tool once your analysis is done."})
+                            working_messages.append({"role": "user", "content": "Finish your work above by making a tool call of `vote` or `add_answer`. Make sure you actually call the tool."})
 
                     # Switch to custom tools in the next round
                     if tool_switch:

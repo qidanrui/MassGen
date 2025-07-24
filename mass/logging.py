@@ -182,68 +182,26 @@ class MassLogManager:
         return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
     
     def _format_answer_record(self, record: AnswerRecord, agent_id: int) -> str:
-        """Format an AnswerRecord into human-readable text."""
+        """Format an AnswerRecord into simple readable text."""
         timestamp_str = self._format_timestamp(record.timestamp)
         
-        # Wrap long answers for better readability
-        wrapped_answer = textwrap.fill(
-            record.answer, 
-            width=80, 
-            initial_indent="    ", 
-            subsequent_indent="    "
-        )
-        
-        # Create properly aligned header
-        header_text = f"AGENT {agent_id} ANSWER UPDATE"
-        header_padding = max(0, 76 -len(header_text))  # 78 = 80 - 2 (for the ║ characters)
-        aligned_header = f"║ {header_text}{' ' * header_padding} ║"
-        
-        return f"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-{aligned_header}
-╚══════════════════════════════════════════════════════════════════════════════╝
+        return f"""Timestamp: {timestamp_str}
+Status: {record.status}
+Answer: {record.answer}
 
-📅 Timestamp: {timestamp_str}
-🎯 Status: {record.status}
-📝 Answer Length: {len(record.answer)} characters
-
-💬 Answer Content:
-{wrapped_answer}
-
-{'═' * 80}
+{'-' * 40}
 """
     
     def _format_vote_record(self, record: VoteRecord, agent_id: int) -> str:
-        """Format a VoteRecord into human-readable text."""
+        """Format a VoteRecord into simple readable text."""
         timestamp_str = self._format_timestamp(record.timestamp)
         
-        # Wrap long reasoning for better readability
-        wrapped_reason = textwrap.fill(
-            record.reason, 
-            width=80, 
-            initial_indent="    ", 
-            subsequent_indent="    "
-        ) if record.reason else "    No reason provided"
-        
-        # Create properly aligned header
-        header_text = f"AGENT {agent_id} VOTE CAST"
-        header_padding = max(0, 76 -len(header_text))  # 78 = 80 - 2 (for the ║ characters)
-        aligned_header = f"║ {header_text}{' ' * header_padding} ║"
-        
-        return f"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-{aligned_header}
-╚══════════════════════════════════════════════════════════════════════════════╝
+        return f"""Timestamp: {timestamp_str}
+Voter: Agent {record.voter_id}
+Target: Agent {record.target_id}
+Reason: {record.reason}
 
-📅 Timestamp: {timestamp_str}
-🗳️  Voter: Agent {record.voter_id}
-🎯 Target: Agent {record.target_id}
-📄 Reasoning Length: {len(record.reason)} characters
-
-💭 Vote Reasoning:
-{wrapped_reason}
-
-{'═' * 80}
+{'-' * 40}
 """
     
     def _write_agent_answers(self, agent_id: int, answer_records: List[AnswerRecord]):
@@ -333,14 +291,15 @@ class MassLogManager:
             self._write_log_entry(entry)
     
     def log_agent_answer_update(self, agent_id: int, answer: str, 
-                                phase: str = "unknown"):
+                                phase: str = "unknown", orchestrator=None):
         """
-        Log agent answer update with detailed information.
+        Log agent answer update with detailed information and immediately save to file.
         
         Args:
             agent_id: Agent ID
             answer: Updated answer content
             phase: Current workflow phase
+            orchestrator: MassOrchestrator instance to get agent state data
         """
         data = {
             "answer": answer,
@@ -349,8 +308,10 @@ class MassLogManager:
         
         self.log_event("agent_answer_update", agent_id, phase, data)
         
-        # This will be handled by system state snapshots
-        # Individual answer updates are captured there
+        # Immediately write agent answer history to file
+        if orchestrator and agent_id in orchestrator.agent_states:
+            agent_state = orchestrator.agent_states[agent_id]
+            self._write_agent_answers(agent_id, agent_state.updated_answers)
     
     def log_agent_status_change(self, agent_id: int, old_status: str, 
                                new_status: str, phase: str = "unknown"):
@@ -465,15 +426,16 @@ class MassLogManager:
         
         return system_snapshot
     
-    def log_voting_event(self, voter_id: int, target_id: int, phase: str = "unknown", reason: str = ""):
+    def log_voting_event(self, voter_id: int, target_id: int, phase: str = "unknown", reason: str = "", orchestrator=None):
         """
-        Log a voting event with detailed information.
+        Log a voting event with detailed information and immediately save to file.
         
         Args:
             voter_id: ID of the agent casting the vote
             target_id: ID of the agent being voted for
             phase: Current workflow phase
             reason: Reason for the vote
+            orchestrator: MassOrchestrator instance to get agent state data
         """
         with self._lock:
             self.event_counters["votes_cast"] += 1
@@ -487,8 +449,10 @@ class MassLogManager:
         
         self.log_event("voting_event", voter_id, phase, data)
         
-        # Vote events are captured in system state snapshots
-        # Individual votes will be saved when agent states are saved
+        # Immediately write agent vote history to file
+        if orchestrator and voter_id in orchestrator.agent_states:
+            agent_state = orchestrator.agent_states[voter_id]
+            self._write_agent_votes(voter_id, agent_state.cast_votes)
     
     def log_consensus_reached(self, winning_agent_id: int, vote_distribution: Dict[int, int], 
                              is_fallback: bool = False, phase: str = "unknown"):

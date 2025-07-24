@@ -21,10 +21,10 @@ Command-Line Usage:
     # Use cli.py for all command-line operations
     
     # Single agent mode
-    python cli.py "What is 2+2?" --models gpt-4o
+    python cli.py "What is 2+2?" --models gpt-4.1
     
     # Multi-agent mode
-    python cli.py "What is 2+2?" --models gpt-4o gemini-2.5-flash
+    python cli.py "What is 2+2?" --models gpt-4.1 gemini-2.5-flash
     python cli.py "Complex question" --config examples/production.yaml
 
 Programmatic Usage:
@@ -35,15 +35,15 @@ Programmatic Usage:
     
     # Using simple model list (single agent)
     from mass import run_mass_agents
-    result = run_mass_agents("What is 2+2?", ["gpt-4o"])
+    result = run_mass_agents("What is 2+2?", ["gpt-4.1"])
     
     # Using simple model list (multi-agent)
     from mass import run_mass_agents
-    result = run_mass_agents("What is 2+2?", ["gpt-4o", "gemini-2.5-flash"])
+    result = run_mass_agents("What is 2+2?", ["gpt-4.1", "gemini-2.5-flash"])
     
     # Using configuration objects
     from mass import MassSystem, create_config_from_models
-    config = create_config_from_models(["gpt-4o", "grok-3"])
+    config = create_config_from_models(["gpt-4.1", "grok-3"])
     system = MassSystem(config)
     result = system.run("Complex question here")
 """

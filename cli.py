@@ -10,11 +10,11 @@ Usage examples:
     python cli.py "What is 2+2?" --config examples/production.yaml
     
     # Use model names directly (single or multiple agents)
-    python cli.py "What is 2+2?" --models gpt-4o gemini-2.5-flash
-    python cli.py "What is 2+2?" --models gpt-4o  # Single agent mode
+    python cli.py "What is 2+2?" --models gpt-4.1 gemini-2.5-flash
+    python cli.py "What is 2+2?" --models gpt-4.1  # Single agent mode
     
     # Interactive mode (no question provided)
-    python cli.py --models gpt-4o grok-4
+    python cli.py --models gpt-4.1 grok-4
 """
 
 import argparse
@@ -109,7 +109,7 @@ def run_interactive_mode(config):
                 
                 # Display results
                 print("\n" + "="*60)
-                print("🎯 FINAL ANSWER:")
+                print(f"🎯 FINAL ANSWER (Agent {result['representative_agent_id']}):")
                 print("="*60)
                 print(response)
                 print("\n" + "="*60)
@@ -151,14 +151,14 @@ Examples:
   python cli.py "What is the capital of France?" --config examples/production.yaml
   
   # Use model names directly (single or multiple agents)
-  python cli.py "What is 2+2?" --models gpt-4o gemini-2.5-flash
-  python cli.py "What is 2+2?" --models gpt-4o  # Single agent mode
+  python cli.py "What is 2+2?" --models gpt-4.1 gemini-2.5-flash
+  python cli.py "What is 2+2?" --models gpt-4.1  # Single agent mode
   
   # Interactive mode (no question provided)
-  python cli.py --models gpt-4o grok-4
+  python cli.py --models gpt-4.1 grok-4
   
   # Override parameters
-  python cli.py "Question" --models gpt-4o gemini-2.5-flash --max-duration 1200 --consensus 0.8
+  python cli.py "Question" --models gpt-4.1 gemini-2.5-flash --max-duration 1200 --consensus 0.8
         """
     )
     
@@ -170,7 +170,7 @@ Examples:
     config_group.add_argument("--config", type=str,
                              help="Path to YAML configuration file")
     config_group.add_argument("--models", nargs="+",
-                             help="Model names (e.g., gpt-4o gemini-2.5-flash)")
+                             help="Model names (e.g., gpt-4.1 gemini-2.5-flash)")
     
     # Configuration overrides
     parser.add_argument("--max-duration", type=int, default=None,

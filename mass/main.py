@@ -13,11 +13,11 @@ Programmatic usage examples:
     
     # Using simple model list
     from mass import run_mass_agents
-    result = run_mass_agents("What is 2+2?", ["gpt-4o", "gemini-2.5-flash"])
+    result = run_mass_agents("What is 2+2?", ["gpt-4.1", "gemini-2.5-flash"])
     
     # Using configuration objects
     from mass import MassSystem, create_config_from_models
-    config = create_config_from_models(["gpt-4o", "grok-3"])
+    config = create_config_from_models(["gpt-4.1", "grok-3"])
     system = MassSystem(config)
     result = system.run("Complex question here")
 """
@@ -326,7 +326,7 @@ def run_mass_agents(question: str,
     
     Args:
         question: The question to solve
-        models: List of model names (e.g., ["gpt-4o", "gemini-2.5-flash"])
+        models: List of model names (e.g., ["gpt-4.1", "gemini-2.5-flash"])
         max_duration: Maximum duration in seconds
         consensus_threshold: Consensus threshold
         streaming_display: Whether to show real-time progress

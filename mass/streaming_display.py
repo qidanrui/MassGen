@@ -12,6 +12,7 @@ import time
 import threading
 import unicodedata
 import sys
+import re
 from typing import Dict, List, Optional, Callable, Union
 from datetime import datetime
 
@@ -50,6 +51,19 @@ class MultiRegionDisplay:
         self._display_updating = False
         self._pending_update = False
         
+        # ROBUST DISPLAY: Improved ANSI and Unicode handling
+        self._ansi_pattern = re.compile(
+            r'\x1B(?:'         # ESC
+            r'[@-Z\\-_]'       # Fe Escape sequences
+            r'|'
+            r'\[[0-?]*[ -/]*[@-~]'  # CSI sequences
+            r'|'
+            r'\][^\x07]*(?:\x07|\x1B\\)'  # OSC sequences
+            r'|'
+            r'[PX^_][^\x1B]*\x1B\\'  # Other escape sequences
+            r')'
+        )
+        
         # Initialize logging directory and files
         if self.save_logs:
             self._setup_logging()
@@ -72,11 +86,11 @@ class MultiRegionDisplay:
             
             terminal_width = self._get_terminal_width()
             
-            # Conservative calculation to prevent overflow
+            # More conservative calculation to prevent overflow
             # Each column needs: content + left border (│)
             # Plus one final border (│) at the end
             border_chars = num_agents + 1  # │col1│col2│col3│
-            safety_margin = 6  # Extra safety for terminal variations
+            safety_margin = 10  # Increased safety margin for terminal variations
             
             available_width = terminal_width - border_chars - safety_margin
             col_width = max(25, available_width // num_agents)  # Minimum 25 chars per column
@@ -85,8 +99,8 @@ class MultiRegionDisplay:
             total_width = (col_width * num_agents) + border_chars
             
             # Final safety check - ensure we don't exceed terminal
-            if total_width > terminal_width:
-                col_width = max(20, (terminal_width - border_chars - 2) // num_agents)
+            if total_width > terminal_width - 2:  # Extra 2 char safety
+                col_width = max(20, (terminal_width - border_chars - 4) // num_agents)
                 total_width = (col_width * num_agents) + border_chars
             
             # Cache the results
@@ -102,117 +116,210 @@ class MultiRegionDisplay:
         cache = self._display_cache
         return cache['col_width'], cache['total_width'], cache['terminal_width']
     
-    def _simple_display_width(self, text: str) -> int:
+    def _get_display_width(self, text: str) -> int:
         """
-        Simplified, reliable width calculation that focuses on accuracy over complexity.
+        ROBUST: Calculate the actual display width of text with proper ANSI and Unicode handling.
         """
         if not text:
             return 0
         
-        # Remove ANSI escape sequences
-        import re
-        ansi_pattern = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        clean_text = ansi_pattern.sub('', text)
+        # Remove ALL ANSI escape sequences using comprehensive regex
+        clean_text = self._ansi_pattern.sub('', text)
         
         width = 0
-        for char in clean_text:
-            # Handle common wide characters and emojis conservatively
+        i = 0
+        while i < len(clean_text):
+            char = clean_text[i]
             char_code = ord(char)
-            if (
-                # Common emoji ranges
-                (0x1F600 <= char_code <= 0x1F64F) or  # Emoticons
-                (0x1F300 <= char_code <= 0x1F5FF) or  # Misc symbols
-                (0x1F680 <= char_code <= 0x1F6FF) or  # Transport
-                (0x1F1E6 <= char_code <= 0x1F1FF) or  # Flags
-                (0x2600 <= char_code <= 0x26FF) or   # Misc symbols
-                (0x2700 <= char_code <= 0x27BF) or   # Dingbats
-                # East Asian wide characters
-                unicodedata.east_asian_width(char) in ('F', 'W')
-            ):
-                width += 2
-            elif char_code >= 32:  # Printable characters
-                width += 1
-            # Control characters add 0 width
+            
+            # Handle control characters (should not contribute to width)
+            if char_code < 32 or char_code == 127:  # Control characters
+                i += 1
+                continue
+            
+            # Handle Unicode combining characters (zero-width)
+            if unicodedata.combining(char):
+                i += 1
+                continue
+            
+            # Handle emoji and wide characters more comprehensively
+            char_width = self._get_char_width(char)
+            width += char_width
+            i += 1
         
         return width
     
+    def _get_char_width(self, char: str) -> int:
+        """
+        ROBUST: Get the display width of a single character.
+        """
+        char_code = ord(char)
+        
+        # ASCII printable characters
+        if 32 <= char_code <= 126:
+            return 1
+        
+        # Common emoji ranges (display as width 2)
+        if (
+            # Basic emoji ranges
+            (0x1F600 <= char_code <= 0x1F64F) or  # Emoticons
+            (0x1F300 <= char_code <= 0x1F5FF) or  # Misc symbols
+            (0x1F680 <= char_code <= 0x1F6FF) or  # Transport
+            (0x1F700 <= char_code <= 0x1F77F) or  # Alchemical symbols
+            (0x1F780 <= char_code <= 0x1F7FF) or  # Geometric shapes extended
+            (0x1F800 <= char_code <= 0x1F8FF) or  # Supplemental arrows-C
+            (0x1F900 <= char_code <= 0x1F9FF) or  # Supplemental symbols
+            (0x1FA00 <= char_code <= 0x1FA6F) or  # Chess symbols
+            (0x1FA70 <= char_code <= 0x1FAFF) or  # Symbols and pictographs extended-A
+            (0x1F1E6 <= char_code <= 0x1F1FF) or  # Regional indicator symbols (flags)
+            # Misc symbols and dingbats
+            (0x2600 <= char_code <= 0x26FF) or   # Misc symbols
+            (0x2700 <= char_code <= 0x27BF) or   # Dingbats
+            (0x1F0A0 <= char_code <= 0x1F0FF) or  # Playing cards
+            # Mathematical symbols
+            (0x1F100 <= char_code <= 0x1F1FF)     # Enclosed alphanumeric supplement
+        ):
+            return 2
+        
+        # Use Unicode East Asian Width property for CJK characters
+        east_asian_width = unicodedata.east_asian_width(char)
+        if east_asian_width in ('F', 'W'):  # Fullwidth or Wide
+            return 2
+        elif east_asian_width in ('N', 'Na', 'H'):  # Narrow, Not assigned, Halfwidth
+            return 1
+        elif east_asian_width == 'A':  # Ambiguous - default to 1 for safety
+            return 1
+        
+        # Default to 1 for unknown characters
+        return 1
+    
+    def _preserve_ansi_truncate(self, text: str, max_width: int) -> str:
+        """
+        ROBUST: Truncate text while preserving ANSI color codes and handling wide characters.
+        """
+        if max_width <= 0:
+            return ""
+        
+        if max_width <= 1:
+            return "…"
+        
+        # Split text into ANSI codes and regular text segments
+        segments = self._ansi_pattern.split(text)
+        ansi_codes = self._ansi_pattern.findall(text)
+        
+        result = ""
+        current_width = 0
+        ansi_index = 0
+        
+        for i, segment in enumerate(segments):
+            # Add ANSI code if this isn't the first segment
+            if i > 0 and ansi_index < len(ansi_codes):
+                result += ansi_codes[ansi_index]
+                ansi_index += 1
+            
+            # Process regular text segment
+            for char in segment:
+                char_width = self._get_char_width(char)
+                
+                # Check if we can fit this character
+                if current_width + char_width > max_width - 1:  # Save space for ellipsis
+                    # Try to add ellipsis if possible
+                    if current_width < max_width:
+                        result += "…"
+                    return result
+                
+                result += char
+                current_width += char_width
+        
+        return result
+    
     def _pad_to_width(self, text: str, target_width: int, align: str = 'left') -> str:
         """
-        Pad text to exact target width using simplified logic.
+        ROBUST: Pad text to exact target width with proper ANSI and Unicode handling.
         """
         if target_width <= 0:
             return ""
         
-        current_width = self._simple_display_width(text)
+        current_width = self._get_display_width(text)
         
         # Truncate if too long
         if current_width > target_width:
-            # Simple truncation approach
-            import re
-            ansi_pattern = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-            clean_text = ansi_pattern.sub('', text)
-            
-            truncated = ""
-            width = 0
-            for char in clean_text:
-                char_width = self._simple_display_width(char)
-                if width + char_width > target_width - 1:  # Save space for …
-                    truncated += "…"
-                    break
-                truncated += char
-                width += char_width
-            text = truncated
-            current_width = self._simple_display_width(text)
+            text = self._preserve_ansi_truncate(text, target_width)
+            current_width = self._get_display_width(text)
         
-        # Add padding
+        # Calculate padding needed
         padding = target_width - current_width
-        if padding > 0:
-            if align == 'center':
-                left_pad = padding // 2
-                right_pad = padding - left_pad
-                return " " * left_pad + text + " " * right_pad
-            elif align == 'right':
-                return " " * padding + text
-            else:  # left
-                return text + " " * padding
+        if padding <= 0:
+            return text
         
-        return text
+        # Apply padding based on alignment
+        if align == 'center':
+            left_pad = padding // 2
+            right_pad = padding - left_pad
+            return " " * left_pad + text + " " * right_pad
+        elif align == 'right':
+            return " " * padding + text
+        else:  # left
+            return text + " " * padding
     
     def _create_bordered_line(self, content_parts: List[str], total_width: int) -> str:
         """
-        Create a single bordered line with guaranteed correct width.
+        ROBUST: Create a single bordered line with guaranteed correct width.
         """
-        # Join content with borders: │content1│content2│content3│
-        line = "│" + "│".join(content_parts) + "│"
+        # Ensure all content parts are exactly the right width
+        validated_parts = []
+        for part in content_parts:
+            if self._get_display_width(part) != self._display_cache['col_width']:
+                # Re-pad if width is incorrect
+                part = self._pad_to_width(part, self._display_cache['col_width'], 'left')
+            validated_parts.append(part)
         
-        # Verify width matches expectation
-        actual_width = self._simple_display_width(line)
-        if actual_width != total_width:
-            # Simple fix: truncate or pad the entire line
-            if actual_width > total_width:
-                # Emergency truncation
-                import re
-                ansi_pattern = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-                clean_line = ansi_pattern.sub('', line)
-                if len(clean_line) > total_width:
-                    clean_line = clean_line[:total_width-1] + "│"
+        # Join content with borders: │content1│content2│content3│
+        line = "│" + "│".join(validated_parts) + "│"
+        
+        # Final width validation
+        actual_width = self._get_display_width(line)
+        expected_width = total_width
+        
+        if actual_width != expected_width:
+            # Emergency fix - truncate or pad the entire line
+            if actual_width > expected_width:
+                # Strip ANSI codes and truncate
+                clean_line = self._ansi_pattern.sub('', line)
+                if len(clean_line) > expected_width:
+                    clean_line = clean_line[:expected_width-1] + "│"
                 line = clean_line
             else:
-                # Add padding to reach exact width
-                line += " " * (total_width - actual_width)
+                # Pad to reach exact width
+                line += " " * (expected_width - actual_width)
         
         return line
     
     def _create_system_bordered_line(self, content: str, total_width: int) -> str:
         """
-        Create a system section line with borders.
+        ROBUST: Create a system section line with borders.
         """
         content_width = total_width - 2  # Account for │ on each side
         if content_width <= 0:
             return "│" + " " * max(0, total_width - 2) + "│"
         
         padded_content = self._pad_to_width(content, content_width, 'left')
-        return f"│{padded_content}│"
+        line = f"│{padded_content}│"
+        
+        # Validate final width
+        actual_width = self._get_display_width(line)
+        if actual_width != total_width:
+            # Emergency padding
+            if actual_width < total_width:
+                line += " " * (total_width - actual_width)
+            elif actual_width > total_width:
+                # Strip ANSI and truncate
+                clean_line = self._ansi_pattern.sub('', line)
+                if len(clean_line) > total_width:
+                    clean_line = clean_line[:total_width-1] + "│"
+                line = clean_line
+        
+        return line
     
     def _invalidate_display_cache(self):
         """Reset display cache when terminal is resized."""
@@ -483,12 +590,14 @@ class MultiRegionDisplay:
         """Handle terminal resize by resetting cached dimensions."""
         try:
             current_width = os.get_terminal_size().columns
-            if self._display_cache and abs(current_width - self._display_cache['terminal_width']) > 5:
-                # Significant change detected, reset cache
+            if self._display_cache and abs(current_width - self._display_cache['terminal_width']) > 2:
+                # Even small changes should invalidate cache for border alignment
                 self._invalidate_display_cache()
                 return True
         except:
-            pass
+            # If we can't detect terminal size, invalidate cache to be safe
+            self._invalidate_display_cache()
+            return True
         return False
     
     def add_system_message(self, message: str):
@@ -626,11 +735,20 @@ class MultiRegionDisplay:
                 agent_header = f"{emoji} {BRIGHT_CYAN}Agent {agent_id}{RESET} {status_color}[{status}]{RESET}"
             
             header_content = self._pad_to_width(agent_header, col_width, 'center')
+            # Validate width immediately
+            if self._get_display_width(header_content) != col_width:
+                # Fallback to simple text if formatting issues
+                simple_header = f"Agent {agent_id} [{status}]"
+                header_content = self._pad_to_width(simple_header, col_width, 'center')
             header_parts.append(header_content)
         
         # Print agent header line with exact borders
-        header_line = self._create_bordered_line(header_parts, total_width)
-        print(header_line)
+        try:
+            header_line = self._create_bordered_line(header_parts, total_width)
+            print(header_line)
+        except Exception as e:
+            # Fallback to simple border if formatting fails
+            print("─" * total_width)
         
         # Agent state information line
         state_parts = []
@@ -648,7 +766,7 @@ class MultiRegionDisplay:
             if vote_target:
                 state_info.append(f"{BRIGHT_WHITE}Vote →{RESET} {BRIGHT_GREEN}{vote_target}{RESET}")
             else:
-                state_info.append(f"{BRIGHT_WHITE}Vote:{RESET} None")
+                state_info.append(f"{BRIGHT_WHITE}Vote->{RESET} None")
             
             state_text = f"📊 {' | '.join(state_info)}"
             # Ensure exact column width with improved padding
@@ -656,8 +774,12 @@ class MultiRegionDisplay:
             state_parts.append(state_content)
         
         # Validate state line consistency before printing
-        state_line = self._create_bordered_line(state_parts, total_width)
-        print(state_line)
+        try:
+            state_line = self._create_bordered_line(state_parts, total_width)
+            print(state_line)
+        except Exception as e:
+            # Fallback to simple border if formatting fails
+            print("─" * total_width)
         
         # Log file information
         if self.save_logs and hasattr(self, 'session_logs_dir'):
@@ -672,7 +794,7 @@ class MultiRegionDisplay:
                     # Safe path truncation with better width handling
                     prefix = "📁 Log: "
                     # More conservative calculation
-                    max_path_len = max(10, col_width - self._simple_display_width(prefix) - 8)
+                    max_path_len = max(10, col_width - self._get_display_width(prefix) - 8)
                     if len(display_path) > max_path_len:
                         display_path = "..." + display_path[-(max_path_len-3):]
                     
@@ -683,8 +805,12 @@ class MultiRegionDisplay:
                 link_parts.append(link_content)
             
             # Validate log line consistency
-            log_line = self._create_bordered_line(link_parts, total_width)
-            print(log_line)
+            try:
+                log_line = self._create_bordered_line(link_parts, total_width)
+                print(log_line)
+            except Exception as e:
+                # Fallback to simple border if formatting fails
+                print("─" * total_width)
         
         print(border_line)
         
@@ -700,8 +826,13 @@ class MultiRegionDisplay:
                 content_parts.append(padded_content)
             
             # Apply border validation to every content line for consistency
-            content_line = self._create_bordered_line(content_parts, total_width)
-            print(content_line)
+            try:
+                content_line = self._create_bordered_line(content_parts, total_width)
+                print(content_line)
+            except Exception as e:
+                # Fallback: print content without borders to maintain functionality
+                simple_line = " | ".join(content_parts)[:total_width-4] + " " * max(0, total_width-4-len(simple_line))
+                print(f"│ {simple_line} │")
         
         # System status section with exact width
         if self.system_messages or self.current_phase or self.vote_distribution:
@@ -734,7 +865,7 @@ class MultiRegionDisplay:
                     
                     # Safe path truncation with consistent width handling
                     prefix = "📁 Log: "
-                    max_path_len = max(10, total_width - self._simple_display_width(prefix) - 15)
+                    max_path_len = max(10, total_width - self._get_display_width(prefix) - 15)
                     if len(display_path) > max_path_len:
                         display_path = "..." + display_path[-(max_path_len-3):]
                     
@@ -756,7 +887,7 @@ class MultiRegionDisplay:
                 
                 # Use the new safe wrapping method
                 max_content_width = total_width - 2
-                if self._simple_display_width(vote_msg) <= max_content_width:
+                if self._get_display_width(vote_msg) <= max_content_width:
                     vote_line = self._create_system_bordered_line(vote_msg, total_width)
                     print(vote_line)
                 else:
@@ -772,11 +903,9 @@ class MultiRegionDisplay:
             
             # Regular system messages with validation
             for message in self.system_messages:
-                # The original _wrap_and_print_system_message used _get_display_width_unified,
-                # which was a simplified width calculation.
-                # Now we use _simple_display_width for consistency.
+                # Use consistent width calculation throughout
                 max_content_width = total_width - 2
-                if self._simple_display_width(message) <= max_content_width:
+                if self._get_display_width(message) <= max_content_width:
                     line = self._create_system_bordered_line(message, total_width)
                     print(line)
                 else:
@@ -786,7 +915,7 @@ class MultiRegionDisplay:
                     
                     for word in words:
                         test_line = f"{current_line} {word}".strip()
-                        if self._simple_display_width(test_line) > max_content_width:
+                        if self._get_display_width(test_line) > max_content_width:
                             # Print current line if it has content
                             if current_line.strip():
                                 line = self._create_system_bordered_line(current_line.strip(), total_width)

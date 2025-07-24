@@ -14,12 +14,12 @@ import math
 # Model mappings and constants
 MODEL_MAPPINGS = {
     "openai": [
-        # GPT-4 variants
-        "gpt-4o",
-        "gpt-4o-mini",
         # GPT-4.1 variants
-        "gpt-4.1-mini",
         "gpt-4.1",
+        "gpt-4.1-mini",
+        # GPT-4o variants
+        "gpt-4o-mini",
+        "gpt-4o",
         # o1
         "o1",  # -> o1-2024-12-17
         # o3

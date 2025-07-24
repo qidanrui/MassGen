@@ -24,11 +24,13 @@ from .backends import oai, gemini, grok
 # """
 
 SYSTEM_INSTRUCTION = """
-You are evaluating answers from multiple agents for final response to a message. Does the best CURRENT ANSWER address the ORIGINAL MESSAGE?
+You are evaluating answers from multiple agents for final response to a message. 
 
-If YES, use the `vote` tool to record your vote and skip the `add_answer` tool.
+You should use your expertise, reasoning, and tools (if available) to fully verify and challenge the CURRENT ANSWER.
 
-If NO, do additional work first, then use the `add_answer` tool to record a better answer to the ORIGINAL MESSAGE.
+If the CURRENT ANSWERS fully address the ORIGINAL MESSAGE, use the `vote` tool to record your vote and skip the `add_answer` tool from different aspects.
+
+If the CURRENT ANSWERS do not fully address the ORIGINAL MESSAGE, do additional work first, then use the `add_answer` tool to record a better answer to the ORIGINAL MESSAGE.
 Your new answer should be self-contained, process-complete, well-sourced, compelling, and ready to serve as the final response. 
 Make sure you actually call the tool `add_answer` to submit your new answer for further evaluation.
 """
@@ -250,8 +252,6 @@ class MassAgent(ABC):
         function_outputs = []
         successful_called = []
         
-
-        
         for func_call in function_calls:
             func_call_id = func_call.get("call_id")
             func_name = func_call.get("name")
@@ -358,6 +358,19 @@ class MassAgent(ABC):
                 custom_tools.append(tool_schema)
         return custom_tools
     
+    def _get_builtin_tools(self) -> List[Dict[str, Any]]:
+        """
+        Override the parent method due to the Gemini's limitation.
+        Return the built-in tools that are available to Gemini models. 
+        live_search and code_execution are supported right now.
+        However, the built-in tools and function call are not supported at the same time.
+        """
+        builtin_tools = []
+        for tool in self.tools:
+            if tool in ["live_search", "code_execution"]:
+                builtin_tools.append(tool)
+        return builtin_tools
+    
     def _get_all_answers(self) -> List[str]:
         """Get all answers from all agents.
         Format:
@@ -418,11 +431,6 @@ class MassAgent(ABC):
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": user_input}
         ]
-               
-    @abstractmethod
-    def _get_builtin_tools(self) -> List[Dict[str, Any]]:
-        """Return the built-in tools that are available to different agent backends."""
-        pass
     
     def _get_curr_messages_and_tools(self, task: TaskInput):
         """Get the current messages and tools for the agent."""

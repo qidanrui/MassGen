@@ -37,7 +37,7 @@ Thank you for your interest in contributing to MASS (Multi-Agent Scaling System)
 
 5. **Test Installation**
    ```bash
-   python cli.py --models gpt-4o "Hello, world!"
+   python cli.py --models gpt-4.1 "Hello, world!"
    ```
 
 ## 🛠️ Development Guidelines
@@ -107,7 +107,7 @@ We welcome contributions in these areas:
 3. **Test Your Changes**
    ```bash
    # Test with different models
-   python cli.py --models gpt-4o "Test question"
+   python cli.py --models gpt-4.1 "Test question"
    python cli.py --models gemini-2.5-flash "Test question"
    ```
 

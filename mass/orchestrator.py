@@ -111,6 +111,7 @@ class MassOrchestrator:
                     agent_id=agent_id,
                     answer=answer,
                     phase=self.system_state.phase,
+                    orchestrator=self,
                 )
 
             self._log_event(
@@ -251,6 +252,7 @@ class MassOrchestrator:
                     target_id=target_id,
                     phase=self.system_state.phase,
                     reason=reason,
+                    orchestrator=self,
                 )
                 self.log_manager.log_agent_status_change(
                     agent_id=voter_id,
