@@ -111,10 +111,11 @@ GEMINI_API_KEY=your-gemini-key-here
 
 ### 3. 🧩 Register Models
 
-Configure the models you wish to use by updating the model registry in `massgen/utils.py`. 
+<!-- What does the following mean? If it can be clarified, then we can uncomment -->
+<!-- Configure the models you wish to use by updating the model registry in `massgen/utils.py`.  -->
 
-The system currently supports three model providers with advanced reasoning capabilities: **Google Gemini**, **OpenAI**, and **xAI Grok**.
-More providers will be added soon.
+The system currently supports three model providers with advanced reasoning capabilities: **Google Gemini**, **OpenAI**, and **xAI Grok**. The specific models tested can be found in `massgen/utils.py`. You can add a model in that file.
+More providers will be added (help wanted!) and the extension will be made easier.
 
 
 ### 4. 🏃 Run MassGen
@@ -122,16 +123,16 @@ More providers will be added soon.
 #### Simple Usage
 ```bash
 # Multi-agent mode with specific models
-python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gemini-2.5-flash gpt-4.1
+python cli.py "Which AI won IMO 2025?" --models gemini-2.5-flash gpt-4.1
 
 # Single agent mode
-python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gpt-4.1
+python cli.py "What is greatest common divisor of 238, 756, and 1512" --models gemini-2.5-flash
 ```
 
 #### Configuration File Usage
 ```bash
 # Use configuration file
-python cli.py --config examples/fast_config.yaml "Complex analysis question"
+python cli.py --config examples/fast_config.yaml "find big AI news this week"
 
 # Override specific parameters
 python cli.py --config examples/fast_config.yaml "Question" --max-duration 120 --consensus 0.5
@@ -204,6 +205,12 @@ logs/
 
 Here are a few examples of how you can use MassGen for different tasks:
 
+### Case Studies
+
+To see how MassGen works in practice, check out these detailed case studies based on real session logs:
+
+- [**MassGen Case Studies**](cases.md)
+
 ### 1. 📝 Code Generation
 
 ```bash
@@ -223,6 +230,11 @@ python cli.py --config examples/fast_config.yaml "Explain the theory of relativi
 ```bash
 # Generate a short story
 python cli.py --config examples/fast_config.yaml "Write a short story about a robot who discovers music."
+```
+
+### 4. Research
+```bash
+python cli.py --config examples/fast_config.yaml "find big AI news this week"
 ```
 
 ---
