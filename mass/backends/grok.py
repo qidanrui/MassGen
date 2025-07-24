@@ -207,14 +207,6 @@ def process_message(messages,
             elif message.get("type", None) == "function_call_output":
                 content = message.get("output", None)
                 chat.append(tool_result(content))
-                
-        # DEBUGGING
-        with open("grok_streaming.txt", "a") as f:
-            import time  # Local import to ensure availability in threading context
-            inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Grok API Request:\n\n"
-            inference_log += f"Messages: {json.dumps(messages, indent=2)}\n"
-            inference_log += "\n\n"
-            f.write(inference_log)
 
         if stream:
             return chat.stream()
@@ -369,23 +361,10 @@ def process_message(messages,
                         stream_callback(f"🔧 Arguments: {json.dumps(function_call['arguments'], indent=4)}\n\n")
 
         except Exception as e:
-            import traceback
-            print("Streaming error (full exception):")
-            print(traceback.format_exc())
-            with open("streaming_error.txt", "a") as f:
-                f.write(traceback.format_exc())
             # Fall back to non-streaming
             completion = make_grok_request(stream=False)
             result = parse_completion(completion, add_citations=True)
             return result
-        
-        with open("grok_streaming.txt", "a") as f:
-            import time  # Local import to ensure availability in threading context
-            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Grok API Streaming:\n")
-            f.write(f"TEXT: {text}\n\n")
-            f.write(f"CODE: {code}\n\n")
-            f.write(f"CITATIONS: {citations}\n\n")
-            f.write(f"FUNCTION CALLS: {function_calls}\n\n")
             
         result = AgentResponse(
             text=text,

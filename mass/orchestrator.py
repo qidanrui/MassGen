@@ -242,7 +242,7 @@ class MassOrchestrator:
                     self.streaming_orchestrator.update_agent_votes_cast(agent_id, vote_cast_count)
                 vote_counts = self._get_current_vote_counts()
                 self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
-                vote_msg = f"🗳️ Agent {voter_id} voted for Agent {target_id}"
+                vote_msg = f"👍 Agent {voter_id} voted for Agent {target_id}"
                 self.streaming_orchestrator.add_system_message(vote_msg)
 
             # Log to the comprehensive logging system
@@ -287,14 +287,6 @@ class MassOrchestrator:
                     "total_votes": voted_agents_count,
                 },
             )
-
-            # Check if consensus is reached
-            consensus_reached = self._check_consensus()
-            # if consensus_reached:
-            #     logger.info("🎉 CONSENSUS REACHED!")
-            #     print(f"      🎉 CONSENSUS REACHED!")
-
-            return consensus_reached
             
     def notify_answer_update(self, agent_id: int, answer: str):
         """

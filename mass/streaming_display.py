@@ -719,7 +719,7 @@ class MultiRegionDisplay:
             # Status configuration
             status_config = {
                 "working": {"emoji": "🔄", "color": BRIGHT_YELLOW},
-                "voted": {"emoji": "🗳️", "color": BRIGHT_GREEN}, 
+                "voted": {"emoji": "✅", "color": BRIGHT_GREEN}, 
                 "failed": {"emoji": "❌", "color": BRIGHT_RED},
                 "unknown": {"emoji": "❓", "color": BRIGHT_WHITE}
             }
@@ -848,7 +848,7 @@ class MultiRegionDisplay:
             system_state_info.append(f"{BRIGHT_WHITE}Consensus:{RESET} {consensus_color}{consensus_text}{RESET}")
             system_state_info.append(f"{BRIGHT_WHITE}Debate Rounds:{RESET} {BRIGHT_CYAN}{self.debate_rounds}{RESET}")
             if self.representative_agent_id:
-                system_state_info.append(f"{BRIGHT_WHITE}Rep →{RESET} {BRIGHT_GREEN}{self.representative_agent_id}{RESET}")
+                system_state_info.append(f"{BRIGHT_WHITE}Representative Agent:{RESET} {BRIGHT_GREEN}{self.representative_agent_id}{RESET}")
             else:
                 system_state_info.append(f"{BRIGHT_WHITE}Representative Agent:{RESET} None")
             
@@ -883,7 +883,7 @@ class MultiRegionDisplay:
             
             # Vote distribution with validation
             if self.vote_distribution:
-                vote_msg = "🗳️  Vote Distribution: " + ", ".join([f"Agent {k}→{v} votes" for k, v in self.vote_distribution.items()])
+                vote_msg = "📊  Vote Distribution: " + ", ".join([f"Agent {k}→{v} votes" for k, v in self.vote_distribution.items()])
                 
                 # Use the new safe wrapping method
                 max_content_width = total_width - 2
@@ -892,7 +892,7 @@ class MultiRegionDisplay:
                     print(vote_line)
                 else:
                     # Wrap vote distribution using safe method
-                    vote_header = "🗳️  Vote Distribution:"
+                    vote_header = "📊  Vote Distribution:"
                     header_line = self._create_system_bordered_line(vote_header, total_width)
                     print(header_line)
                     

@@ -30,9 +30,16 @@ from mass import (
     ConfigurationError
 )
 
+def display_vote_distribution(vote_distribution):
+    """Display the vote distribution in a more readable format."""
+    # sort the keys
+    sorted_keys = sorted(vote_distribution.keys())
+    for agent_id in sorted_keys:
+        print(f"    * Agent {agent_id}: {vote_distribution[agent_id]} votes")
 
 def run_interactive_mode(config):
     """Run MASS in interactive mode, asking for questions repeatedly."""
+    
     print("\n🤖 MASS Interactive Mode")
     print("="*60)
     
@@ -88,7 +95,7 @@ def run_interactive_mode(config):
     try:
         while True:
             try:
-                question = input("\nUser: ").strip()
+                question = input("\n👤 User Input: ").strip()
                 chat_history += f"User: {question}\n"
                 
                 if question.lower() in ['quit', 'exit', 'q']:
@@ -107,27 +114,46 @@ def run_interactive_mode(config):
                 response = result["answer"]
                 chat_history += f"Assistant: {response}\n"
                 
-                # Display results
-                print("\n" + "="*60)
-                print(f"🎯 FINAL ANSWER (Agent {result['representative_agent_id']}):")
-                print("="*60)
-                print(response)
-                print("\n" + "="*60)
+                # Display complete conversation exchange
+                print("\n" + "="*80)
+                print("💬 CONVERSATION EXCHANGE")
+                print("="*80)
                 
-                # Show different metadata based on single vs multi-agent mode
+                print(f"👤 User Input:")
+                print(f"   {question}")
+                print()
+                
+                print(f"🤖 Assistant Response:")
+                
+                agents = {f"Agent {agent.agent_id}": agent.model_config.model for agent in config.agents}
+
+                # Show metadata first
                 if result.get("single_agent_mode", False):
-                    print("🤖 Single Agent Mode")
-                    print(f"✅ Model: {result.get('model_used', 'Unknown')}")
-                    print(f"⏱️  Duration: {result['session_duration']:.1f}s")
+                    print(f"   📋 Mode: Single Agent")
+                    print(f"   🤖 Agents: {agents}")
+                    print(f"   🎯 Representative Agent: {result['representative_agent_id']}")
+                    print(f"   🔧 Model: {result.get('model_used', 'Unknown')}")
+                    print(f"   ⏱️  Duration: {result['session_duration']:.1f}s")
                     if result.get("citations"):
-                        print(f"📚 Citations: {len(result['citations'])}")
+                        print(f"   📚 Citations: {len(result['citations'])}")
                     if result.get("code"):
-                        print(f"💻 Code blocks: {len(result['code'])}")
+                        print(f"   💻 Code blocks: {len(result['code'])}")
                 else:
-                    print(f"✅ Consensus: {result['consensus_reached']}")
-                    print(f"⏱️  Duration: {result['session_duration']:.1f}s")
-                    print(f"🗳️  Votes: {result['summary']['final_vote_distribution']}")
-                    print(f"🤖 Agents: {len(config.agents)}")
+                    print(f"   📋 Mode: Multi-Agent")
+                    print(f"   🤖 Agents: {agents}")
+                    print(f"   🎯 Representative Agent: {result['representative_agent_id']}")
+                    print(f"   ✅ Consensus Reached: {result['consensus_reached']}")
+                    print(f"   ⏱️  Duration: {result['session_duration']:.1f}s")
+                    print(f"   📊 Vote Distribution:")
+                    display_vote_distribution(result['summary']['final_vote_distribution'])
+                    
+                # Print the response
+                print(f"   💡 Response:")
+                # Indent the response for better formatting
+                for line in response.split('\n'):
+                    print(f"   {line}")
+                
+                print("\n" + "="*80)
                 
             except KeyboardInterrupt:
                 print("\n👋 Goodbye!")
@@ -185,12 +211,6 @@ Examples:
                        help="Disable file logging")
     
     args = parser.parse_args()
-    
-    # DEBUGGING
-    for file in ["function_calls.txt", "errors.txt", "openai_streaming.txt",
-                 "gemini_streaming.txt", "grok_streaming.txt"]:
-        if os.path.exists(file):
-            os.remove(file)
             
     # Load configuration
     try:
@@ -238,7 +258,8 @@ Examples:
             else:
                 print(f"✅ Consensus: {result['consensus_reached']}")
                 print(f"⏱️  Duration: {result['session_duration']:.1f}s")
-                print(f"🗳️  Votes: {result['summary']['final_vote_distribution']}")
+                print(f"📊 Votes:")
+                display_vote_distribution(result['summary']['final_vote_distribution'])
                 print(f"🤖 Agents: {len(config.agents)}")
         else:
             # Interactive mode
