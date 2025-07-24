@@ -28,6 +28,12 @@ This eliminates endless update loops and produces reliable decisions across dive
 ### 3. Domain Agnostic Success
 Proven across research (econometrics), computation (Tower of Hanoi), and analytical tasks.
 
+### 4. Recent Technical Improvements
+- **Duplicate Answer Prevention**: Agents cannot provide identical answers, preventing unnecessary restarts
+- **Enhanced Conversation Management**: `reset_chat` and `clear_history` parameters for flexible conversation control
+- **Improved Message Accuracy**: `complete_message` chunks preserve exact backend message structure
+- **Better Case 3 Enforcement**: Conversation continuity maintained during tool enforcement
+
 ## New Simplified Approach
 
 Based on extensive testing, the MASS system now uses a simplified message structure that eliminates perfectionism loops and produces reliable tool usage decisions.
@@ -69,6 +75,12 @@ IF NO, do additional work first, then use the `new_answer` tool to record a bett
 - Case 3 → Case 2: When enforcement succeeds or other agents have provided `new_answer`  
 - Case 4 → Case 2: When error recovery succeeds or other agents have provided `new_answer`
 - Case 2 → Case 2: When any agent provides `new_answer` during evaluation
+
+**🚀 Real-Time Streaming & Graceful Restarts**:
+- **Concurrent execution**: Multiple agents stream output simultaneously with `[agent_id]` prefixes
+- **Graceful restarts**: When an agent provides `new_answer`, other agents complete their current inference naturally before restarting
+- **No enforcement interruption**: Case 3/4 retry attempts are stopped (not continued) when restart is pending due to new answers
+- **Immediate invalidation**: Votes are cleared immediately when `new_answer` is provided, but agents finish their current work gracefully
 
 ### Case 1: Initial Work (No Summaries Exist)
 
@@ -162,6 +174,11 @@ User: "Finish your work above by making a tool call of `vote` or `new_answer`. M
 ### Case 4: Error Recovery  
 
 **When**: Previous tool call failed (error sent via tool response)
+
+**Common Error Types**:
+- **Vote when no answers exist**: `"Error: Cannot vote when no answers exist. Use new_answer tool."`
+- **Vote for invalid agent**: `"Error: Invalid agent_id 'invalid_agent'. Valid agents: Agent A, Agent B"`  
+- **Duplicate answer**: `"Error: Answer already provided by Agent A. Please provide a different answer or vote for the existing one."`
 
 **System Message**:
 ```

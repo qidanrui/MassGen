@@ -11,8 +11,8 @@ from xai_sdk.chat import assistant, system, user, tool_result, tool as xai_tool_
 from xai_sdk.search import SearchParameters
 
 # Import utility functions and tools  
-from mass.utils import function_to_json, execute_function_calls
-from mass.types import AgentResponse
+from massgen.utils import function_to_json, execute_function_calls
+from massgen.types import AgentResponse
 
 load_dotenv()
 

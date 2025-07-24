@@ -4,7 +4,7 @@
 # Uses robust models with strict consensus requirements and comprehensive logging.
 #
 # Usage:
-#   python -m mass --config examples/production.yaml "Production question"
+#   python -m massgen --config examples/production.yaml "Production question"
 
 orchestrator:
   max_duration: 900           # 15 minutes for thorough analysis

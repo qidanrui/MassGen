@@ -3,18 +3,18 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mass"
+name = "massgen"
 version = "0.0.1"
-description = "Advanced multi-agent orchestration system for collaborative AI"
-readme = "README.md"
+description = "Multi-Agent Scaling System - A powerful framework for collaborative AI"
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "MASS Team", email = "mass-team@example.com" }
+    { name = "MASS Team", email = "contact@massgen.dev" }
 ]
 keywords = ["ai", "multi-agent", "collaboration", "orchestration", "llm", "gpt", "claude", "gemini", "grok"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
@@ -61,20 +61,26 @@ all = [
 ]
 
 [project.scripts]
-mass = "mass_main:main"
+massgen = "massgen.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Leezekun/MassAgent"
-Repository = "https://github.com/Leezekun/MassAgent"
-Issues = "https://github.com/Leezekun/MassAgent/issues"
-Documentation = "https://github.com/Leezekun/MassAgent/blob/main/README.md"
+Homepage = "https://github.com/Leezekun/MassGen"
+Repository = "https://github.com/Leezekun/MassGen"
+"Bug Reports" = "https://github.com/Leezekun/MassGen/issues"
+Source = "https://github.com/Leezekun/MassGen"
+Documentation = "https://github.com/Leezekun/MassGen/blob/main/README.md"
+
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["agents*", "mass*"]
+include = ["agents*", "massgen*"]
 exclude = ["tests*", "docs*", "future_mass*"]
 
 [tool.setuptools.package-data]
+massgen = ["examples/*.yaml", "backends/.env.example"]
 "*" = ["*.json", "*.yaml", "*.yml", "*.md"]
 
 # Black configuration
@@ -152,7 +158,7 @@ markers = [
 
 # Coverage configuration
 [tool.coverage.run]
-source = ["agents", "mass_*"]
+source = ["agents", "massgen_*"]
 omit = [
     "*/tests/*",
     "*/test_*",

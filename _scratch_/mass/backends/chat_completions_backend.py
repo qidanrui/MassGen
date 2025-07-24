@@ -110,14 +110,28 @@ class ChatCompletionsBackend(LLMBackend):
                                 
                                 final_tool_calls.append({
                                     "id": tool_call["id"] or f"call_{index}",
-                                    "name": tool_call["name"],
-                                    "arguments": arguments
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool_call["name"],
+                                        "arguments": arguments
+                                    }
                                 })
                             
-                            yield StreamChunk(type="tool_calls", tool_calls=final_tool_calls)
+                            yield StreamChunk(type="tool_calls", content=final_tool_calls)
+                            
+                            # Build and yield complete message
+                            complete_message = {"role": "assistant", "content": content.strip()}
+                            if final_tool_calls:
+                                complete_message["tool_calls"] = final_tool_calls
+                            yield StreamChunk(type="complete_message", complete_message=complete_message)
                         elif choice.finish_reason in ["stop", "length"]:
                             if search_sources_used > 0:
                                 yield StreamChunk(type="content", content=f"\n✅ [Live Search Complete] Used {search_sources_used} sources\n")
+                            
+                            # Build and yield complete message (no tool calls)
+                            complete_message = {"role": "assistant", "content": content.strip()}
+                            yield StreamChunk(type="complete_message", complete_message=complete_message)
+                            
                             yield StreamChunk(type="done")
                         return
                 
@@ -142,3 +156,11 @@ class ChatCompletionsBackend(LLMBackend):
                 continue
         
         yield StreamChunk(type="done")
+    
+    def extract_tool_name(self, tool_call: Dict[str, Any]) -> str:
+        """Extract tool name from Chat Completions format."""
+        return tool_call.get("function", {}).get("name", "unknown")
+    
+    def extract_tool_arguments(self, tool_call: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract tool arguments from Chat Completions format."""
+        return tool_call.get("function", {}).get("arguments", {})

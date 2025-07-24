@@ -11,8 +11,8 @@ import copy
 load_dotenv()
 
 # Import utility functions and tools
-from mass.utils import function_to_json, execute_function_calls, generate_random_id
-from mass.types import AgentResponse
+from massgen.utils import function_to_json, execute_function_calls, generate_random_id
+from massgen.types import AgentResponse
 
 def add_citations_to_response(response):
     text = response.text

@@ -1,7 +1,47 @@
-# 🚀 MASS: Multi-Agent Scaling System
+# 🚀 MassGen: Multi-Agent Scaling System for GenAI
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+
+<svg width="280" height="70" viewBox="0 0 280 70" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradMass" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#1A5276;stop-opacity:1" /> <!-- Darker blue -->
+      <stop offset="100%" style="stop-color:#2E86C1;stop-opacity:1" /> <!-- Lighter blue -->
+    </linearGradient>
+    <linearGradient id="gradGen" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#229954;stop-opacity:1" /> <!-- Darker green -->
+      <stop offset="100%" style="stop-color:#2ECC71;stop-opacity:1" /> <!-- Lighter green -->
+    </linearGradient>
+  </defs>
+
+  <!-- Text: MassGen -->
+  <text x="10" y="45" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="36" font-weight="bold" fill="url(#gradMass)">Mass</text>
+  <text x="115" y="45" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="36" font-weight="bold" fill="url(#gradGen)">Gen</text>
+
+  <!-- Icon: Multi-Agent Scaling System -->
+  <g transform="translate(200, 20)">
+    <!-- Base level (multiple agents) -->
+    <circle cx="0" cy="30" r="3" fill="#6C757D" /> <!-- Agent 1 -->
+    <circle cx="10" cy="30" r="3" fill="#6C757D" /> <!-- Agent 2 -->
+    <circle cx="20" cy="30" r="3" fill="#6C757D" /> <!-- Agent 3 -->
+
+    <!-- Middle level (interconnection & growth) -->
+    <circle cx="5" cy="20" r="4" fill="#495057" /> <!-- Agent Group 1 -->
+    <circle cx="15" cy="20" r="4" fill="#495057" /> <!-- Agent Group 2 -->
+
+    <!-- Top level (scaled system / unified output) -->
+    <circle cx="10" cy="10" r="5" fill="#343A40" /> <!-- Scaled System -->
+
+    <!-- Connecting lines for flow/network -->
+    <line x1="0" y1="30" x2="5" y2="20" stroke="#ADB5BD" stroke-width="1.5" />
+    <line x1="10" y1="30" x2="5" y2="20" stroke="#ADB5BD" stroke-width="1.5" />
+    <line x1="10" y1="30" x2="15" y2="20" stroke="#ADB5BD" stroke-width="1.5" />
+    <line x1="20" y1="30" x2="15" y2="20" stroke="#ADB5BD" stroke-width="1.5" />
+    <line x1="5" y1="20" x2="10" y2="10" stroke="#ADB5BD" stroke-width="1.5" />
+    <line x1="15" y1="20" x2="10" y2="10" stroke="#ADB5BD" stroke-width="1.5" />
+  </g>
+</svg>
 
 <div align="center">
   <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
@@ -11,7 +51,7 @@
 
 > 🧠 **Next-gen multi-agent scaling through intelligent collaboration in Grok Heavy style**
 
-MASS is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result. This project is inspired by the "threads of thoughts" and "iterative refinement" ideas presented in [The Myth of Reasoning](https://docs.ag2.ai/latest/docs/blog/#the-myth-of-reasoning), the power of "parallel study group" demonstrated in premium commercial prodcuts like [Grok Heavy](https://x.ai/news/grok-4#grok-4-heavy), and extends the classic "multi-agent conversation" idea in [AG2](https://github.com/ag2ai/ag2).
+MassGen is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result. This project is inspired by the "threads of thoughts" and "iterative refinement" ideas presented in [The Myth of Reasoning](https://docs.ag2.ai/latest/docs/blog/#the-myth-of-reasoning), the power of "parallel study group" demonstrated in premium commercial prodcuts like [Grok Heavy](https://x.ai/news/grok-4#grok-4-heavy), and extends the classic "multi-agent conversation" idea in [AG2](https://github.com/ag2ai/ag2).
 
 ---
 
@@ -39,11 +79,11 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 
 ## 🏗️ System Design
 
-MASS operates through a sophisticated architecture designed for **seamless multi-agent collaboration**:
+MassGen operates through a sophisticated architecture designed for **seamless multi-agent collaboration**:
 
 ```mermaid
 graph TB
-    O[🚀 MASS Orchestrator<br/>📋 Task Distribution & Coordination]
+    O[🚀 MassGen Orchestrator<br/>📋 Task Distribution & Coordination]
 
     subgraph Collaborative Agents
         A1[Agent 1<br/>🏗️ Anthropic/Claude]
@@ -85,8 +125,8 @@ This collaborative approach ensures that the final output leverages collective i
 ### 1. 📥 Installation
 
 ```bash
-git clone https://github.com/Leezekun/MassAgent.git
-cd MassAgent
+git clone https://github.com/Leezekun/MassGen.git
+cd MassGen
 pip install uv
 uv venv
 source .venv/bin/activate  # On macOS/Linux
@@ -95,11 +135,11 @@ uv pip install -e .
 
 ### 2. 🔐 API Configuration
 
-Create a `.env` file in the `mass/backends/` directory with your API keys:
+Create a `.env` file in the `massgen/backends/` directory with your API keys:
 
 ```bash
 # Copy example configuration
-cp mass/backends/.env.example mass/backends/.env
+cp massgen/backends/.env.example massgen/backends/.env
 
 # Edit with your API keys
 OPENAI_API_KEY=sk-your-openai-key-here
@@ -109,13 +149,13 @@ GEMINI_API_KEY=your-gemini-key-here
 
 ### 3. 🧩 Register Models
 
-Configure the models you wish to use by updating the model registry in `mass/utils.py`. 
+Configure the models you wish to use by updating the model registry in `massgen/utils.py`. 
 
 The system currently supports three model providers with advanced reasoning capabilities: **Google Gemini**, **OpenAI**, and **xAI Grok**.
 More providers will be added soon.
 
 
-### 4. 🏃 Run MASS
+### 4. 🏃 Run MassGen
 
 #### Simple Usage
 ```bash
@@ -137,7 +177,7 @@ python cli.py --config examples/fast_config.yaml "Question" --max-duration 120 -
 
 #### Interactive Multi-turn Mode
 
-MASS supports an interactive mode where you can have ongoing conversations with the system:
+MassGen supports an interactive mode where you can have ongoing conversations with the system:
 
 ```bash
 # Start interactive mode with multiple agents
@@ -200,7 +240,7 @@ logs/
 
 ## 💡 Examples
 
-Here are a few examples of how you can use MASS for different tasks:
+Here are a few examples of how you can use MassGen for different tasks:
 
 ### 1. 📝 Code Generation
 
@@ -227,12 +267,12 @@ python cli.py --config examples/fast_config.yaml "Write a short story about a ro
 
 ## 🗺️ Roadmap
 
-MASS is currently in its foundational stage, with a focus on core multi-agent collaboration and orchestration. Our roadmap is centered on enhancing this framework to build a more robust, intelligent, and user-friendly system.
+MassGen is currently in its foundational stage, with a focus on parallel, async multi-agent collaboration and orchestration. Our roadmap is centered on transforming this foundation into a highly robust, intelligent, and user-friendly system, while enabling frontier research and exploration.
 
 ### Key Future Enhancements:
 
 -   **Advanced Agent Collaboration:** Exploring more communication and consensus-building protocols to improve agent synergy.
--   **Expanded Model & Tool Integration:** Adding support for more models, including Claude, and integrating a wider range of tools like MCP Servers.
+-   **Expanded Model, Tool & Agent Integration:** Adding support for more models/tools/agents, including Claude, a wider range of tools like MCP Servers, and coding agents.
 -   **Improved Performance & Scalability:** Optimizing the streaming and logging mechanisms for better performance and resource management.
 -   **Enhanced Developer Experience:** Introducing a more modular agent design and a comprehensive benchmarking framework for easier extension and evaluation.
 -   **Web Interface:** Developing a web-based UI for better visualization and interaction with the agent ecosystem.
@@ -257,6 +297,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 **⭐ Star this repo if you find it useful! ⭐**
 
-Made with ❤️ by the MASS team
+Made with ❤️ by the MassGen team
 
 </div>
