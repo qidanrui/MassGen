@@ -219,16 +219,6 @@ def process_message(messages,
             # Append the function response
             gemini_messages.append(types.Content(role="user", parts=[function_response_part])) 
         
-    # DEBUGGING
-    with open("gemini_streaming.txt", "a") as f:
-        import time  # Local import to ensure availability in threading context
-        import json
-        inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Gemini API Request:\n\n"
-        inference_log += f"Tools: {tools}\n"
-        inference_log += f"Messages: {json.dumps(messages, indent=2)}\n"
-        inference_log += "\n\n"
-        f.write(inference_log)
-        
     # Set up generation config
     generation_config = {}
     if temperature is not None:
@@ -454,14 +444,6 @@ def process_message(messages,
                 except Exception as e:
                     print(f"Stream callback error: {e}")
 
-                with open("gemini_streaming.txt", "a") as f:
-                    import time  # Local import to ensure availability in threading context
-                    f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Gemini API Streaming:\n")
-                    f.write(f"TEXT: {text}\n\n")
-                    f.write(f"CODE: {code}\n\n")
-                    f.write(f"CITATIONS: {citations}\n\n")
-                    f.write(f"FUNCTION CALLS: {function_calls}\n\n")
-            
                 return AgentResponse(
                     text=text,
                     code=code,

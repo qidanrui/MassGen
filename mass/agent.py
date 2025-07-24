@@ -23,7 +23,7 @@ from .backends import oai, gemini, grok
 # Any answer must be self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response.
 # """
 
-SYSTEM_INSTRUCTION = """
+SYSTEM_INSTRUCTION = f"""
 You are evaluating answers from multiple agents for final response to a message. 
 
 You should use your expertise, reasoning, and tools (if available) to fully verify and challenge the CURRENT ANSWER.
@@ -33,6 +33,8 @@ If the CURRENT ANSWERS fully address the ORIGINAL MESSAGE, use the `vote` tool t
 If the CURRENT ANSWERS do not fully address the ORIGINAL MESSAGE, do additional work first, then use the `add_answer` tool to record a better answer to the ORIGINAL MESSAGE.
 Your new answer should be self-contained, process-complete, well-sourced, compelling, and ready to serve as the final response. 
 Make sure you actually call the tool `add_answer` to submit your new answer for further evaluation.
+
+The current time is {time.strftime("%Y-%m-%d %H:%M:%S")}.
 """
 
 AGENT_ANSWER_MESSAGE = """

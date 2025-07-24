@@ -199,22 +199,23 @@ def run_mass_with_config(question: str, config: MassConfig) -> Dict[str, Any]:
     # Create task input
     task = TaskInput(question=question)
     
-    # Create streaming display
+    # Create log manager first to get answers directory
+    log_manager = MassLogManager(
+        log_dir=config.logging.log_dir,
+        session_id=config.logging.session_id,
+        non_blocking=config.logging.non_blocking
+    )
+    
+    # Create streaming display with answers directory from log manager
     streaming_orchestrator = None
     if config.streaming_display.display_enabled:
         streaming_orchestrator = create_streaming_display(
             display_enabled=config.streaming_display.display_enabled,
             max_lines=config.streaming_display.max_lines,
             save_logs=config.streaming_display.save_logs,
-            stream_callback=config.streaming_display.stream_callback
+            stream_callback=config.streaming_display.stream_callback,
+            answers_dir=str(log_manager.answers_dir) if not log_manager.non_blocking else None
         )
-    
-    # Create log manager
-    log_manager = MassLogManager(
-        log_dir=config.logging.log_dir,
-        session_id=config.logging.session_id,
-        non_blocking=config.logging.non_blocking
-    )
     
     # Create orchestrator with full configuration
     orchestrator = MassOrchestrator(

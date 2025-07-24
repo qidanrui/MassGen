@@ -17,10 +17,11 @@ from typing import Dict, List, Optional, Callable, Union
 from datetime import datetime
 
 class MultiRegionDisplay:
-    def __init__(self, display_enabled: bool = True, max_lines: int = 20, save_logs: bool = True):
+    def __init__(self, display_enabled: bool = True, max_lines: int = 20, save_logs: bool = True, answers_dir: Optional[str] = None):
         self.display_enabled = display_enabled
         self.max_lines = max_lines
         self.save_logs = save_logs
+        self.answers_dir = answers_dir  # Path to answers directory from logging system
         self.agent_outputs: Dict[int, str] = {}
         self.agent_models: Dict[int, str] = {}
         self.agent_statuses: Dict[int, str] = {}  # Track agent statuses
@@ -56,7 +57,8 @@ class MultiRegionDisplay:
             r'\x1B(?:'         # ESC
             r'[@-Z\\-_]'       # Fe Escape sequences
             r'|'
-            r'\[[0-?]*[ -/]*[@-~]'  # CSI sequences
+            r'\['
+            r'[0-?]*[ -/]*[@-~]'  # CSI sequences
             r'|'
             r'\][^\x07]*(?:\x07|\x1B\\)'  # OSC sequences
             r'|'
@@ -518,6 +520,17 @@ class MultiRegionDisplay:
         # Return relative path for better display
         return log_path
     
+    def get_agent_answer_path_for_display(self, agent_id: int) -> str:
+        """Get the answer file path for display purposes (clickable link)."""
+        if not self.save_logs or not self.answers_dir:
+            return ""
+        
+        # Construct answer file path using the answers directory
+        answer_file_path = os.path.join(self.answers_dir, f"agent_{agent_id}.txt")
+        
+        # Return relative path for better display
+        return answer_file_path
+    
     def get_system_log_path_for_display(self) -> str:
         """Get the system log file path for display purposes (clickable link)."""
         if not self.save_logs:
@@ -766,7 +779,7 @@ class MultiRegionDisplay:
             if vote_target:
                 state_info.append(f"{BRIGHT_WHITE}Vote →{RESET} {BRIGHT_GREEN}{vote_target}{RESET}")
             else:
-                state_info.append(f"{BRIGHT_WHITE}Vote->{RESET} None")
+                state_info.append(f"{BRIGHT_WHITE}Vote →{RESET} None")
             
             state_text = f"📊 {' | '.join(state_info)}"
             # Ensure exact column width with improved padding
@@ -781,18 +794,19 @@ class MultiRegionDisplay:
             # Fallback to simple border if formatting fails
             print("─" * total_width)
         
-        # Log file information
-        if self.save_logs and hasattr(self, 'session_logs_dir'):
+        # Answer file information
+        if self.save_logs and (hasattr(self, 'session_logs_dir') or self.answers_dir):
             UNDERLINE = '\033[4m'
             link_parts = []
             for agent_id in agent_ids:
-                log_path = self.get_agent_log_path_for_display(agent_id)
-                if log_path:
+                # Try to get answer file path first, fallback to log file path
+                answer_path = self.get_agent_answer_path_for_display(agent_id)
+                if answer_path:
                     # Shortened display path
-                    display_path = log_path.replace(os.getcwd() + "/", "") if log_path.startswith(os.getcwd()) else log_path
+                    display_path = answer_path.replace(os.getcwd() + "/", "") if answer_path.startswith(os.getcwd()) else answer_path
                     
                     # Safe path truncation with better width handling
-                    prefix = "📁 Log: "
+                    prefix = "📄 Answers: "
                     # More conservative calculation
                     max_path_len = max(10, col_width - self._get_display_width(prefix) - 8)
                     if len(display_path) > max_path_len:
@@ -801,7 +815,18 @@ class MultiRegionDisplay:
                     link_text = f"{prefix}{UNDERLINE}{display_path}{RESET}"
                     link_content = self._pad_to_width(link_text, col_width, 'center')
                 else:
-                    link_content = self._pad_to_width("", col_width, 'center')
+                    # Fallback to log file path if answer path not available
+                    log_path = self.get_agent_log_path_for_display(agent_id)
+                    if log_path:
+                        display_path = log_path.replace(os.getcwd() + "/", "") if log_path.startswith(os.getcwd()) else log_path
+                        prefix = "📁 Log: "
+                        max_path_len = max(10, col_width - self._get_display_width(prefix) - 8)
+                        if len(display_path) > max_path_len:
+                            display_path = "..." + display_path[-(max_path_len-3):]
+                        link_text = f"{prefix}{UNDERLINE}{display_path}{RESET}"
+                        link_content = self._pad_to_width(link_text, col_width, 'center')
+                    else:
+                        link_content = self._pad_to_width("", col_width, 'center')
                 link_parts.append(link_content)
             
             # Validate log line consistency
@@ -944,8 +969,8 @@ class MultiRegionDisplay:
         self._execute_display_update()
 
 class StreamingOrchestrator:
-    def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 20, save_logs: bool = True):
-        self.display = MultiRegionDisplay(display_enabled, max_lines, save_logs)
+    def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 20, save_logs: bool = True, answers_dir: Optional[str] = None):
+        self.display = MultiRegionDisplay(display_enabled, max_lines, save_logs, answers_dir)
         self.stream_callback = stream_callback
     
     def stream_output(self, agent_id: int, content: str):
@@ -1026,6 +1051,10 @@ class StreamingOrchestrator:
         """Get the log file path for a specific agent."""
         return self.display.get_agent_log_path_for_display(agent_id)
     
+    def get_agent_answer_path(self, agent_id: int) -> str:
+        """Get the answer file path for a specific agent."""
+        return self.display.get_agent_answer_path_for_display(agent_id)
+    
     def get_system_log_path(self) -> str:
         """Get the system log file path."""
         return self.display.get_system_log_path_for_display()
@@ -1034,6 +1063,6 @@ class StreamingOrchestrator:
         """Clean up resources when orchestrator is no longer needed."""
         self.display.cleanup()
 
-def create_streaming_display(display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 20, save_logs: bool = True) -> StreamingOrchestrator:
+def create_streaming_display(display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 20, save_logs: bool = True, answers_dir: Optional[str] = None) -> StreamingOrchestrator:
     """Create a streaming orchestrator with display capabilities."""
-    return StreamingOrchestrator(display_enabled, stream_callback, max_lines, save_logs)
+    return StreamingOrchestrator(display_enabled, stream_callback, max_lines, save_logs, answers_dir)

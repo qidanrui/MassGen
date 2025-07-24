@@ -234,11 +234,15 @@ Examples:
         # Validate final configuration
         config.validate()
         
+        # The used models
+        agents = {f"Agent {agent.agent_id}": agent.model_config.model for agent in config.agents}
+
         # Check if question was provided
         if args.question:
             # Single question mode
             result = run_mass_with_config(args.question, config)
             
+
             # Display results
             print("\n" + "="*60)
             print(f"🎯 FINAL ANSWER (Agent {result['representative_agent_id']}):")
@@ -249,18 +253,19 @@ Examples:
             # Show different metadata based on single vs multi-agent mode
             if result.get("single_agent_mode", False):
                 print("🤖 Single Agent Mode")
-                print(f"✅ Model: {result.get('model_used', 'Unknown')}")
+                print(f"🤖 Agents: {agents}")
                 print(f"⏱️  Duration: {result['session_duration']:.1f}s")
                 if result.get("citations"):
                     print(f"📚 Citations: {len(result['citations'])}")
                 if result.get("code"):
                     print(f"💻 Code blocks: {len(result['code'])}")
             else:
+                print(f"🤖 Agents: {agents}")
+                print(f"🎯 Representative Agent: {result['representative_agent_id']}")
                 print(f"✅ Consensus: {result['consensus_reached']}")
                 print(f"⏱️  Duration: {result['session_duration']:.1f}s")
                 print(f"📊 Votes:")
                 display_vote_distribution(result['summary']['final_vote_distribution'])
-                print(f"🤖 Agents: {len(config.agents)}")
         else:
             # Interactive mode
             run_interactive_mode(config)

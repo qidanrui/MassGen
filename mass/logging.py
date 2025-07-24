@@ -187,7 +187,8 @@ class MassLogManager:
         
         return f"""Timestamp: {timestamp_str}
 Status: {record.status}
-Answer: {record.answer}
+Answer:
+{record.answer}
 
 {'-' * 40}
 """
@@ -327,7 +328,7 @@ Reason: {record.reason}
         data = {
             "old_status": old_status,
             "new_status": new_status,
-            "status_change": f"{old_status} -> {new_status}"
+            "status_change": f"{old_status} {new_status}"
         }
         
         self.log_event("agent_status_change", agent_id, phase, data)

@@ -143,15 +143,6 @@ def process_message(messages,
                 formatted_tools.append({"type": "code_interpreter", "container": {"type": "auto"}})
             else:
                 raise ValueError(f"Invalid tool type: {type(tool)}")
-
-    # DEBUGGING
-    with open("openai_streaming.txt", "a") as f:
-        import time  # Local import to ensure availability in threading context
-        inference_log = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OpenAI API Request:\n"
-        inference_log += f"Tools: {formatted_tools}\n"
-        inference_log += f"Messages: {json.dumps(messages, indent=2)}\n"
-        inference_log += "\n\n"
-        f.write(inference_log)
                 
     # Convert messages to the format expected by OpenAI responses API
     # For now, we'll use the last user message as input
@@ -493,14 +484,6 @@ def process_message(messages,
                         stream_callback("\n✅ Response complete\n")
                     except Exception as e:
                         print(f"Stream callback error: {e}")
-                        
-        with open("openai_streaming.txt", "a") as f:
-            import time  # Local import to ensure availability in threading context
-            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OpenAI API Streaming:\n")
-            f.write(f"TEXT: {text}\n\n")
-            f.write(f"CODE: {code}\n\n")
-            f.write(f"CITATIONS: {citations}\n\n")
-            f.write(f"FUNCTION CALLS: {function_calls}\n\n")
             
         result = AgentResponse(
             text=text,

@@ -72,7 +72,7 @@ def get_agent_type_from_model(model: str) -> str:
     elif any(keyword in model_lower for keyword in ["grok"]):
         return "grok"
     else:
-        return "openai"  # Default fallback
+        raise ValueError(f"Unknown model: {model}")
 
 
 def get_available_models() -> list:
