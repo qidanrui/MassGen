@@ -1,24 +1,22 @@
 orchestrator:
-  max_duration: 300
+  max_duration: 600
   consensus_threshold: 0.7
-  max_debate_rounds: 2
+  max_debate_rounds: 1
   status_check_interval: 1.0
   thread_pool_timeout: 5
-
 agents:
 - agent_id: 1
   agent_type: openai
   model_config:
-    model: gpt-4o
+    model: gpt-4.1
     tools:
     - live_search
     - code_execution
-    max_retries: 3
-    max_rounds: 10
+    max_retries: 10
+    max_rounds: 5
     temperature: 0.7
-    processing_timeout: 60  # Reduced timeout
-    stream: false
-
+    inference_timeout: 150
+    stream: true
 - agent_id: 2
   agent_type: gemini
   model_config:
@@ -26,17 +24,26 @@ agents:
     tools:
     - live_search
     - code_execution
-    max_retries: 3
-    max_rounds: 10
+    max_retries: 10
+    max_rounds: 5
     temperature: 0.7
-    processing_timeout: 60  # Reduced timeout
+    inference_timeout: 150
+    stream: true
+- agent_id: 3
+  agent_type: "grok"
+  model_config:
+    model: "grok-3-mini"
+    tools: ["live_search"]
+    max_retries: 10
+    max_rounds: 5
+    temperature: 0.4         # Balanced creativity and reliability
+    top_p: 0.9
+    inference_timeout: 150
     stream: false
-
 streaming_display:
   display_enabled: true
-  max_lines: 20
-  save_logs: false  # Disable file logging for faster startup
-
+  max_lines: 30
+  save_logs: true
 logging:
   log_dir: logs
-  non_blocking: true  # Enable non-blocking mode to prevent startup delays 
+  non_blocking: false

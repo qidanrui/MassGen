@@ -9,56 +9,55 @@
 orchestrator:
   max_duration: 900           # 15 minutes for thorough analysis
   consensus_threshold: 0.8    # 80% agreement for high confidence
-  max_debate_rounds: 3        # Standard debate rounds
+  max_debate_rounds: 2        # Standard debate rounds
   status_check_interval: 1.0  # Balanced responsiveness
   thread_pool_timeout: 10     # Longer timeout for stability
 
 agents:
-  # Agent 1: OpenAI GPT-4o (Primary analyst)
+  # Agent 1: OpenAI o4-mini (Primary analyst)
   - agent_id: 1
     agent_type: "openai"
     model_config:
-      model: "gpt-4o"
-      tools: ["live_search", "code_execution"]
+      model: "o4-mini"
+      tools:
+        - live_search
+        - code_execution
       max_retries: 15           # More retries for reliability
-      max_rounds: 10           # Allow thorough analysis
-      max_tokens: 8000         # Large context for detailed work
-      temperature: 0.3         # Low temperature for consistency
-      top_p: 0.9
-      processing_timeout: 300  # Longer timeout for complex tasks
-      stream: false
+      max_rounds: 5           # Allow thorough analysis
+      inference_timeout: 180  # Longer timeout for complex tasks
+      stream: true
 
   # Agent 2: Google Gemini Pro (Research specialist)
   - agent_id: 2
     agent_type: "gemini"
     model_config:
       model: "gemini-2.5-pro"
-      tools: ["live_search", "code_execution"]
-      max_retries: 15
-      max_rounds: 10
-      max_tokens: 8000
-      temperature: 0.2         # Very low temperature for accuracy
+      tools:
+        - live_search
+        - code_execution
+      max_retries: 10
+      max_rounds: 5
+      temperature: 0.4         # Balanced creativity and reliability
       top_p: 0.9
-      processing_timeout: 300
-      stream: false
+      inference_timeout: 180
+      stream: true
 
   # Agent 3: xAI Grok (Alternative perspective)
   - agent_id: 3
     agent_type: "grok"
     model_config:
-      model: "grok-3"
-      tools: ["live_search", "code_execution"]
+      model: "grok-4"
+      tools: ["live_search"]
       max_retries: 12
       max_rounds: 10
-      max_tokens: 6000
-      temperature: 0.4         # Balanced creativity and reliability
+      temperature: 0.2        # Very low temperature for accuracy
       top_p: 0.9
-      processing_timeout: 250
-      stream: false
+      inference_timeout: 180
+      stream: true
 
 streaming_display:
   display_enabled: true
-  max_lines: 50               # More lines for detailed output
+  max_lines: 30               # More lines for detailed output
   save_logs: true
 
 logging:
@@ -67,11 +66,5 @@ logging:
 
 task:
   category: "production"
-  priority: "high"
-  expected_duration: 600
-  custom_instructions: |
-    This is a production task requiring high accuracy and reliability.
-    Please provide detailed analysis with supporting evidence.
-    Cross-verify information and cite sources when possible.
   domain: "business"
   complexity: "high" 

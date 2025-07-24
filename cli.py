@@ -66,7 +66,7 @@ def run_interactive_mode(config):
         model_config = config.agents[0].model_config
         print(f"🔧 Model Config:")
         temp = getattr(model_config, 'temperature', 'Default')
-        timeout = getattr(model_config, 'processing_timeout', 'Default')
+        timeout = getattr(model_config, 'inference_timeout', 'Default')
         max_rounds = getattr(model_config, 'max_rounds', 'Default')
         print(f"   • Temperature: {temp}")
         print(f"   • Timeout: {timeout}s")

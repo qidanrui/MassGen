@@ -12,7 +12,6 @@ from xai_sdk.search import SearchParameters
 
 # Import utility functions and tools  
 from mass.utils import function_to_json, execute_function_calls
-from mass.tools import mock_add_answer, mock_check_updates, mock_vote
 from mass.types import AgentResponse
 
 load_dotenv()

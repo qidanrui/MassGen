@@ -80,7 +80,7 @@ class MassAgent(ABC):
             agent_id: Unique identifier for this agent
             orchestrator: Reference to the MassOrchestrator
             model_config: Configuration object containing model parameters (model, tools, 
-                         temperature, top_p, max_tokens, processing_timeout, max_retries, stream)
+                         temperature, top_p, max_tokens, inference_timeout, max_retries, stream)
             stream_callback: Optional callback function for streaming chunks
             agent_type: Type of agent ("openai", "gemini", "grok") to determine backend
             **kwargs: Additional parameters specific to the agent implementation
@@ -115,7 +115,7 @@ class MassAgent(ABC):
         self.max_tokens = model_config.max_tokens
         self.temperature = model_config.temperature
         self.top_p = model_config.top_p
-        self.processing_timeout = model_config.processing_timeout
+        self.inference_timeout = model_config.inference_timeout
         self.stream = model_config.stream
         self.stream_callback = stream_callback
         self.kwargs = kwargs
@@ -161,15 +161,15 @@ class MassAgent(ABC):
                 
                 try:
                     # Wait for result with timeout
-                    result = future.result(timeout=self.processing_timeout)
+                    result = future.result(timeout=self.inference_timeout)
                     # Backend implementations now return AgentResponse objects directly
                     return result
                 except FutureTimeoutError:
                     # Mark agent as failed due to timeout
-                    timeout_msg = f"Agent {self.agent_id} timed out after {self.processing_timeout} seconds"
+                    timeout_msg = f"Agent {self.agent_id} timed out after {self.inference_timeout} seconds"
                     self.mark_failed(timeout_msg)
                     return AgentResponse(
-                        text=f"Agent processing timed out after {self.processing_timeout} seconds",
+                        text=f"Agent processing timed out after {self.inference_timeout} seconds",
                         code=[],
                         citations=[],
                         function_calls=[],
@@ -250,12 +250,7 @@ class MassAgent(ABC):
         function_outputs = []
         successful_called = []
         
-        # DEBUGGING
-        with open("function_calls.txt", "a") as f:
-            # Write the function calls to the file
-            # Include the agent id, agent model name, time, and function calls
-            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
-            f.write(f"{json.dumps(function_calls, indent=2)}\n")
+
         
         for func_call in function_calls:
             func_call_id = func_call.get("call_id")
@@ -287,11 +282,7 @@ class MassAgent(ABC):
                 function_outputs.append(function_output)
                 successful_called.append(True)
                 
-                # DEBUGGING
-                with open("function_calls.txt", "a") as f:
-                    f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Agent {self.agent_id} ({self.model}):\n")
-                    f.write(f"{json.dumps(function_output, indent=2)}\n")
-                    f.write(f"Successful called: {True}\n")
+
                 
             except Exception as e:
                 # Handle execution errors

@@ -85,6 +85,8 @@ This collaborative approach ensures that the final output leverages collective i
 ### 1. 📥 Installation
 
 ```bash
+conda create -n agent python==3.10
+conda activate agent
 git clone https://github.com/Leezekun/MassAgent.git
 cd MassAgent
 pip install -r requirements.txt
@@ -104,40 +106,94 @@ XAI_API_KEY=xai-your-xai-key-here
 GEMINI_API_KEY=your-gemini-key-here
 ```
 
-### 3. 🏃 Run MASS
+### 3. 🧩 Register Models
+
+Configure the models you wish to use by updating the model registry in `mass/utils.py`. 
+
+The system currently supports three model providers with advanced reasoning capabilities: **OpenAI**, **Google Gemini**, and **xAI Grok**.
+More providers will be added soon.
+
+
+### 4. 🏃 Run MASS
 
 #### Simple Usage
 ```bash
-# Run with specific models
-python cli.py --models gpt-4o gemini-2.5-flash "What is 2+2?"
+# Multi-agent mode with specific models
+python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gemini-2.5-flash gpt-4o
 
-# Mathematical calculation
-python cli.py --models gpt-4o gemini-2.5-flash "2312312 * (142342 + 222552) = ?"
+# Single agent mode
+python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gpt-4o
 ```
 
 #### Configuration File Usage
 ```bash
-# Use existing configuration file
-python cli.py --config examples/production.yaml "Complex analysis question"
+# Use configuration file
+python cli.py --config examples/fast_config.yaml "Complex analysis question"
 
 # Override specific parameters
-python cli.py --config examples/production.yaml "Question" --max-duration 1200 --consensus 0.8
+python cli.py --config examples/fast_config.yaml "Question" --max-duration 120 --consensus 0.5
 ```
 
-#### Parameter Overrides
+#### Interactive Multi-turn Mode
+
+MASS supports an interactive mode where you can have ongoing conversations with the system:
+
 ```bash
-# Customize execution parameters
-python cli.py --models gpt-4o gemini-2.5-flash "Question" \
-  --max-duration 1200 \
-  --consensus 0.8 \
-  --max-debates 5 \
-  --no-display \
-  --no-logs
+# Start interactive mode with multiple agents
+python cli.py --models gpt-4.1 gemini-2.5-flash grok-3-mini
+
+# Start interactive mode with configuration file
+python cli.py --config examples/fast_config.yaml
+
+# Interactive mode with custom parameters
+python cli.py --models gpt-4.1 grok-3-mini --consensus 0.7 --max-duration 600
 ```
+
+**Note**: `--config` and `--models` are mutually exclusive - use one or the other.
+
+**Interactive Mode Features:**
+- **Multi-turn conversations**: Multiple agents collaborate to chat with you in an ongoing conversation
+- **Real-time feedback**: Displays real-time agent and system status
+- **Easy exit**: Type `quit`, `exit`, or press `Ctrl+C` to stop
+
 
 ### 4. 📊 View Results
 
-The system shows real-time collaboration between agents in a multi-region display and presents the final converged solution with consensus details.
+The system provides multiple ways to view and analyze results:
+
+#### Real-time Display
+- **Live Collaboration View**: See agents working in parallel through a multi-region terminal display
+- **Status Updates**: Real-time phase transitions, voting progress, and consensus building
+- **Streaming Output**: Watch agents' reasoning and responses as they develop
+
+#### Comprehensive Logging
+All sessions are automatically logged with detailed information:
+
+```bash
+logs/
+└── 20250123_142530/          # Session timestamp (YYYYMMDD_HHMMSS)
+    ├── answers/
+    │   ├── agent_1.txt       # The proposed answers by agent 1
+    │   ├── agent_2.txt       # The proposed answers by agent 2
+    │   └── agent_3.txt       # The proposed answers by agent 3
+    ├── votes/
+    │   ├── agent_1.txt       # The votes cast by agent 1
+    │   ├── agent_2.txt       # The votes cast by agent 2
+    │   └── agent_3.txt       # The votes cast by agent 3
+    ├── display/
+    │   ├── agent_1.txt       # The full log in the streaming display of agent 1
+    │   ├── agent_2.txt       # The full log in the streaming display of agent 2
+    │   ├── agent_3.txt       # The full log in the streaming display of agent 3
+    │   └── system.txt        # The full log of system events and phase changes
+    ├── console.log           # Console output and system messages
+    ├── events.jsonl          # Orchestrator events and phase changes (JSONL format)
+    └── result.json           # Final results and session summary
+```
+
+#### Log File Contents
+- **Session Summary**: Final answer, consensus score, voting results, execution time
+- **Agent History**: Complete action and chat history for each agent
+- **System Events**: Phase transitions, restarts, consensus detection of the whole system
 
 ---
 
@@ -145,31 +201,30 @@ The system shows real-time collaboration between agents in a multi-region displa
 
 Here are a few examples of how you can use MASS for different tasks:
 
-### 1. 📝 Code Generation (TODO: hanoi, video)
+### 1. 📝 Code Generation
 
 ```bash
 # Generate a Python function to calculate the Fibonacci sequence
-python cli.py --config examples/production.yaml "Write a Python function to calculate the nth Fibonacci number."
+python cli.py --config examples/fast_config.yaml "Write a Python function to calculate the nth Fibonacci number."
 ```
 
-### 2. ❓ Question Answering (TODO: economic, video)
+### 2. ❓ Question Answering
 
 ```bash
 # Ask a question about a complex topic
-python cli.py --config examples/production.yaml "Explain the theory of relativity in simple terms."
+python cli.py --config examples/fast_config.yaml "Explain the theory of relativity in simple terms."
 ```
 
-### 3. 🧠 Creative Writing (TODO: try, video)
+### 3. 🧠 Creative Writing
 
 ```bash
 # Generate a short story
-python cli.py --config examples/production.yaml "Write a short story about a robot who discovers music."
+python cli.py --config examples/fast_config.yaml "Write a short story about a robot who discovers music."
 ```
 
 ---
 
-##  Roadmap
-
+## 🗺️ Roadmap
 
 MASS is currently in its foundational stage, with a focus on core multi-agent collaboration and orchestration. Our roadmap is centered on enhancing this framework to build a more robust, intelligent, and user-friendly system.
 

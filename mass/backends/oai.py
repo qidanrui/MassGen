@@ -11,9 +11,6 @@ from openai import OpenAI
 
 # Import utility functions
 from mass.utils import function_to_json, execute_function_calls
-from mass.tools import (mock_add_answer as add_answer, 
-                        mock_check_updates as check_updates, 
-                        mock_vote as vote)
 from mass.types import AgentResponse
 
             

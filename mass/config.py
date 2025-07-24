@@ -84,7 +84,7 @@ def create_config_from_models(
             max_retries=10,
             max_rounds=10,
             temperature=None,
-            processing_timeout=180
+            inference_timeout=180
         )
         
         agent_config = AgentConfig(

@@ -18,14 +18,14 @@ agents:
   - agent_id: 1
     agent_type: "openai"
     model_config:
-      model: "gpt-4o"
+      model: "o4-mini"
       tools: ["live_search", "code_execution"]
       max_retries: 10
       max_rounds: 10            # Fewer rounds for simple processing
       max_tokens: 4000          # Reasonable token limit
       temperature: 0.7          # Balanced creativity
       top_p: 0.9
-      processing_timeout: 120   # 2 minutes timeout
+      inference_timeout: 120   # 2 minutes timeout
       stream: false
 
 streaming_display:

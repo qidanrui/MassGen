@@ -12,7 +12,6 @@ load_dotenv()
 
 # Import utility functions and tools
 from mass.utils import function_to_json, execute_function_calls, generate_random_id
-from mass.tools import mock_add_answer, mock_check_updates, mock_vote
 from mass.types import AgentResponse
 
 def add_citations_to_response(response):

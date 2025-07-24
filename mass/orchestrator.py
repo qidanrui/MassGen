@@ -288,9 +288,9 @@ class MassOrchestrator:
 
             # Check if consensus is reached
             consensus_reached = self._check_consensus()
-            if consensus_reached:
-                logger.info("🎉 CONSENSUS REACHED!")
-                print(f"      🎉 CONSENSUS REACHED!")
+            # if consensus_reached:
+            #     logger.info("🎉 CONSENSUS REACHED!")
+            #     print(f"      🎉 CONSENSUS REACHED!")
 
             return consensus_reached
             
