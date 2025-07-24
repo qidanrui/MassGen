@@ -85,11 +85,12 @@ This collaborative approach ensures that the final output leverages collective i
 ### 1. 📥 Installation
 
 ```bash
-conda create -n agent python==3.10
-conda activate agent
 git clone https://github.com/Leezekun/MassAgent.git
 cd MassAgent
-pip install -r requirements.txt
+pip install uv
+uv venv
+source .venv/bin/activate  # On macOS/Linux
+uv pip install -e .
 ```
 
 ### 2. 🔐 API Configuration
@@ -110,7 +111,7 @@ GEMINI_API_KEY=your-gemini-key-here
 
 Configure the models you wish to use by updating the model registry in `mass/utils.py`. 
 
-The system currently supports three model providers with advanced reasoning capabilities: **OpenAI**, **Google Gemini**, and **xAI Grok**.
+The system currently supports three model providers with advanced reasoning capabilities: **Google Gemini**, **OpenAI**, and **xAI Grok**.
 More providers will be added soon.
 
 
