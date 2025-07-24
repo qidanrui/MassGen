@@ -10,38 +10,39 @@ import os
 import json
 import time
 import logging
-import signal
 import threading
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Union
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
-import threading
 from collections import Counter
+import textwrap
 
-@dataclass
-class LogEntry:
-    """Represents a single log entry in the MASS system."""
-    timestamp: float
-    event_type: str  # e.g., "agent_summary_update", "voting", "phase_change", etc.
-    agent_id: Optional[int]
-    phase: str
-    data: Dict[str, Any]
-    session_id: Optional[str] = None
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return asdict(self)
+from .types import LogEntry, AnswerRecord, VoteRecord
 
 class MassLogManager:
     """
     Comprehensive logging system for the MASS framework.
     
-    This system records all significant events including:
-    - Agent state changes (status, summary updates, voting)
-    - Orchestrator events
-    - Workflow phase transitions
+    Records all significant events including:
+    - Agent state changes (working, voted, failed)
+    - Answer updates and notifications  
+    - Voting events and consensus decisions
+    - Phase transitions (collaboration, debate, consensus)
     - System metrics and performance data
+    
+    New organized structure:
+    logs/
+    └── YYYYMMDD_HHMMSS/
+        ├── display/
+        │   ├── agent_0.txt, agent_1.txt, ...  # Real-time display logs
+        │   └── system.txt                     # System messages
+        ├── answers/
+        │   ├── agent_0.txt, agent_1.txt, ...  # Agent answer histories
+        ├── votes/
+        │   ├── agent_0.txt, agent_1.txt, ...  # Agent voting records
+        ├── events.jsonl                       # Structured event log
+        └── console.log                        # Python logging output
     """
     
     def __init__(self, log_dir: str = "logs", session_id: Optional[str] = None, non_blocking: bool = False):
@@ -51,57 +52,93 @@ class MassLogManager:
         Args:
             log_dir: Directory to save log files
             session_id: Unique identifier for this session
-            non_blocking: If True, disable file logging to prevent any hanging issues
+            non_blocking: If True, disable file logging to prevent hanging issues
         """
-        self.log_dir = Path(log_dir)
+        self.base_log_dir = Path(log_dir)
         self.session_id = session_id or self._generate_session_id()
         self.non_blocking = non_blocking
         
         if self.non_blocking:
             print(f"⚠️  LOGGING: Non-blocking mode enabled - file logging disabled")
         
-        # Create log directory if it doesn't exist (unless non-blocking)
+        # Create main session directory
+        self.session_dir = self.base_log_dir / self.session_id
         if not self.non_blocking:
             try:
-                self.log_dir.mkdir(exist_ok=True)
+                self.session_dir.mkdir(parents=True, exist_ok=True)
             except Exception as e:
-                print(f"Warning: Failed to create log directory, enabling non-blocking mode: {e}")
+                print(f"Warning: Failed to create session directory, enabling non-blocking mode: {e}")
                 self.non_blocking = True
         
-        # Session-specific log file
-        self.session_log_file = self.log_dir / f"session_{self.session_id}.jsonl"
+        # Create subdirectories
+        self.display_dir = self.session_dir / "display"
+        self.answers_dir = self.session_dir / "answers"
+        self.votes_dir = self.session_dir / "votes"
         
-        # Agent-specific log files
-        self.agent_log_dir = self.log_dir / f"session_{self.session_id}_agents"
         if not self.non_blocking:
             try:
-                self.agent_log_dir.mkdir(exist_ok=True)
+                self.display_dir.mkdir(exist_ok=True)
+                self.answers_dir.mkdir(exist_ok=True)
+                self.votes_dir.mkdir(exist_ok=True)
             except Exception as e:
-                print(f"Warning: Failed to create agent log directory, enabling non-blocking mode: {e}")
+                print(f"Warning: Failed to create subdirectories, enabling non-blocking mode: {e}")
                 self.non_blocking = True
+        
+        # File paths
+        self.events_log_file = self.session_dir / "events.jsonl"
+        self.console_log_file = self.session_dir / "console.log"
+        self.system_log_file = self.display_dir / "system.txt"
         
         # In-memory log storage for real-time access
         self.log_entries: List[LogEntry] = []
         self.agent_logs: Dict[int, List[LogEntry]] = {}
         
+        # MASS-specific event counters
+        self.event_counters = {
+            "answer_updates": 0,
+            "votes_cast": 0,
+            "consensus_reached": 0,
+            "debates_started": 0,
+            "agent_restarts": 0,
+            "notifications_sent": 0
+        }
+        
         # Thread lock for concurrent access
         self._lock = threading.Lock()
         
-        # Initialize basic logging
+        # Initialize logging
         self._setup_logging()
+        
+        # Initialize system log file
+        if not self.non_blocking:
+            self._initialize_system_log()
         
         # Log session start
         self.log_event("session_started", data={
             "session_id": self.session_id,
             "timestamp": time.time(),
-            "log_dir": str(self.log_dir),
+            "session_dir": str(self.session_dir),
             "non_blocking_mode": self.non_blocking
         })
     
     def _generate_session_id(self) -> str:
         """Generate a unique session ID."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return f"mass_{timestamp}_{int(time.time() * 1000) % 10000}"
+        return f"{timestamp}"
+    
+    def _initialize_system_log(self):
+        """Initialize the system log file with header."""
+        if self.non_blocking:
+            return
+            
+        try:
+            with open(self.system_log_file, 'w', encoding='utf-8') as f:
+                f.write(f"MASS System Messages Log\n")
+                f.write(f"Session ID: {self.session_id}\n")
+                f.write(f"Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 80 + "\n\n")
+        except Exception as e:
+            print(f"Warning: Failed to initialize system log: {e}")
     
     def _setup_logging(self):
         """Set up file logging configuration."""
@@ -115,21 +152,19 @@ class MassLogManager:
         
         # Ensure log directory exists before creating file handler
         try:
-            self.log_dir.mkdir(parents=True, exist_ok=True)
+            self.session_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            print(f"Warning: Failed to create log directory {self.log_dir}, skipping file logging: {e}")
+            print(f"Warning: Failed to create session directory {self.session_dir}, skipping file logging: {e}")
             return
         
-        # Create session-specific log file handler
-        session_log_handler = logging.FileHandler(
-            self.log_dir / f"session_{self.session_id}.log"
-        )
-        session_log_handler.setFormatter(log_formatter)
-        session_log_handler.setLevel(logging.DEBUG)
+        # Create console log file handler
+        console_log_handler = logging.FileHandler(self.console_log_file)
+        console_log_handler.setFormatter(log_formatter)
+        console_log_handler.setLevel(logging.DEBUG)
         
         # Add handler to the mass logger
         mass_logger = logging.getLogger('mass')
-        mass_logger.addHandler(session_log_handler)
+        mass_logger.addHandler(console_log_handler)
         mass_logger.setLevel(logging.DEBUG)
         
         # Prevent duplicate console logs
@@ -141,6 +176,129 @@ class MassLogManager:
             console_handler.setFormatter(log_formatter)
             console_handler.setLevel(logging.INFO)
             mass_logger.addHandler(console_handler)
+    
+    def _format_timestamp(self, timestamp: float) -> str:
+        """Format timestamp to human-readable format."""
+        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+    
+    def _format_answer_record(self, record: AnswerRecord, agent_id: int) -> str:
+        """Format an AnswerRecord into human-readable text."""
+        timestamp_str = self._format_timestamp(record.timestamp)
+        
+        # Wrap long answers for better readability
+        wrapped_answer = textwrap.fill(
+            record.answer, 
+            width=80, 
+            initial_indent="    ", 
+            subsequent_indent="    "
+        )
+        
+        # Create properly aligned header
+        header_text = f"AGENT {agent_id} ANSWER UPDATE"
+        header_padding = max(0, 76 -len(header_text))  # 78 = 80 - 2 (for the ║ characters)
+        aligned_header = f"║ {header_text}{' ' * header_padding} ║"
+        
+        return f"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+{aligned_header}
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 Timestamp: {timestamp_str}
+🎯 Status: {record.status}
+📝 Answer Length: {len(record.answer)} characters
+
+💬 Answer Content:
+{wrapped_answer}
+
+{'═' * 80}
+"""
+    
+    def _format_vote_record(self, record: VoteRecord, agent_id: int) -> str:
+        """Format a VoteRecord into human-readable text."""
+        timestamp_str = self._format_timestamp(record.timestamp)
+        
+        # Wrap long reasoning for better readability
+        wrapped_reason = textwrap.fill(
+            record.reason, 
+            width=80, 
+            initial_indent="    ", 
+            subsequent_indent="    "
+        ) if record.reason else "    No reason provided"
+        
+        # Create properly aligned header
+        header_text = f"AGENT {agent_id} VOTE CAST"
+        header_padding = max(0, 76 -len(header_text))  # 78 = 80 - 2 (for the ║ characters)
+        aligned_header = f"║ {header_text}{' ' * header_padding} ║"
+        
+        return f"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+{aligned_header}
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 Timestamp: {timestamp_str}
+🗳️  Voter: Agent {record.voter_id}
+🎯 Target: Agent {record.target_id}
+📄 Reasoning Length: {len(record.reason)} characters
+
+💭 Vote Reasoning:
+{wrapped_reason}
+
+{'═' * 80}
+"""
+    
+    def _write_agent_answers(self, agent_id: int, answer_records: List[AnswerRecord]):
+        """Write agent's answer history to the answers folder."""
+        if self.non_blocking:
+            return
+            
+        try:
+            answers_file = self.answers_dir / f"agent_{agent_id}.txt"
+            
+            with open(answers_file, 'w', encoding='utf-8') as f:
+                f.write(f"MASS Agent {agent_id} Answer History\n")
+                f.write(f"Session: {self.session_id}\n")
+                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 80 + "\n\n")
+                
+                if not answer_records:
+                    f.write("No answer records found for this agent.\n")
+                else:
+                    f.write(f"Total Answer Updates: {len(answer_records)}\n\n")
+                    
+                    for i, record in enumerate(answer_records, 1):
+                        f.write(f"[Update #{i}]\n")
+                        f.write(self._format_answer_record(record, agent_id))
+                        f.write("\n")
+                        
+        except Exception as e:
+            print(f"Warning: Failed to write answers for agent {agent_id}: {e}")
+    
+    def _write_agent_votes(self, agent_id: int, vote_records: List[VoteRecord]):
+        """Write agent's vote history to the votes folder."""
+        if self.non_blocking:
+            return
+            
+        try:
+            votes_file = self.votes_dir / f"agent_{agent_id}.txt"
+            
+            with open(votes_file, 'w', encoding='utf-8') as f:
+                f.write(f"MASS Agent {agent_id} Vote History\n")
+                f.write(f"Session: {self.session_id}\n")
+                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 80 + "\n\n")
+                
+                if not vote_records:
+                    f.write("No vote records found for this agent.\n")
+                else:
+                    f.write(f"Total Votes Cast: {len(vote_records)}\n\n")
+                    
+                    for i, record in enumerate(vote_records, 1):
+                        f.write(f"[Vote #{i}]\n")
+                        f.write(self._format_vote_record(record, agent_id))
+                        f.write("\n")
+                        
+        except Exception as e:
+            print(f"Warning: Failed to write votes for agent {agent_id}: {e}")
     
     def log_event(self, event_type: str, agent_id: Optional[int] = None, 
                   phase: str = "unknown", data: Optional[Dict[str, Any]] = None):
@@ -174,35 +332,25 @@ class MassLogManager:
             # Write to file immediately
             self._write_log_entry(entry)
     
-    def log_agent_summary_update(self, agent_id: int, summary: str, 
-                                final_answer: str = "", phase: str = "unknown"):
+    def log_agent_answer_update(self, agent_id: int, answer: str, 
+                                phase: str = "unknown"):
         """
-        Log agent summary update with detailed information.
+        Log agent answer update with detailed information.
         
         Args:
             agent_id: Agent ID
-            summary: Updated summary content
-            final_answer: Final answer if provided
+            answer: Updated answer content
             phase: Current workflow phase
         """
         data = {
-            "summary": summary,
-            "summary_length": len(summary),
-            "final_answer": final_answer,
-            "final_answer_length": len(final_answer),
-            "has_final_answer": bool(final_answer)
+            "answer": answer,
+            "answer_length": len(answer),
         }
         
-        self.log_event("agent_summary_update", agent_id, phase, data)
+        self.log_event("agent_answer_update", agent_id, phase, data)
         
-        # Log to agent-specific file
-        self._write_agent_log(agent_id, {
-            "timestamp": time.time(),
-            "event": "summary_update",
-            "phase": phase,
-            "summary": summary,
-            "final_answer": final_answer
-        })
+        # This will be handled by system state snapshots
+        # Individual answer updates are captured there
     
     def log_agent_status_change(self, agent_id: int, old_status: str, 
                                new_status: str, phase: str = "unknown"):
@@ -223,18 +371,11 @@ class MassLogManager:
         
         self.log_event("agent_status_change", agent_id, phase, data)
         
-        # Log to agent-specific file
-        self._write_agent_log(agent_id, {
-            "timestamp": time.time(),
-            "event": "status_change",
-            "phase": phase,
-            "old_status": old_status,
-            "new_status": new_status
-        })
+        # Status changes are captured in system state snapshots
     
     def log_system_state_snapshot(self, orchestrator, phase: str = "unknown"):
         """
-        Log a complete system state snapshot including all agent summaries and voting status.
+        Log a complete system state snapshot including all agent answers and voting status.
         
         Args:
             orchestrator: The MassOrchestrator instance
@@ -243,33 +384,30 @@ class MassLogManager:
         
         # Collect all agent states
         agent_states = {}
-        all_agent_summaries = {}
+        all_agent_answers = {}
         vote_records = []
         
         for agent_id, agent_state in orchestrator.agent_states.items():
             # Full agent state information
             agent_states[agent_id] = {
                 "status": agent_state.status,
-                "working_summary": agent_state.working_summary,
-                "final_answer": agent_state.final_answer,
-                "vote_target": agent_state.vote_target,
+                "curr_answer": agent_state.curr_answer,
+                "vote_target": agent_state.curr_vote.target_id if agent_state.curr_vote else None,
                 "execution_time": agent_state.execution_time,
-                "update_count": len(agent_state.update_history),
+                "update_count": len(agent_state.updated_answers),
                 "seen_updates_timestamps": agent_state.seen_updates_timestamps
             }
             
-            # Summary history for each agent
-            all_agent_summaries[agent_id] = {
-                "current_summary": agent_state.working_summary,
-                "current_final_answer": agent_state.final_answer,
-                "summary_history": [
+            # Answer history for each agent
+            all_agent_answers[agent_id] = {
+                "current_answer": agent_state.curr_answer,
+                "answer_history": [
                     {
-                        "timestamp": update["timestamp"],
-                        "summary": update["summary"],
-                        "final_answer": update.get("final_answer", ""),
-                        "status": update.get("status", "unknown")
+                        "timestamp": update.timestamp,
+                        "answer": update.answer,
+                        "status": update.status
                     }
-                    for update in agent_state.update_history
+                    for update in agent_state.updated_answers
                 ]
             }
         
@@ -288,18 +426,17 @@ class MassLogManager:
             "total_votes_cast": len(orchestrator.votes),
             "total_agents": len(orchestrator.agents),
             "consensus_reached": orchestrator.system_state.consensus_reached,
-            "winning_agent_id": orchestrator.system_state.final_solution_agent_id,
+            "winning_agent_id": orchestrator.system_state.representative_agent_id,
             "votes_needed_for_consensus": max(1, int(len(orchestrator.agents) * orchestrator.consensus_threshold))
         }
         
         # Complete system state snapshot
         system_snapshot = {
             "agent_states": agent_states,
-            "agent_summaries": all_agent_summaries,
+            "agent_answers": all_agent_answers,
             "voting_records": vote_records,
             "voting_status": voting_status,
             "system_phase": phase,
-            "total_rounds": orchestrator.system_state.total_rounds,
             "system_runtime": (time.time() - orchestrator.system_state.start_time) if orchestrator.system_state.start_time else 0
         }
         
@@ -314,184 +451,88 @@ class MassLogManager:
             "system_state": system_snapshot
         }
         
+        # Save individual agent states to answers and votes folders
+        for agent_id, agent_state in orchestrator.agent_states.items():
+            # Save answer history
+            self._write_agent_answers(agent_id, agent_state.updated_answers)
+            
+            # Save vote history  
+            self._write_agent_votes(agent_id, agent_state.cast_votes)
+        
+        # Write system state to each agent's display log file for complete context
         for agent_id in orchestrator.agents.keys():
-            self._write_agent_log(agent_id, system_state_entry)
+            self._write_agent_display_log(agent_id, system_state_entry)
         
         return system_snapshot
     
-    def log_agent_summary_update_with_system_context(self, agent_id: int, summary: str, 
-                                                    final_answer: str = "", phase: str = "unknown",
-                                                    orchestrator=None):
+    def log_voting_event(self, voter_id: int, target_id: int, phase: str = "unknown", reason: str = ""):
         """
-        Enhanced version of log_agent_summary_update that includes system context.
+        Log a voting event with detailed information.
         
         Args:
-            agent_id: Agent ID
-            summary: Updated summary content
-            final_answer: Final answer if provided
+            voter_id: ID of the agent casting the vote
+            target_id: ID of the agent being voted for
             phase: Current workflow phase
-            orchestrator: The orchestrator for context
+            reason: Reason for the vote
         """
-        # First log the standard summary update
-        self.log_agent_summary_update(agent_id, summary, final_answer, phase)
-        
-        # Then log system context if orchestrator is provided
-        if orchestrator:
-            # Get current state of all other agents for context
-            peer_states = {}
-            for other_agent_id, other_state in orchestrator.agent_states.items():
-                if other_agent_id != agent_id:
-                    peer_states[other_agent_id] = {
-                        "status": other_state.status,
-                        "has_summary": bool(other_state.working_summary),
-                        "vote_target": other_state.vote_target,
-                        "last_update_time": other_state.update_history[-1]["timestamp"] if other_state.update_history else None
-                    }
+        with self._lock:
+            self.event_counters["votes_cast"] += 1
             
-            # Get current voting status
-            vote_counts = Counter(vote.target_id for vote in orchestrator.votes)
-            current_voting_status = {
-                "vote_distribution": dict(vote_counts),
-                "total_votes": len(orchestrator.votes),
-                "agent_voted": orchestrator.agent_states[agent_id].status == "voted",
-                "agent_vote_target": orchestrator.agent_states[agent_id].vote_target
-            }
-            
-            # Enhanced log entry with system context
-            enhanced_entry = {
-                "timestamp": time.time(),
-                "event": "summary_update_with_context",
-                "phase": phase,
-                "agent_summary": {
-                    "summary": summary,
-                    "final_answer": final_answer,
-                    "summary_length": len(summary)
-                },
-                "peer_agent_states": peer_states,
-                "voting_status": current_voting_status,
-                "system_round": len(orchestrator.agent_states[agent_id].update_history)
-            }
-            
-            self._write_agent_log(agent_id, enhanced_entry)
-    
-    def log_voting_event_with_system_context(self, voter_id: int, target_id: int, 
-                                           phase: str = "unknown", response_text: str = "",
-                                           orchestrator=None):
-        """
-        Enhanced version of log_voting_event that includes full system voting context.
-        
-        Args:
-            voter_id: Agent casting the vote
-            target_id: Agent being voted for
-            phase: Current workflow phase
-            response_text: The full response text that led to this vote
-            orchestrator: The orchestrator for full context
-        """
-        # First log the standard voting event
-        self.log_voting_event(voter_id, target_id, phase, response_text)
-        
-        # Then log enhanced context if orchestrator is provided
-        if orchestrator:
-            # Get complete voting picture after this vote
-            vote_counts = Counter(vote.target_id for vote in orchestrator.votes)
-            
-            # Get all agent summaries that are being voted on
-            candidate_summaries = {}
-            for candidate_id, votes in vote_counts.items():
-                candidate_state = orchestrator.agent_states[candidate_id]
-                candidate_summaries[candidate_id] = {
-                    "summary": candidate_state.working_summary,
-                    "final_answer": candidate_state.final_answer,
-                    "vote_count": votes,
-                    "summary_length": len(candidate_state.working_summary)
-                }
-            
-            # Enhanced voting context
-            enhanced_voting_entry = {
-                "timestamp": time.time(),
-                "event": "voting_with_full_context",
-                "phase": phase,
-                "vote_details": {
-                    "voter_id": voter_id,
-                    "target_id": target_id,
-                    "response_text": response_text,
-                    "response_length": len(response_text)
-                },
-                "complete_voting_state": {
-                    "vote_distribution": dict(vote_counts),
-                    "total_votes_cast": len(orchestrator.votes),
-                    "consensus_reached": orchestrator.system_state.consensus_reached,
-                    "votes_needed": max(1, int(len(orchestrator.agents) * orchestrator.consensus_threshold))
-                },
-                "candidate_summaries": candidate_summaries,
-                "remaining_working_agents": [
-                    aid for aid, state in orchestrator.agent_states.items()
-                    if state.status == "working"
-                ]
-            }
-            
-            # Write to all agent logs for complete transparency
-            for agent_id in orchestrator.agents.keys():
-                self._write_agent_log(agent_id, enhanced_voting_entry)
-    
-    def log_voting_event(self, voter_id: int, target_id: int, phase: str = "unknown", response_text: str = ""):
-        """
-        Log voting event.
-        
-        Args:
-            voter_id: Agent casting the vote
-            target_id: Agent being voted for
-            phase: Current workflow phase
-            response_text: The full response text that led to this vote (optional)
-        """
-        print(f"        🗳️  LOG_VOTING_EVENT: {voter_id} → {target_id} (phase: {phase})")
-        if response_text:
-            print(f"        📝 Including response text ({len(response_text)} chars)")
-        
         data = {
             "voter_id": voter_id,
             "target_id": target_id,
-            "vote_action": f"Agent {voter_id} -> Agent {target_id}"
+            "reason": reason,
+            "total_votes_cast": self.event_counters["votes_cast"]
         }
         
-        self.log_event("voting", voter_id, phase, data)
-        print(f"        📝 General voting event logged")
+        self.log_event("voting_event", voter_id, phase, data)
         
-        # Log to both voter and target agent files
-        vote_data = {
-            "timestamp": time.time(),
-            "event": "vote_cast",
-            "phase": phase,
-            "voter_id": voter_id,
-            "target_id": target_id
-        }
-        
-        # Add response text if provided
-        if response_text:
-            vote_data["response_text"] = response_text
-            vote_data["response_length"] = len(response_text)
-        
-        print(f"        📁 Writing to voter agent log: agent_{voter_id}.jsonl")
-        self._write_agent_log(voter_id, vote_data)
-        
-        vote_received_data = {
-            **vote_data,
-            "event": "vote_received"
-        }
-        print(f"        📁 Writing to target agent log: agent_{target_id}.jsonl")
-        self._write_agent_log(target_id, vote_received_data)
-        
-        print(f"        ✅ All voting logs written successfully")
+        # Vote events are captured in system state snapshots
+        # Individual votes will be saved when agent states are saved
     
-    def log_phase_transition(self, old_phase: str, new_phase: str, 
-                            additional_data: Optional[Dict[str, Any]] = None):
+    def log_consensus_reached(self, winning_agent_id: int, vote_distribution: Dict[int, int], 
+                             is_fallback: bool = False, phase: str = "unknown"):
         """
-        Log workflow phase transition.
+        Log when consensus is reached.
+        
+        Args:
+            winning_agent_id: ID of the winning agent
+            vote_distribution: Dictionary of agent_id -> vote_count
+            is_fallback: Whether this was a fallback consensus (timeout)
+            phase: Current workflow phase
+        """
+        with self._lock:
+            self.event_counters["consensus_reached"] += 1
+            
+        data = {
+            "winning_agent_id": winning_agent_id,
+            "vote_distribution": vote_distribution,
+            "is_fallback": is_fallback,
+            "total_consensus_events": self.event_counters["consensus_reached"]
+        }
+        
+        self.log_event("consensus_reached", winning_agent_id, phase, data)
+        
+        # Log to all agent display files
+        consensus_entry = {
+            "timestamp": time.time(),
+            "event": "consensus_reached",
+            "phase": phase,
+            "winning_agent_id": winning_agent_id,
+            "vote_distribution": vote_distribution,
+            "is_fallback": is_fallback
+        }
+        for agent_id in vote_distribution.keys():
+            self._write_agent_display_log(agent_id, consensus_entry)
+    
+    def log_phase_transition(self, old_phase: str, new_phase: str, additional_data: Dict[str, Any] = None):
+        """
+        Log system phase transitions.
         
         Args:
             old_phase: Previous phase
             new_phase: New phase
-            additional_data: Additional transition data
+            additional_data: Additional context data
         """
         data = {
             "old_phase": old_phase,
@@ -502,27 +543,81 @@ class MassLogManager:
         
         self.log_event("phase_transition", phase=new_phase, data=data)
     
-    def log_consensus_reached(self, winning_agent_id: int, vote_distribution: Dict[int, int],
-                             total_rounds: int, is_fallback: bool = False, phase: str = "unknown"):
+    def log_notification_sent(self, agent_id: int, notification_type: str, content_preview: str, phase: str = "unknown"):
         """
-        Log consensus achievement.
+        Log when a notification is sent to an agent.
         
         Args:
-            winning_agent_id: Agent selected by consensus
-            vote_distribution: Final vote counts
-            total_rounds: Total workflow rounds
-            is_fallback: Whether this was a fallback consensus
-            phase: Current workflow phase when consensus was reached
+            agent_id: Target agent ID
+            notification_type: Type of notification (update, debate, presentation, prompt)
+            content_preview: Preview of notification content
+            phase: Current workflow phase
         """
+        with self._lock:
+            self.event_counters["notifications_sent"] += 1
+            
         data = {
-            "winning_agent_id": winning_agent_id,
-            "vote_distribution": vote_distribution,
-            "total_rounds": total_rounds,
-            "is_fallback": is_fallback,
-            "consensus_type": "fallback" if is_fallback else "majority"
+            "notification_type": notification_type,
+            "content_preview": content_preview[:200] + "..." if len(content_preview) > 200 else content_preview,
+            "content_length": len(content_preview),
+            "total_notifications_sent": self.event_counters["notifications_sent"]
         }
         
-        self.log_event("consensus_reached", phase=phase, data=data)
+        self.log_event("notification_sent", agent_id, phase, data)
+        
+        # Log to agent display file
+        notification_entry = {
+            "timestamp": time.time(),
+            "event": "notification_received",
+            "phase": phase,
+            "notification_type": notification_type,
+            "content": content_preview
+        }
+        self._write_agent_display_log(agent_id, notification_entry)
+    
+    def log_agent_restart(self, agent_id: int, reason: str, phase: str = "unknown"):
+        """
+        Log when an agent is restarted.
+        
+        Args:
+            agent_id: ID of the restarted agent
+            reason: Reason for restart
+            phase: Current workflow phase
+        """
+        with self._lock:
+            self.event_counters["agent_restarts"] += 1
+            
+        data = {
+            "restart_reason": reason,
+            "total_restarts": self.event_counters["agent_restarts"]
+        }
+        
+        self.log_event("agent_restart", agent_id, phase, data)
+        
+        # Log to agent display file
+        restart_entry = {
+            "timestamp": time.time(),
+            "event": "agent_restarted",
+            "phase": phase,
+            "reason": reason
+        }
+        self._write_agent_display_log(agent_id, restart_entry)
+    
+    def log_debate_started(self, phase: str = "unknown"):
+        """
+        Log when a debate phase starts.
+        
+        Args:
+            phase: Current workflow phase
+        """
+        with self._lock:
+            self.event_counters["debates_started"] += 1
+            
+        data = {
+            "total_debates": self.event_counters["debates_started"]
+        }
+        
+        self.log_event("debate_started", phase=phase, data=data)
     
     def log_task_completion(self, final_solution: Dict[str, Any]):
         """
@@ -539,120 +634,69 @@ class MassLogManager:
         self.log_event("task_completed", phase="completed", data=data)
     
     def _write_log_entry(self, entry: LogEntry):
-        """Write a single log entry to the session JSONL file with timeout protection."""
+        """Write a single log entry to the session JSONL file."""
         # Skip file operations in non-blocking mode
         if self.non_blocking:
             return
         
-        def write_with_timeout():
-            try:
-                # Create directory if it doesn't exist
-                self.session_log_file.parent.mkdir(parents=True, exist_ok=True)
-                
-                with open(self.session_log_file, 'a', buffering=1) as f:  # Line buffering
-                    json_line = json.dumps(entry.to_dict(), default=str, ensure_ascii=False)
-                    f.write(json_line + '\n')
-                    f.flush()
-                    os.fsync(f.fileno())
-                return True
-            except Exception as e:
-                print(f"Warning: Failed to write log entry: {e}")
-                return False
-        
-        # Use daemon thread with timeout to prevent hanging
-        result_container = {"completed": False, "success": False}
-        
-        def worker():
-            try:
-                result_container["success"] = write_with_timeout()
-            except Exception as e:
-                print(f"Session log write thread error: {e}")
-                result_container["success"] = False
-            finally:
-                result_container["completed"] = True
-        
-        # Create daemon thread
-        worker_thread = threading.Thread(target=worker, daemon=True)
-        worker_thread.start()
-        
-        # Wait for completion with timeout
-        worker_thread.join(timeout=3.0)
-        
-        if not result_container["completed"]:
-            print(f"Warning: Session log write timed out after 3 seconds")
+        try:
+            # Create directory if it doesn't exist
+            self.events_log_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(self.events_log_file, 'a', buffering=1) as f:  # Line buffering
+                json_line = json.dumps(entry.to_dict(), default=str, ensure_ascii=False)
+                f.write(json_line + '\n')
+                f.flush()
+        except Exception as e:
+            print(f"Warning: Failed to write log entry: {e}")
     
-    def _write_agent_log(self, agent_id: int, data: Dict[str, Any]):
-        """Write agent-specific log entry with timeout protection."""
+    def _write_agent_display_log(self, agent_id: int, data: Dict[str, Any]):
+        """Write agent-specific display log entry."""
         # Skip file operations in non-blocking mode
         if self.non_blocking:
             return
         
-        def write_with_timeout():
-            try:
-                agent_log_file = self.agent_log_dir / f"agent_{agent_id}.jsonl"
-                print(f"          📝 Writing to file: {agent_log_file}")
+        try:
+            agent_log_file = self.display_dir / f"agent_{agent_id}.txt"
+            
+            # Create directory if it doesn't exist
+            agent_log_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Initialize file if it doesn't exist
+            if not agent_log_file.exists():
+                with open(agent_log_file, 'w', encoding='utf-8') as f:
+                    f.write(f"MASS Agent {agent_id} Display Log\n")
+                    f.write(f"Session: {self.session_id}\n")
+                    f.write(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write("=" * 80 + "\n\n")
+            
+            # Write event entry
+            with open(agent_log_file, 'a', encoding='utf-8') as f:
+                timestamp_str = self._format_timestamp(data.get('timestamp', time.time()))
+                f.write(f"[{timestamp_str}] {data.get('event', 'unknown_event')}\n")
                 
-                # Truncate data if it's too large to prevent JSON serialization issues
-                truncated_data = self._truncate_data_if_needed(data)
-                print(f"          📋 Data size: {len(str(data))} chars")
-                
-                # Create directory if it doesn't exist
-                agent_log_file.parent.mkdir(parents=True, exist_ok=True)
-                
-                # Write with explicit timeout and buffering
-                with open(agent_log_file, 'a', buffering=1) as f:  # Line buffering
-                    json_line = json.dumps(truncated_data, default=str, ensure_ascii=False)
-                    f.write(json_line + '\n')
-                    f.flush()  # Force write to disk
-                    os.fsync(f.fileno())  # Ensure data is written to disk
-                
-                print(f"          ✅ Successfully wrote {len(json_line)} characters to {agent_log_file}")
-                return True
-            except Exception as e:
-                print(f"          ❌ Failed to write agent log: {e}")
-                print(f"Warning: Failed to write agent log: {e}")
-                return False
-        
-        # Use daemon thread with timeout to prevent hanging
-        result_container = {"completed": False, "success": False}
-        
-        def worker():
-            try:
-                result_container["success"] = write_with_timeout()
-            except Exception as e:
-                print(f"          ❌ Logging thread error: {e}")
-                result_container["success"] = False
-            finally:
-                result_container["completed"] = True
-        
-        # Create daemon thread that will be killed when main thread exits
-        worker_thread = threading.Thread(target=worker, daemon=True)
-        worker_thread.start()
-        
-        # Wait for completion with timeout (5 seconds should be enough for file I/O)
-        worker_thread.join(timeout=5.0)
-        
-        if not result_container["completed"]:
-            print(f"          ⏰ Logging operation timed out for Agent {agent_id} - continuing without logging")
-            print(f"Warning: Agent {agent_id} log write timed out after 5 seconds")
-        elif not result_container["success"]:
-            print(f"          ⚠️  Logging operation failed for Agent {agent_id} - continuing without logging")
+                # Write event details
+                for key, value in data.items():
+                    if key not in ['timestamp', 'event']:
+                        f.write(f"  {key}: {value}\n")
+                f.write("\n")
+                f.flush()
+        except Exception as e:
+            print(f"Warning: Failed to write agent display log: {e}")
     
-    def _truncate_data_if_needed(self, data: Dict[str, Any], max_size: int = 50000) -> Dict[str, Any]:
-        """Truncate data fields if they're too large to prevent hanging."""
-        truncated_data = data.copy()
-        
-        # Fields that might be very large
-        large_fields = ['summary', 'response_text', 'final_answer']
-        
-        for field in large_fields:
-            if field in truncated_data and isinstance(truncated_data[field], str):
-                if len(truncated_data[field]) > max_size:
-                    print(f"          ✂️  Truncating {field} from {len(truncated_data[field])} to {max_size} chars")
-                    truncated_data[field] = truncated_data[field][:max_size] + "... [TRUNCATED]"
-        
-        return truncated_data
-    
+    def _write_system_log(self, message: str):
+        """Write a system message to the system log file."""
+        if self.non_blocking:
+            return
+            
+        try:
+            with open(self.system_log_file, 'a', encoding='utf-8') as f:
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                f.write(f"[{timestamp}] {message}\n")
+                f.flush()  # Ensure immediate write
+        except Exception as e:
+            print(f"Error writing to system log: {e}")
+      
     def get_agent_history(self, agent_id: int) -> List[LogEntry]:
         """Get complete history for a specific agent."""
         with self._lock:
@@ -688,8 +732,12 @@ class MassLogManager:
                 "agent_activities": agent_activities,
                 "session_duration": self._calculate_session_duration(),
                 "log_files": {
-                    "session_log": str(self.session_log_file),
-                    "agent_logs_dir": str(self.agent_log_dir)
+                    "session_dir": str(self.session_dir),
+                    "events_log": str(self.events_log_file),
+                    "console_log": str(self.console_log_file),
+                    "display_dir": str(self.display_dir),
+                    "answers_dir": str(self.answers_dir),
+                    "votes_dir": str(self.votes_dir)
                 }
             }
     
@@ -701,86 +749,21 @@ class MassLogManager:
         start_time = min(entry.timestamp for entry in self.log_entries)
         end_time = max(entry.timestamp for entry in self.log_entries)
         return end_time - start_time
-    
-    def export_full_session_report(self) -> str:
-        """Export a comprehensive session report to a file with timeout protection."""
-        report_file = self.log_dir / f"session_{self.session_id}_report.json"
-        
-        def export_with_timeout():
-            try:
-                with self._lock:
-                    # Gather all data with size limits to prevent hanging
-                    print(f"📊 Gathering session data for report...")
-                    
-                    # Truncate large datasets to prevent hanging
-                    max_events = 1000  # Limit total events
-                    truncated_events = self.log_entries[-max_events:] if len(self.log_entries) > max_events else self.log_entries
-                    
-                    if len(self.log_entries) > max_events:
-                        print(f"⚠️  Truncating events from {len(self.log_entries)} to {max_events} for report")
-                    
-                    full_report = {
-                        "session_metadata": {
-                            "session_id": self.session_id,
-                            "start_time": min(entry.timestamp for entry in self.log_entries) if self.log_entries else None,
-                            "end_time": max(entry.timestamp for entry in self.log_entries) if self.log_entries else None,
-                            "duration": self._calculate_session_duration(),
-                            "total_events": len(self.log_entries),
-                            "truncated": len(self.log_entries) > max_events
-                        },
-                        "all_events": [entry.to_dict() for entry in truncated_events],
-                        "agent_summaries": {
-                            agent_id: [self._truncate_data_if_needed(entry.to_dict(), max_size=10000) for entry in entries[-50:]]  # Last 50 entries per agent
-                            for agent_id, entries in self.agent_logs.items()
-                        },
-                        "session_summary": self.get_session_summary()
-                    }
+     
+    def save_agent_states(self, orchestrator):
+        """Save current agent states to answers and votes folders."""
+        if self.non_blocking:
+            return
+            
+        try:
+            for agent_id, agent_state in orchestrator.agent_states.items():
+                # Save answer history
+                self._write_agent_answers(agent_id, agent_state.updated_answers)
                 
-                print(f"📝 Writing report to {report_file}...")
-                
-                # Write to file with size check
-                report_str = json.dumps(full_report, indent=2, default=str)
-                if len(report_str) > 50_000_000:  # 50MB limit
-                    print(f"⚠️  Report too large ({len(report_str):,} chars), creating summary only")
-                    # Create minimal report
-                    full_report = {
-                        "session_metadata": full_report["session_metadata"],
-                        "session_summary": full_report["session_summary"],
-                        "note": "Full report was too large, created summary only"
-                    }
-                    report_str = json.dumps(full_report, indent=2, default=str)
-                
-                with open(report_file, 'w') as f:
-                    f.write(report_str)
-                    f.flush()
-                    os.fsync(f.fileno())
-                
-                print(f"✅ Report written successfully ({len(report_str):,} characters)")
-                return str(report_file)
-                
-            except Exception as e:
-                print(f"❌ Error exporting session report: {e}")
-                return ""
-        
-        # Use daemon thread with timeout to prevent hanging
-        result_container = {"completed": False, "result": ""}
-        
-        def worker():
-            try:
-                result_container["result"] = export_with_timeout()
-            except Exception as e:
-                print(f"❌ Report export thread error: {e}")
-                result_container["result"] = ""
-            finally:
-                result_container["completed"] = True
-        
-        # Create daemon thread that will be killed when main thread exits
-        worker_thread = threading.Thread(target=worker, daemon=True)
-        worker_thread.start()
-        
-        # Skip report generation to avoid timeout issues
-        print("📊 Skipping detailed report generation")
-        return ""
+                # Save vote history  
+                self._write_agent_votes(agent_id, agent_state.cast_votes)
+        except Exception as e:
+            print(f"Warning: Failed to save agent states: {e}")
     
     def cleanup(self):
         """Clean up and finalize the logging session."""
@@ -788,11 +771,29 @@ class MassLogManager:
             "end_timestamp": time.time(),
             "total_events_logged": len(self.log_entries)
         })
+
+    def get_session_statistics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive session statistics.
         
-        # Export final report
-        report_file = self.export_full_session_report()
-        if report_file:
-            print(f"📋 Session report exported: {report_file}")
+        Returns:
+            Dictionary containing session metrics and statistics
+        """
+        with self._lock:
+            total_events = len(self.log_entries)
+            agent_event_counts = {}
+            
+            for agent_id, logs in self.agent_logs.items():
+                agent_event_counts[agent_id] = len(logs)
+                
+            return {
+                "session_id": self.session_id,
+                "total_events": total_events,
+                "event_counters": self.event_counters.copy(),
+                "agent_event_counts": agent_event_counts,
+                "total_agents": len(self.agent_logs),
+                "session_duration": time.time() - (self.log_entries[0].timestamp if self.log_entries else time.time())
+            }
 
 
 # Global log manager instance
