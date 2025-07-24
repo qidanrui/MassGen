@@ -267,12 +267,12 @@ python cli.py --config examples/fast_config.yaml "Write a short story about a ro
 
 ## 🗺️ Roadmap
 
-MASS is currently in its foundational stage, with a focus on core multi-agent collaboration and orchestration. Our roadmap is centered on enhancing this framework to build a more robust, intelligent, and user-friendly system.
+MASS is currently in its foundational stage, with a focus on parallel multi-agent collaboration and orchestration. Our roadmap is centered on transforming this foundation into a highly robust, intelligent, and user-friendly system, while enabling frontier research and exploration.
 
 ### Key Future Enhancements:
 
 -   **Advanced Agent Collaboration:** Exploring more communication and consensus-building protocols to improve agent synergy.
--   **Expanded Model & Tool Integration:** Adding support for more models, including Claude, and integrating a wider range of tools like MCP Servers.
+-   **Expanded Model, Tool & Agent Integration:** Adding support for more models/tools/agents, including Claude, a wider range of tools like MCP Servers, and coding agents.
 -   **Improved Performance & Scalability:** Optimizing the streaming and logging mechanisms for better performance and resource management.
 -   **Enhanced Developer Experience:** Introducing a more modular agent design and a comprehensive benchmarking framework for easier extension and evaluation.
 -   **Web Interface:** Developing a web-based UI for better visualization and interaction with the agent ecosystem.
