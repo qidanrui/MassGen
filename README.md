@@ -267,7 +267,7 @@ python cli.py --config examples/fast_config.yaml "Write a short story about a ro
 
 ## 🗺️ Roadmap
 
-MASS is currently in its foundational stage, with a focus on parallel multi-agent collaboration and orchestration. Our roadmap is centered on transforming this foundation into a highly robust, intelligent, and user-friendly system, while enabling frontier research and exploration.
+MASS is currently in its foundational stage, with a focus on parallel, async multi-agent collaboration and orchestration. Our roadmap is centered on transforming this foundation into a highly robust, intelligent, and user-friendly system, while enabling frontier research and exploration.
 
 ### Key Future Enhancements:
 
