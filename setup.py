@@ -17,7 +17,7 @@ with open(os.path.join(here, "requirements.txt"), encoding="utf-8") as f:
 
 setup(
     name="mass-agent",
-    version="1.0.0",
+    version="0.0.1",
     description="Multi-Agent Scaling System - A powerful framework for collaborative AI",
     long_description=long_description,
     long_description_content_type="text/markdown",

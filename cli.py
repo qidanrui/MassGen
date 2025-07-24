@@ -22,10 +22,10 @@ import sys
 import os
 from pathlib import Path
 
-# Add mass package to path
+# Add massgen package to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from mass import (
+from massgen import (
     run_mass_with_config, load_config_from_yaml, create_config_from_models, 
     ConfigurationError
 )

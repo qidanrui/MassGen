@@ -199,3 +199,4 @@ models/
 *.db
 *.sqlite
 *.sqlite3
+gemini_streaming.txt

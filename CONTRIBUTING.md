@@ -31,7 +31,7 @@ Thank you for your interest in contributing to MASS (Multi-Agent Scaling System)
 
 4. **Configure API Keys**
    ```bash
-   cp mass/backends/.env.example mass/backends/.env
+   cp massgen/backends/.env.example massgen/backends/.env
    # Edit .env with your API keys
    ```
 
@@ -75,10 +75,10 @@ mass/
 
 To add support for a new model provider:
 
-1. Create a new file in `mass/backends/` (e.g., `claude.py`)
+1. Create a new file in `massgen/backends/` (e.g., `claude.py`)
 2. Implement the `process_message` function with the required signature
-3. Add the model mapping in `mass/utils.py` in `get_agent_type_from_model`
-4. Update the agent creation logic in `mass/agents.py`
+3. Add the model mapping in `massgen/utils.py` in `get_agent_type_from_model`
+4. Update the agent creation logic in `massgen/agents.py`
 5. Add tests and documentation
 
 ### Contributing Areas
