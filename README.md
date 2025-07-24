@@ -48,10 +48,10 @@ graph TB
     O[🚀 MassGen Orchestrator<br/>📋 Task Distribution & Coordination]
 
     subgraph Collaborative Agents
-        A1[Agent 1<br/>🏗️ Anthropic/Claude]
-        A2[Agent 2<br/>🌟 Google/Gemini]
-        A3[Agent 3<br/>🤖 OpenAI/GPT + Tools]
-        A4[Agent 4<br/>⚡ xAI/Grok + Search]
+        A1[Agent 1<br/>🏗️ Anthropic/Claude + Tools]
+        A2[Agent 2<br/>🌟 Google/Gemini + Tools]
+        A3[Agent 3<br/>🤖 OpenAI/GPT/O + Tools]
+        A4[Agent 4<br/>⚡ xAI/Grok + Tools]
     end
 
     H[🔄 Shared Collaboration Hub<br/>📡 Real-time Notification & Consensus]
