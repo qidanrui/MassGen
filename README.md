@@ -1,4 +1,4 @@
-# 🚀 MASS: Multi-Agent Scaling System
+# 🚀 MassGen: Multi-Agent Scaling System for GenAI
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -51,7 +51,7 @@
 
 > 🧠 **Next-gen multi-agent scaling through intelligent collaboration in Grok Heavy style**
 
-MASS is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result. This project is inspired by the "threads of thoughts" and "iterative refinement" ideas presented in [The Myth of Reasoning](https://docs.ag2.ai/latest/docs/blog/#the-myth-of-reasoning), the power of "parallel study group" demonstrated in premium commercial prodcuts like [Grok Heavy](https://x.ai/news/grok-4#grok-4-heavy), and extends the classic "multi-agent conversation" idea in [AG2](https://github.com/ag2ai/ag2).
+MassGen is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result. This project is inspired by the "threads of thoughts" and "iterative refinement" ideas presented in [The Myth of Reasoning](https://docs.ag2.ai/latest/docs/blog/#the-myth-of-reasoning), the power of "parallel study group" demonstrated in premium commercial prodcuts like [Grok Heavy](https://x.ai/news/grok-4#grok-4-heavy), and extends the classic "multi-agent conversation" idea in [AG2](https://github.com/ag2ai/ag2).
 
 ---
 
@@ -79,11 +79,11 @@ MASS is a cutting-edge multi-agent system that leverages the power of collaborat
 
 ## 🏗️ System Design
 
-MASS operates through a sophisticated architecture designed for **seamless multi-agent collaboration**:
+MassGen operates through a sophisticated architecture designed for **seamless multi-agent collaboration**:
 
 ```mermaid
 graph TB
-    O[🚀 MASS Orchestrator<br/>📋 Task Distribution & Coordination]
+    O[🚀 MassGen Orchestrator<br/>📋 Task Distribution & Coordination]
 
     subgraph Collaborative Agents
         A1[Agent 1<br/>🏗️ Anthropic/Claude]
@@ -125,8 +125,8 @@ This collaborative approach ensures that the final output leverages collective i
 ### 1. 📥 Installation
 
 ```bash
-git clone https://github.com/Leezekun/MassAgent.git
-cd MassAgent
+git clone https://github.com/Leezekun/MassGen.git
+cd MassGen
 pip install uv
 uv venv
 source .venv/bin/activate  # On macOS/Linux
@@ -155,7 +155,7 @@ The system currently supports three model providers with advanced reasoning capa
 More providers will be added soon.
 
 
-### 4. 🏃 Run MASS
+### 4. 🏃 Run MassGen
 
 #### Simple Usage
 ```bash
@@ -177,7 +177,7 @@ python cli.py --config examples/fast_config.yaml "Question" --max-duration 120 -
 
 #### Interactive Multi-turn Mode
 
-MASS supports an interactive mode where you can have ongoing conversations with the system:
+MassGen supports an interactive mode where you can have ongoing conversations with the system:
 
 ```bash
 # Start interactive mode with multiple agents
@@ -240,7 +240,7 @@ logs/
 
 ## 💡 Examples
 
-Here are a few examples of how you can use MASS for different tasks:
+Here are a few examples of how you can use MassGen for different tasks:
 
 ### 1. 📝 Code Generation
 
@@ -267,7 +267,7 @@ python cli.py --config examples/fast_config.yaml "Write a short story about a ro
 
 ## 🗺️ Roadmap
 
-MASS is currently in its foundational stage, with a focus on parallel, async multi-agent collaboration and orchestration. Our roadmap is centered on transforming this foundation into a highly robust, intelligent, and user-friendly system, while enabling frontier research and exploration.
+MassGen is currently in its foundational stage, with a focus on parallel, async multi-agent collaboration and orchestration. Our roadmap is centered on transforming this foundation into a highly robust, intelligent, and user-friendly system, while enabling frontier research and exploration.
 
 ### Key Future Enhancements:
 
@@ -297,6 +297,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 **⭐ Star this repo if you find it useful! ⭐**
 
-Made with ❤️ by the MASS team
+Made with ❤️ by the MassGen team
 
 </div>
