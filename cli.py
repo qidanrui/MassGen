@@ -84,10 +84,12 @@ def run_interactive_mode(config):
     print("💬 Type your questions below. Type 'quit', 'exit', or press Ctrl+C to stop.")
     print("="*60)
     
+    chat_history = ""
     try:
         while True:
             try:
                 question = input("\nUser: ").strip()
+                chat_history += f"User: {question}\n"
                 
                 if question.lower() in ['quit', 'exit', 'q']:
                     print("👋 Goodbye!")
@@ -100,13 +102,16 @@ def run_interactive_mode(config):
                 print("\n🔄 Processing your question...")
                 
                 # Run MASS
-                result = run_mass_with_config(question, config)
+                result = run_mass_with_config(chat_history, config)
+                
+                response = result["answer"]
+                chat_history += f"Assistant: {response}\n"
                 
                 # Display results
                 print("\n" + "="*60)
                 print("🎯 FINAL ANSWER:")
                 print("="*60)
-                print(result["answer"])
+                print(response)
                 print("\n" + "="*60)
                 
                 # Show different metadata based on single vs multi-agent mode
