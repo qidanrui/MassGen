@@ -47,6 +47,11 @@ This case study demonstrates the power of MassGen's collaborative approach. By e
 
 This case study demonstrates how MassGen handles subjective prompts by tasking a representative agent to synthesize a final, comprehensive answer from multiple, diverse viewpoints.
 
+**Command:**
+```bash
+python cli.py --config examples/fast_config.yaml "find big AI news this week"
+```
+
 **Prompt:** `find big AI news this week`
 
 **Agents:**
