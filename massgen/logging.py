@@ -163,7 +163,7 @@ class MassLogManager:
         console_log_handler.setLevel(logging.DEBUG)
         
         # Add handler to the mass logger
-        mass_logger = logging.getLogger('mass')
+        mass_logger = logging.getLogger('massgen')
         mass_logger.addHandler(console_log_handler)
         mass_logger.setLevel(logging.DEBUG)
         

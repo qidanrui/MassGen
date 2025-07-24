@@ -95,11 +95,11 @@ uv pip install -e .
 
 ### 2. 🔐 API Configuration
 
-Create a `.env` file in the `mass/backends/` directory with your API keys:
+Create a `.env` file in the `massgen/backends/` directory with your API keys:
 
 ```bash
 # Copy example configuration
-cp mass/backends/.env.example mass/backends/.env
+cp massgen/backends/.env.example massgen/backends/.env
 
 # Edit with your API keys
 OPENAI_API_KEY=sk-your-openai-key-here
@@ -109,7 +109,7 @@ GEMINI_API_KEY=your-gemini-key-here
 
 ### 3. 🧩 Register Models
 
-Configure the models you wish to use by updating the model registry in `mass/utils.py`. 
+Configure the models you wish to use by updating the model registry in `massgen/utils.py`. 
 
 The system currently supports three model providers with advanced reasoning capabilities: **Google Gemini**, **OpenAI**, and **xAI Grok**.
 More providers will be added soon.
