@@ -19,7 +19,7 @@ class GrokBackend(ChatCompletionsBackend):
         self.api_key = api_key or os.getenv("XAI_API_KEY")
         self.base_url = "https://api.x.ai/v1"
     
-    async def stream_with_tools(self, model: str, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], 
+    async def stream_with_tools(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], 
                               **kwargs) -> AsyncGenerator[StreamChunk, None]:
         """Stream response using xAI's OpenAI-compatible API."""
         try:
@@ -32,8 +32,9 @@ class GrokBackend(ChatCompletionsBackend):
             )
             
             # Extract parameters
-            max_tokens = kwargs.get("max_tokens", 1000)
-            temperature = kwargs.get("temperature", 0.7)
+            model = kwargs.get("model", "grok-3-mini")
+            max_tokens = kwargs.get("max_tokens", None)
+            temperature = kwargs.get("temperature", None)
             enable_web_search = kwargs.get("enable_web_search", False)
             
             # Convert tools to Chat Completions format
@@ -87,16 +88,30 @@ class GrokBackend(ChatCompletionsBackend):
         """Calculate cost for token usage."""
         model_lower = model.lower()
         
+        # Handle -mini models with lower costs
         if "grok-2" in model_lower:
-            input_cost = (input_tokens / 1_000_000) * 2.0
-            output_cost = (output_tokens / 1_000_000) * 10.0
+            if "mini" in model_lower:
+                input_cost = (input_tokens / 1_000_000) * 1.0   # Lower cost for mini
+                output_cost = (output_tokens / 1_000_000) * 5.0
+            else:
+                input_cost = (input_tokens / 1_000_000) * 2.0
+                output_cost = (output_tokens / 1_000_000) * 10.0
         elif "grok-3" in model_lower:
-            input_cost = (input_tokens / 1_000_000) * 5.0
-            output_cost = (output_tokens / 1_000_000) * 15.0
+            if "mini" in model_lower:
+                input_cost = (input_tokens / 1_000_000) * 2.5   # Lower cost for mini
+                output_cost = (output_tokens / 1_000_000) * 7.5
+            else:
+                input_cost = (input_tokens / 1_000_000) * 5.0
+                output_cost = (output_tokens / 1_000_000) * 15.0
         elif "grok-4" in model_lower:
-            input_cost = (input_tokens / 1_000_000) * 8.0
-            output_cost = (output_tokens / 1_000_000) * 20.0
+            if "mini" in model_lower:
+                input_cost = (input_tokens / 1_000_000) * 4.0   # Lower cost for mini
+                output_cost = (output_tokens / 1_000_000) * 10.0
+            else:
+                input_cost = (input_tokens / 1_000_000) * 8.0
+                output_cost = (output_tokens / 1_000_000) * 20.0
         else:
+            # Default fallback (assume grok-3 pricing)
             input_cost = (input_tokens / 1_000_000) * 5.0
             output_cost = (output_tokens / 1_000_000) * 15.0
         
