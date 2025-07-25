@@ -182,27 +182,46 @@ class MassLogManager:
         return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
     
     def _format_answer_record(self, record: AnswerRecord, agent_id: int) -> str:
-        """Format an AnswerRecord into simple readable text."""
+        """Format an AnswerRecord into human-readable text."""
         timestamp_str = self._format_timestamp(record.timestamp)
         
-        return f"""Timestamp: {timestamp_str}
-Status: {record.status}
-Answer:
+        # Status emoji mapping
+        status_emoji = {
+            "working": "🔄",
+            "voted": "✅", 
+            "failed": "❌",
+            "unknown": "❓"
+        }
+        emoji = status_emoji.get(record.status, "��")
+        
+        return f"""
+{emoji} UPDATE DETAILS
+🕒 Time: {timestamp_str}
+📊 Status: {record.status.upper()}
+📏 Length: {len(record.answer)} characters
+
+📄 Content:
 {record.answer}
 
-{'-' * 40}
+{'=' * 80}
 """
     
     def _format_vote_record(self, record: VoteRecord, agent_id: int) -> str:
-        """Format a VoteRecord into simple readable text."""
+        """Format a VoteRecord into human-readable text."""
         timestamp_str = self._format_timestamp(record.timestamp)
         
-        return f"""Timestamp: {timestamp_str}
-Voter: Agent {record.voter_id}
-Target: Agent {record.target_id}
-Reason: {record.reason}
+        reason_text = record.reason if record.reason else "No reason provided"
+        
+        return f"""
+🗳️ VOTE CAST
+🕒 Time: {timestamp_str}
+👤 Voter: Agent {record.voter_id}
+🎯 Target: Agent {record.target_id}
 
-{'-' * 40}
+📝 Reasoning:
+{reason_text}
+
+{'=' * 80}
 """
     
     def _write_agent_answers(self, agent_id: int, answer_records: List[AnswerRecord]):
@@ -214,18 +233,39 @@ Reason: {record.reason}
             answers_file = self.answers_dir / f"agent_{agent_id}.txt"
             
             with open(answers_file, 'w', encoding='utf-8') as f:
-                f.write(f"MassGen Agent {agent_id} Answer History\n")
-                f.write(f"Session: {self.session_id}\n")
-                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                # Clean header with useful information
+                f.write("=" * 80 + "\n")
+                f.write(f"📝 MASSGEN AGENT {agent_id} - ANSWER HISTORY\n")
+                f.write("=" * 80 + "\n")
+                f.write(f"🆔 Session: {self.session_id}\n")
+                f.write(f"📅 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                
+                if answer_records:
+                    # Calculate some summary statistics
+                    total_chars = sum(len(record.answer) for record in answer_records)
+                    avg_chars = total_chars / len(answer_records) if answer_records else 0
+                    first_update = answer_records[0].timestamp if answer_records else 0
+                    last_update = answer_records[-1].timestamp if answer_records else 0
+                    duration = last_update - first_update if len(answer_records) > 1 else 0
+                    
+                    f.write(f"📊 Total Updates: {len(answer_records)}\n")
+                    f.write(f"📏 Total Characters: {total_chars:,}\n")
+                    f.write(f"📈 Average Length: {avg_chars:.0f} chars\n")
+                    if duration > 0:
+                        duration_str = f"{duration/60:.1f} minutes" if duration > 60 else f"{duration:.1f} seconds"
+                        f.write(f"⏱️ Time Span: {duration_str}\n")
+                else:
+                    f.write("❌ No answer records found for this agent.\n")
+                
                 f.write("=" * 80 + "\n\n")
                 
-                if not answer_records:
-                    f.write("No answer records found for this agent.\n")
-                else:
-                    f.write(f"Total Answer Updates: {len(answer_records)}\n\n")
-                    
+                if answer_records:
                     for i, record in enumerate(answer_records, 1):
-                        f.write(f"[Update #{i}]\n")
+                        # Calculate time elapsed since session start
+                        elapsed = record.timestamp - (answer_records[0].timestamp if answer_records else record.timestamp)
+                        elapsed_str = f"[+{elapsed/60:.1f}m]" if elapsed > 60 else f"[+{elapsed:.1f}s]"
+                        
+                        f.write(f"🔢 UPDATE #{i} {elapsed_str}\n")
                         f.write(self._format_answer_record(record, agent_id))
                         f.write("\n")
                         
@@ -241,18 +281,48 @@ Reason: {record.reason}
             votes_file = self.votes_dir / f"agent_{agent_id}.txt"
             
             with open(votes_file, 'w', encoding='utf-8') as f:
-                f.write(f"MassGen Agent {agent_id} Vote History\n")
-                f.write(f"Session: {self.session_id}\n")
-                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                # Clean header with useful information
+                f.write("=" * 80 + "\n")
+                f.write(f"🗳️ MASSGEN AGENT {agent_id} - VOTE HISTORY\n")
+                f.write("=" * 80 + "\n")
+                f.write(f"🆔 Session: {self.session_id}\n")
+                f.write(f"📅 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                
+                if vote_records:
+                    # Calculate voting statistics
+                    vote_targets = {}
+                    total_reason_chars = 0
+                    for vote in vote_records:
+                        vote_targets[vote.target_id] = vote_targets.get(vote.target_id, 0) + 1
+                        total_reason_chars += len(vote.reason) if vote.reason else 0
+                    
+                    most_voted_target = max(vote_targets.items(), key=lambda x: x[1]) if vote_targets else None
+                    avg_reason_length = total_reason_chars / len(vote_records) if vote_records else 0
+                    
+                    first_vote = vote_records[0].timestamp if vote_records else 0
+                    last_vote = vote_records[-1].timestamp if vote_records else 0
+                    voting_duration = last_vote - first_vote if len(vote_records) > 1 else 0
+                    
+                    f.write(f"📊 Total Votes Cast: {len(vote_records)}\n")
+                    f.write(f"🎯 Unique Targets: {len(vote_targets)}\n")
+                    if most_voted_target:
+                        f.write(f"👑 Most Voted For: Agent {most_voted_target[0]} ({most_voted_target[1]} votes)\n")
+                    f.write(f"📝 Avg Reason Length: {avg_reason_length:.0f} chars\n")
+                    if voting_duration > 0:
+                        duration_str = f"{voting_duration/60:.1f} minutes" if voting_duration > 60 else f"{voting_duration:.1f} seconds"
+                        f.write(f"⏱️ Voting Duration: {duration_str}\n")
+                else:
+                    f.write("❌ No vote records found for this agent.\n")
+                
                 f.write("=" * 80 + "\n\n")
                 
-                if not vote_records:
-                    f.write("No vote records found for this agent.\n")
-                else:
-                    f.write(f"Total Votes Cast: {len(vote_records)}\n\n")
-                    
+                if vote_records:
                     for i, record in enumerate(vote_records, 1):
-                        f.write(f"[Vote #{i}]\n")
+                        # Calculate time elapsed since first vote
+                        elapsed = record.timestamp - (vote_records[0].timestamp if vote_records else record.timestamp)
+                        elapsed_str = f"[+{elapsed/60:.1f}m]" if elapsed > 60 else f"[+{elapsed:.1f}s]"
+                        
+                        f.write(f"🗳️ VOTE #{i} {elapsed_str}\n")
                         f.write(self._format_vote_record(record, agent_id))
                         f.write("\n")
                         

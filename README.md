@@ -3,13 +3,17 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-![logo](logo.svg)
+![logo](assets/logo.svg)
 
 <div align="center">
   <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
     <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg" alt="MassGen Demo Video">
   </a>
 </div>
+
+<!-- <div align="center">
+  <img src="assets/MassGen-v1.gif" alt="MassGen Demo" width="800">
+</div> -->
 
 > 🧠 **Next-gen multi-agent scaling through intelligent collaboration in Grok Heavy style**
 

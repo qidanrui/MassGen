@@ -57,7 +57,7 @@ agents:
 
 streaming_display:
   display_enabled: true
-  max_lines: 20               # More lines for detailed output
+  max_lines: 10               # More lines for detailed output
   save_logs: true
 
 logging:

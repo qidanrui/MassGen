@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Callable, Union
 from datetime import datetime
 
 class MultiRegionDisplay:
-    def __init__(self, display_enabled: bool = True, max_lines: int = 20, save_logs: bool = True, answers_dir: Optional[str] = None):
+    def __init__(self, display_enabled: bool = True, max_lines: int = 10, save_logs: bool = True, answers_dir: Optional[str] = None):
         self.display_enabled = display_enabled
         self.max_lines = max_lines
         self.save_logs = save_logs
@@ -969,7 +969,7 @@ class MultiRegionDisplay:
         self._execute_display_update()
 
 class StreamingOrchestrator:
-    def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 20, save_logs: bool = True, answers_dir: Optional[str] = None):
+    def __init__(self, display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 10, save_logs: bool = True, answers_dir: Optional[str] = None):
         self.display = MultiRegionDisplay(display_enabled, max_lines, save_logs, answers_dir)
         self.stream_callback = stream_callback
     
@@ -1063,6 +1063,6 @@ class StreamingOrchestrator:
         """Clean up resources when orchestrator is no longer needed."""
         self.display.cleanup()
 
-def create_streaming_display(display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 20, save_logs: bool = True, answers_dir: Optional[str] = None) -> StreamingOrchestrator:
+def create_streaming_display(display_enabled: bool = True, stream_callback: Optional[Callable] = None, max_lines: int = 10, save_logs: bool = True, answers_dir: Optional[str] = None) -> StreamingOrchestrator:
     """Create a streaming orchestrator with display capabilities."""
     return StreamingOrchestrator(display_enabled, stream_callback, max_lines, save_logs, answers_dir)

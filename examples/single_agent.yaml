@@ -30,7 +30,7 @@ agents:
 
 streaming_display:
   display_enabled: true         # Still show progress
-  max_lines: 20                 # Smaller display for single agent
+  max_lines: 10                 # Smaller display for single agent
   save_logs: true
 
 logging:
