@@ -224,6 +224,7 @@ python cli.py --config examples/fast_config.yaml "Design a logo for MassGen (mul
 ```bash
 # Ask a question about a complex topic
 python cli.py --config examples/fast_config.yaml "Explain the theory of relativity in simple terms."
+python cli.py "what's best to do in Stockholm in October 2025" --models gemini-2.5-flash gpt-4o
 ```
 
 ### 2. 🧠 Creative Writing

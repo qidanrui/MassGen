@@ -8,3 +8,4 @@ This directory contains detailed case studies demonstrating MassGen's capabiliti
 *   [Synthesis from Diverse Perspectives (AI News)](diverse_ai_news.md)
 *   [Collaborative Creative Writing](collaborative_creative_writing.md)
 *   [Estimating Grok-4 HLE Benchmark Costs](grok_hle_cost.md)
+*   [Stockholm Travel Guide - Convergence on Detail](stockholm_travel_guide.md)
