@@ -14,6 +14,8 @@ python cli.py --config examples/fast_config.yaml "How much does it cost to run H
 *   Agent 2: `gemini-2.5-flash`
 *   Agent 3: `grok-3-mini` (Designated Representative Agent)
 
+**Watch the recorded demo:**
+
 [![MassGen Case Study](https://img.youtube.com/vi/lKeDHgcitRQ/0.jpg)](https://www.youtube.com/watch?v=lKeDHgcitRQ)
 
 ## The Collaborative Process
