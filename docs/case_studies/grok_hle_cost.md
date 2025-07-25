@@ -4,7 +4,7 @@ This case study demonstrates MassGen's ability to converge on a detailed and wel
 
 **Command:**
 ```bash
-python cli.py "How much does it cost to run HLE benchmark with Grok-4"
+python cli.py --config examples/fast_config.yaml "How much does it cost to run HLE benchmark with Grok-4"
 ```
 
 **Prompt:** `How much does it cost to run HLE benchmark with Grok-4`
@@ -13,6 +13,8 @@ python cli.py "How much does it cost to run HLE benchmark with Grok-4"
 *   Agent 1: `gpt-4o`
 *   Agent 2: `gemini-2.5-flash`
 *   Agent 3: `grok-3-mini` (Designated Representative Agent)
+
+[![MassGen Case Study](https://img.youtube.com/vi/lKeDHgcitRQ/0.jpg)](https://www.youtube.com/watch?v=lKeDHgcitRQ)
 
 ## The Collaborative Process
 

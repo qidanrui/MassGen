@@ -14,6 +14,8 @@ python cli.py --config examples/fast_config.yaml "Write a short story about a ro
 *   Agent 2: `gemini-2.5-flash`
 *   Agent 3: `grok-3-mini`
 
+[![MassGen Case Study](https://img.youtube.com/vi/vixSMvJ9UoU/0.jpg)](https://www.youtube.com/watch?v=vixSMvJ9UoU)
+
 ## The Collaborative Process
 
 ### Initial Creative Outputs
