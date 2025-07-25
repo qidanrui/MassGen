@@ -14,6 +14,8 @@ python cli.py --config examples/fast_config.yaml "find big AI news this week"
 *   Agent 2: `gemini-2.5-flash`
 *   Agent 3: `grok-3-mini`
 
+**Watch the recorded demo:**
+
 [![MassGen Case Study](https://img.youtube.com/vi/SMmgCG7MZ2M/0.jpg)](https://www.youtube.com/watch?v=SMmgCG7MZ2M)
 
 ## The Collaborative Process
