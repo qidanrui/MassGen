@@ -78,7 +78,7 @@ def run_interactive_mode(config):
         print(f"⚙️  Orchestrator:")
         print(f"   • Duration: {getattr(orch, 'max_duration', 'Default')}s")
         print(f"   • Consensus: {getattr(orch, 'consensus_threshold', 'Default')}")
-        print(f"   • Max Rounds: {getattr(orch, 'max_debate_rounds', 'Default')}")
+        print(f"   • Max Debate Rounds: {getattr(orch, 'max_debate_rounds', 'Default')}")
     
     # Show model parameters (from first agent as representative)
     if hasattr(config, 'agents') and config.agents and hasattr(config.agents[0], 'model_config'):
@@ -89,7 +89,7 @@ def run_interactive_mode(config):
         max_rounds = getattr(model_config, 'max_rounds', 'Default')
         print(f"   • Temperature: {temp}")
         print(f"   • Timeout: {timeout}s")
-        print(f"   • Max Rounds: {max_rounds}")
+        print(f"   • Max Debate Rounds: {max_rounds}")
     
     # Show display settings
     if hasattr(config, 'streaming_display'):
