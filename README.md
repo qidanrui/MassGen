@@ -6,7 +6,7 @@
 ![logo](assets/logo.svg)
 
 <div align="center">
-  <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+  <a href="https://youtu.be/eMBdoAYeujw">
     <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg" alt="MassGen Demo Video">
   </a>
 </div>
@@ -163,8 +163,8 @@ python cli.py --config examples/fast_config.yaml "who will win World Cup 2026" -
 | Parameter | Description |
 |-----------|-------------|
 | `--config` | Path to YAML configuration file with agent setup, model parameters, and orchestrator settings |
-| `--models` | Space-separated model names (e.g., `gpt-4o gemini-2.5-flash`). Single model enables single-agent mode; multiple models enable collaborative multi-agent mode |
-| `--consensus` | Consensus threshold (0.0-1.0) for multi-agent agreement. Higher values require stronger consensus before concluding; unmet thresholds trigger continued debate and refinement |
+| `--models` | Space-separated model names. Single model enables single-agent mode; multiple models enable collaborative multi-agent mode |
+| `--consensus` | Consensus threshold (0.0-1.0) for multi-agent agreement. Unmet thresholds trigger continued debate and refinement |
 | `--max-duration` | Maximum session execution time in seconds before automatic termination |
 | `--max-debates` | Maximum number of debate rounds allowed when agents fail to reach consensus |
 | `--no-display` | Disable real-time streaming display of agent progress |
