@@ -15,7 +15,7 @@
   <img src="assets/MassGen-v1.gif" alt="MassGen Demo" width="800">
 </div> -->
 
-> 🧠 **Next-gen multi-agent scaling through intelligent collaboration in Grok Heavy style**
+> 🧠 **Multi-agent scaling through intelligent collaboration in Grok Heavy style**
 
 MassGen is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result. The power of this "parallel study group" approach is exemplified by advanced systems like xAI's Grok Heavy and Google DeepMind's Gemini DeepThink.
 This project started with the "threads of thoughts" and "iterative refinement" ideas presented in [The Myth of Reasoning](https://docs.ag2.ai/latest/docs/blog/#the-myth-of-reasoning), and extends the classic "multi-agent conversation" idea in [AG2](https://github.com/ag2ai/ag2).
