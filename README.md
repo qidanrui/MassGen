@@ -114,21 +114,36 @@ XAI_API_KEY=xai-your-xai-key-here
 GEMINI_API_KEY=your-gemini-key-here
 ```
 
-### 3. 🧩 Register Models
+### 3. 🧩 Supported Models and Tools
 
 <!-- What does the following mean? If it can be clarified, then we can uncomment -->
 <!-- Configure the models you wish to use by updating the model registry in `massgen/utils.py`.  -->
 
+#### Models
+
 The system currently supports three model providers with advanced reasoning capabilities: **Google Gemini**, **OpenAI**, and **xAI Grok**. The specific models tested can be found in `massgen/utils.py`. You can add a model in that file.
 More providers will be added (help wanted!) and the extension will be made easier.
 
+#### Tools
+
+MassGen agents can leverage various tools to enhance their problem-solving capabilities. The Gemini, OpenAI, and Grok models can  use their own built-in search and code execution. You can easily extend functionality by registering custom tools in `massgen/tools.py`.
+
+**Supported Built-in Tools by Models:**
+
+| Backend | Live Search | Code Execution |
+|---------|:-----------:|:--------------:|
+| **Gemini** | ✅ | ✅ |
+| **OpenAI** | ✅ | ✅ |
+| **Grok** | ✅ | ❌ |
+
+> 🔧 **Custom Tools**: More tools are coming soon! Check `massgen/tools.py` to add your own custom tools and expand agent capabilities.
 
 ### 4. 🏃 Run MassGen
 
 #### Simple Usage
 ```bash
 # Multi-agent mode with specific models
-python cli.py "Which AI won IMO 2025?" --models gemini-2.5-flash gpt-4o
+python cli.py "Which AI won IMO in 2025?" --models gemini-2.5-flash gpt-4o
 
 # Single agent mode
 python cli.py "What is greatest common divisor of 238, 756, and 1512" --models gemini-2.5-flash
@@ -142,6 +157,20 @@ python cli.py --config examples/fast_config.yaml "find big AI news this week"
 # Override specific parameters
 python cli.py --config examples/fast_config.yaml "who will win World Cup 2026" --max-duration 120 --consensus 0.5
 ```
+
+#### Configuration Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `--config` | Path to YAML configuration file with agent setup, model parameters, and orchestrator settings |
+| `--models` | Space-separated model names (e.g., `gpt-4o gemini-2.5-flash`). Single model enables single-agent mode; multiple models enable collaborative multi-agent mode |
+| `--consensus` | Consensus threshold (0.0-1.0) for multi-agent agreement. Higher values require stronger consensus before concluding; unmet thresholds trigger continued debate and refinement |
+| `--max-duration` | Maximum session execution time in seconds before automatic termination |
+| `--max-debates` | Maximum number of debate rounds allowed when agents fail to reach consensus |
+| `--no-display` | Disable real-time streaming display of agent progress |
+| `--no-logs` | Disable automatic session logging to files |
+
+**Note**: `--config` and `--models` are mutually exclusive - use one or the other.
 
 #### Interactive Multi-turn Mode
 
@@ -157,8 +186,6 @@ python cli.py --config examples/fast_config.yaml
 # Interactive mode with custom parameters
 python cli.py --models gpt-4o grok-3-mini --consensus 0.7 --max-duration 600
 ```
-
-**Note**: `--config` and `--models` are mutually exclusive - use one or the other.
 
 **Interactive Mode Features:**
 - **Multi-turn conversations**: Multiple agents collaborate to chat with you in an ongoing conversation
