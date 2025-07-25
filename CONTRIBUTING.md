@@ -67,9 +67,8 @@ We welcome contributions in these areas:
 
 ## 🤝 Community
 
-- Join discussions in GitHub Issues
-- Follow the project for updates
-- Share your use cases and examples
+Join the discussion on the #massgen channel of AG2 Discord server: https://discord.gg/VVrT2rQaz5
+
 
 ## 📄 License
 

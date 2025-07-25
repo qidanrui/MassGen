@@ -17,8 +17,8 @@
 
 > 🧠 **Multi-agent scaling through intelligent collaboration in Grok Heavy style**
 
-MassGen is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine to converge to the best solution to deliver a comprehensive and high-quality result. The power of this "parallel study group" approach is exemplified by advanced systems like xAI's Grok Heavy and Google DeepMind's Gemini DeepThink.
-This project started with the "threads of thoughts" and "iterative refinement" ideas presented in [The Myth of Reasoning](https://docs.ag2.ai/latest/docs/blog/#the-myth-of-reasoning), and extends the classic "multi-agent conversation" idea in [AG2](https://github.com/ag2ai/ag2).
+MassGen is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks. It assigns a task to multiple AI agents who work in parallel, observe each other's progress, and refine their approaches to converge on the best solution to deliver a comprehensive and high-quality result. The power of this "parallel study group" approach is exemplified by advanced systems like xAI's Grok Heavy and Google DeepMind's Gemini Deep Think.
+This project started with the "threads of thought" and "iterative refinement" ideas presented in [The Myth of Reasoning](https://docs.ag2.ai/latest/docs/blog/#the-myth-of-reasoning), and extends the classic "multi-agent conversation" idea in [AG2](https://github.com/ag2ai/ag2).
 
 ---
 
@@ -114,6 +114,13 @@ XAI_API_KEY=xai-your-xai-key-here
 GEMINI_API_KEY=your-gemini-key-here
 ```
 
+Make sure you set up the API key for the model you want to use.
+
+**Useful links to get API keys:**
+ - [Gemini](https://ai.google.dev/gemini-api/docs)
+ - [OpenAI](https://platform.openai.com/api-keys)
+ - [Grok](https://docs.x.ai/docs/overview)
+
 ### 3. 🧩 Supported Models and Tools
 
 <!-- What does the following mean? If it can be clarified, then we can uncomment -->
@@ -121,12 +128,12 @@ GEMINI_API_KEY=your-gemini-key-here
 
 #### Models
 
-The system currently supports three model providers with advanced reasoning capabilities: **Google Gemini**, **OpenAI**, and **xAI Grok**. The specific models tested can be found in `massgen/utils.py`. You can add a model in that file.
-More providers will be added (help wanted!) and the extension will be made easier.
+The system currently supports three model providers with advanced reasoning capabilities: **Google Gemini**, **OpenAI**, and **xAI Grok**. The specific models tested can be found in `massgen/utils.py`. Additional models can be registered in that file.
+More providers and local inference of open-sourced models (using vllm or sglang) will be added (help wanted!) and the extension will be made easier.
 
 #### Tools
 
-MassGen agents can leverage various tools to enhance their problem-solving capabilities. The Gemini, OpenAI, and Grok models can  use their own built-in search and code execution. You can easily extend functionality by registering custom tools in `massgen/tools.py`.
+MassGen agents can leverage various tools to enhance their problem-solving capabilities. The Gemini, OpenAI, and Grok models can use their own built-in search and code execution. You can easily extend functionality by registering custom tools in `massgen/tools.py`.
 
 **Supported Built-in Tools by Models:**
 
@@ -193,7 +200,7 @@ python cli.py --models gpt-4o grok-3-mini --consensus 0.7 --max-duration 600
 - **Easy exit**: Type `quit`, `exit`, or press `Ctrl+C` to stop
 
 
-### 4. 📊 View Results
+### 5. 📊 View Results
 
 The system provides multiple ways to view and analyze results:
 
@@ -203,7 +210,7 @@ The system provides multiple ways to view and analyze results:
 - **Streaming Output**: Watch agents' reasoning and responses as they develop
 
 #### Comprehensive Logging
-All sessions are automatically logged with detailed information:
+All sessions are automatically logged with detailed information. The file locations are also displayed and clickable in the UI.
 
 ```bash
 logs/
@@ -268,18 +275,17 @@ python cli.py --config examples/fast_config.yaml "Write a short story about a ro
 ### 3. Research
 ```bash
 python cli.py --config examples/fast_config.yaml "How much does it cost to run HLE benchmark with Grok-4"
-"
 ```
 
 ---
 
 ## 🗺️ Roadmap
 
-MassGen is currently in its foundational stage, with a focus on parallel, async multi-agent collaboration and orchestration. Our roadmap is centered on transforming this foundation into a highly robust, intelligent, and user-friendly system, while enabling frontier research and exploration.
+MassGen is currently in its foundational stage, with a focus on parallel, asynchronous multi-agent collaboration and orchestration. Our roadmap is centered on transforming this foundation into a highly robust, intelligent, and user-friendly system, while enabling frontier research and exploration.
 
 ### Key Future Enhancements:
 
--   **Advanced Agent Collaboration:** Exploring more communication and consensus-building protocols to improve agent synergy.
+-   **Advanced Agent Collaboration:** Exploring improved communication patterns and consensus-building protocols to improve agent synergy.
 -   **Expanded Model, Tool & Agent Integration:** Adding support for more models/tools/agents, including Claude, a wider range of tools like MCP Servers, and coding agents.
 -   **Improved Performance & Scalability:** Optimizing the streaming and logging mechanisms for better performance and resource management.
 -   **Enhanced Developer Experience:** Introducing a more modular agent design and a comprehensive benchmarking framework for easier extension and evaluation.
