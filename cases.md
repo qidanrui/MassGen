@@ -1,6 +1,6 @@
 # MassGen Case Study: The IMO 2025 Winner
 
-This case study showcases how MassGen orchestrated a collaboration between two leading AI models to produce a nuanced, accurate, and well-sourced answer to a complex question.
+This case study showcases how MassGen (v0.0.1alpha) orchestrated a collaboration between two leading AI models to produce a nuanced, accurate, and well-sourced answer to a complex question.
 
 **Prompt:** `Which AI won IMO 2025?`
 
@@ -45,7 +45,7 @@ This case study demonstrates the power of MassGen's collaborative approach. By e
 
 # MassGen Case Study: Synthesis from Diverse Perspectives
 
-This case study demonstrates how MassGen handles subjective prompts by tasking a representative agent to synthesize a final, comprehensive answer from multiple, diverse viewpoints.
+This case study demonstrates how MassGen (v0.0.1alpha) handles subjective prompts by tasking a representative agent to synthesize a final, comprehensive answer from multiple, diverse viewpoints.
 
 **Command:**
 ```bash
