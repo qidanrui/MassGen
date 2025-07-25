@@ -7,7 +7,7 @@
 
 <div align="center">
   <a href="https://youtu.be/eMBdoAYeujw">
-    <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg" alt="MassGen Demo Video">
+    <!-- <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg" alt="MassGen Demo Video"> -->
   </a>
 </div>
 
