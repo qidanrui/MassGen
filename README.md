@@ -210,7 +210,7 @@ Here are a few examples of how you can use MassGen for different tasks:
 
 To see how MassGen works in practice, check out these detailed case studies based on real session logs:
 
-- [**MassGen Case Studies**](cases.md)
+- [**MassGen Case Studies**](docs/case_studies/index.md)
 
 <!-- Uncomment when we add coding agent support -->
 <!-- ### 1. 📝 Code Generation
@@ -235,7 +235,8 @@ python cli.py --config examples/fast_config.yaml "Write a short story about a ro
 
 ### 3. Research
 ```bash
-python cli.py --config examples/fast_config.yaml "find big AI news this week"
+python cli.py --config examples/fast_config.yaml "How much does it cost to run HLE benchmark with Grok-4"
+"
 ```
 
 ---
