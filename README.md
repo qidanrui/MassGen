@@ -140,7 +140,7 @@ python cli.py "What is greatest common divisor of 238, 756, and 1512" --models g
 python cli.py --config examples/fast_config.yaml "find big AI news this week"
 
 # Override specific parameters
-python cli.py --config examples/fast_config.yaml "Question" --max-duration 120 --consensus 0.5
+python cli.py --config examples/fast_config.yaml "who will win World Cup 2026" --max-duration 120 --consensus 0.5
 ```
 
 #### Interactive Multi-turn Mode
@@ -214,32 +214,34 @@ Here are a few examples of how you can use MassGen for different tasks:
 
 To see how MassGen works in practice, check out these detailed case studies based on real session logs:
 
-- [**MassGen Case Studies**](cases.md)
+- [**MassGen Case Studies**](docs/case_studies/index.md)
 
-### 1. 📝 Code Generation
+<!-- Uncomment when we add coding agent support -->
+<!-- ### 1. 📝 Code Generation
 
 ```bash
-# Generate a Python function to calculate the Fibonacci sequence
-python cli.py --config examples/fast_config.yaml "Write a Python function to calculate the nth Fibonacci number."
-```
+python cli.py --config examples/fast_config.yaml "Design a logo for MassGen (multi-agent scaling system for GenAI) GitHub README"
+``` -->
 
-### 2. ❓ Question Answering
+### 1. ❓ Question Answering
 
 ```bash
 # Ask a question about a complex topic
 python cli.py --config examples/fast_config.yaml "Explain the theory of relativity in simple terms."
+python cli.py "what's best to do in Stockholm in October 2025" --models gemini-2.5-flash gpt-4o
 ```
 
-### 3. 🧠 Creative Writing
+### 2. 🧠 Creative Writing
 
 ```bash
 # Generate a short story
 python cli.py --config examples/fast_config.yaml "Write a short story about a robot who discovers music."
 ```
 
-### 4. Research
+### 3. Research
 ```bash
-python cli.py --config examples/fast_config.yaml "find big AI news this week"
+python cli.py --config examples/fast_config.yaml "How much does it cost to run HLE benchmark with Grok-4"
+"
 ```
 
 ---
