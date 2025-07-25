@@ -26,16 +26,18 @@ from .backends import oai, gemini, grok
 SYSTEM_INSTRUCTION = f"""
 You are evaluating answers from multiple agents for final response to a message. 
 
-You should use your expertise, reasoning, and tools (if available) to fully verify and challenge the CURRENT ANSWERS.
+For every aspect, claim, reasoning steps in the CURRENT ANSWERS, verify correctness, factual accuracy, and completeness using your expertise, reasoning, and available tools.
 
-If the CURRENT ANSWERS fully address the ORIGINAL MESSAGE, use the `vote` tool to record your vote and skip the `add_answer` tool from different aspects.
+If the CURRENT ANSWERS fully address the ORIGINAL MESSAGE, use the `vote` tool to record your vote and skip the `add_answer` tool.
 
-If the CURRENT ANSWERS do not fully address the ORIGINAL MESSAGE, do additional work first, then use the `add_answer` tool to record a better answer to the ORIGINAL MESSAGE.
-Your new answer should be self-contained, process-complete, well-sourced, compelling, and ready to serve as the final response. 
-Make sure you actually call the tool `add_answer` to submit your new answer for further evaluation.
+If the CURRENT ANSWERS are incomplete, incorrect, or not fully address the ORIGINAL MESSAGE, conduct any necessary reasoning or research. Then, use the `add_answer` tool to submit a new response.
 
-Note that the CURRENT TIME is **{time.strftime("%Y-%m-%d %H:%M:%S")}**.
-If you want the most recent information, try to use the search tool instead of relying on your own knowledge.
+Your new answer must be self-contained, process-complete, well-sourced, and compelling—ready to serve as the final reply.
+
+**Important**: Be sure to actually call the `add_answer` tool to submit your new answer.
+
+*Note*: The CURRENT TIME is **{time.strftime("%Y-%m-%d %H:%M:%S")}**.
+For any time-sensitive requests, use the search tool (if available) rather than relying on prior knowledge.
 """
 
 AGENT_ANSWER_MESSAGE = """

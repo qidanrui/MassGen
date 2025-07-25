@@ -160,10 +160,10 @@ More providers will be added soon.
 #### Simple Usage
 ```bash
 # Multi-agent mode with specific models
-python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gemini-2.5-flash gpt-4.1
+python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gemini-2.5-flash gpt-4o
 
 # Single agent mode
-python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gpt-4.1
+python cli.py "What is greatest common divisor of 238, 756, and 1512?" --models gpt-4o
 ```
 
 #### Configuration File Usage
@@ -181,13 +181,13 @@ MassGen supports an interactive mode where you can have ongoing conversations wi
 
 ```bash
 # Start interactive mode with multiple agents
-python cli.py --models gpt-4.1 gemini-2.5-flash grok-3-mini
+python cli.py --models gpt-4o gemini-2.5-flash grok-3-mini
 
 # Start interactive mode with configuration file
 python cli.py --config examples/fast_config.yaml
 
 # Interactive mode with custom parameters
-python cli.py --models gpt-4.1 grok-3-mini --consensus 0.7 --max-duration 600
+python cli.py --models gpt-4o grok-3-mini --consensus 0.7 --max-duration 600
 ```
 
 **Note**: `--config` and `--models` are mutually exclusive - use one or the other.

@@ -201,11 +201,6 @@ def process_message(messages,
                     params["reasoning"] = {"effort": "low"}
             params["model"] = model_name
             
-            # DEBUGGING
-            with open("streaming_openai.txt", "a") as f:
-                f.write(f"TOOLS: {json.dumps(formatted_tools, indent=4)}\n")
-                f.write(f"MESSAGE: {json.dumps(messages, indent=4)}\n")
-                
             # Inference        
             response = client.responses.create(**params)
             completion = response
@@ -489,13 +484,6 @@ def process_message(messages,
                         stream_callback("\n✅ Response complete\n")
                     except Exception as e:
                         print(f"Stream callback error: {e}")
-         
-        # DEBUGGING
-        with open("streaming_openai.txt", "a") as f:
-            f.write(f"TEXT: {text}\n")
-            f.write(f"CODE: {code}\n")
-            f.write(f"CITATIONS: {citations}\n")
-            f.write(f"FUNCTION_CALLS: {function_calls}\n")
                    
         result = AgentResponse(
             text=text,

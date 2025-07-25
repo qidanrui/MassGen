@@ -10,11 +10,11 @@ Usage examples:
     python cli.py "What is 2+2?" --config examples/production.yaml
     
     # Use model names directly (single or multiple agents)
-    python cli.py "What is 2+2?" --models gpt-4.1 gemini-2.5-flash
-    python cli.py "What is 2+2?" --models gpt-4.1  # Single agent mode
+    python cli.py "What is 2+2?" --models gpt-4o gemini-2.5-flash
+    python cli.py "What is 2+2?" --models gpt-4o  # Single agent mode
     
     # Interactive mode (no question provided)
-    python cli.py --models gpt-4.1 grok-4
+    python cli.py --models gpt-4o grok-4
 """
 
 import argparse
@@ -30,12 +30,24 @@ from massgen import (
     ConfigurationError
 )
 
+# Color constants for beautiful terminal output
+BRIGHT_CYAN = '\033[96m'
+BRIGHT_BLUE = '\033[94m'
+BRIGHT_GREEN = '\033[92m'
+BRIGHT_YELLOW = '\033[93m'
+BRIGHT_MAGENTA = '\033[95m'
+BRIGHT_RED = '\033[91m'
+BRIGHT_WHITE = '\033[97m'
+RESET = '\033[0m'
+BOLD = '\033[1m'
+DIM = '\033[2m'
+
 def display_vote_distribution(vote_distribution):
     """Display the vote distribution in a more readable format."""
     # sort the keys
     sorted_keys = sorted(vote_distribution.keys())
     for agent_id in sorted_keys:
-        print(f"    * Agent {agent_id}: {vote_distribution[agent_id]} votes")
+        print(f"      {BRIGHT_CYAN}Agent {agent_id}{RESET}: {BRIGHT_GREEN}{vote_distribution[agent_id]}{RESET} votes")
 
 def run_interactive_mode(config):
     """Run MassGen in interactive mode, asking for questions repeatedly."""
@@ -95,7 +107,7 @@ def run_interactive_mode(config):
     try:
         while True:
             try:
-                question = input("\n👤 User Input: ").strip()
+                question = input("\n👤 User: ").strip()
                 chat_history += f"User: {question}\n"
                 
                 if question.lower() in ['quit', 'exit', 'q']:
@@ -115,45 +127,46 @@ def run_interactive_mode(config):
                 chat_history += f"Assistant: {response}\n"
                 
                 # Display complete conversation exchange
-                print("\n" + "="*80)
-                print("💬 CONVERSATION EXCHANGE")
-                print("="*80)
+                print(f"\n{BRIGHT_CYAN}{'='*80}{RESET}")
+                print(f"{BOLD}{BRIGHT_WHITE}💬 CONVERSATION EXCHANGE{RESET}")
+                print(f"{BRIGHT_CYAN}{'='*80}{RESET}")
                 
-                print(f"👤 User Input:")
-                print(f"   {question}")
-                print()
+                # User input section with simple indentation
+                print(f"\n{BRIGHT_BLUE}👤 User:{RESET}")
+                print(f"    {BRIGHT_WHITE}{question}{RESET}")
                 
-                print(f"🤖 Assistant Response:")
+                # Assistant response section 
+                print(f"\n{BRIGHT_GREEN}🤖 Assistant:{RESET}")
                 
                 agents = {f"Agent {agent.agent_id}": agent.model_config.model for agent in config.agents}
 
-                # Show metadata first
+                # Show metadata with clean indentation
                 if result.get("single_agent_mode", False):
-                    print(f"   📋 Mode: Single Agent")
-                    print(f"   🤖 Agents: {agents}")
-                    print(f"   🎯 Representative Agent: {result['representative_agent_id']}")
-                    print(f"   🔧 Model: {result.get('model_used', 'Unknown')}")
-                    print(f"   ⏱️  Duration: {result['session_duration']:.1f}s")
+                    print(f"    {BRIGHT_YELLOW}📋 Mode:{RESET} Single Agent")
+                    print(f"    {BRIGHT_MAGENTA}🤖 Agents:{RESET} {agents}")
+                    print(f"    {BRIGHT_CYAN}🎯 Representative:{RESET} {result['representative_agent_id']}")
+                    print(f"    {BRIGHT_GREEN}🔧 Model:{RESET} {result.get('model_used', 'Unknown')}")
+                    print(f"    {BRIGHT_BLUE}⏱️  Duration:{RESET} {result['session_duration']:.1f}s")
                     if result.get("citations"):
-                        print(f"   📚 Citations: {len(result['citations'])}")
+                        print(f"    {BRIGHT_WHITE}📚 Citations:{RESET} {len(result['citations'])}")
                     if result.get("code"):
-                        print(f"   💻 Code blocks: {len(result['code'])}")
+                        print(f"    {BRIGHT_WHITE}💻 Code blocks:{RESET} {len(result['code'])}")
                 else:
-                    print(f"   📋 Mode: Multi-Agent")
-                    print(f"   🤖 Agents: {agents}")
-                    print(f"   🎯 Representative Agent: {result['representative_agent_id']}")
-                    print(f"   ✅ Consensus Reached: {result['consensus_reached']}")
-                    print(f"   ⏱️  Duration: {result['session_duration']:.1f}s")
-                    print(f"   📊 Vote Distribution:")
+                    print(f"    {BRIGHT_YELLOW}📋 Mode:{RESET} Multi-Agent")
+                    print(f"    {BRIGHT_MAGENTA}🤖 Agents:{RESET} {agents}")
+                    print(f"    {BRIGHT_CYAN}🎯 Representative:{RESET} {result['representative_agent_id']}")
+                    print(f"    {BRIGHT_GREEN}✅ Consensus:{RESET} {result['consensus_reached']}")
+                    print(f"    {BRIGHT_BLUE}⏱️  Duration:{RESET} {result['session_duration']:.1f}s")
+                    print(f"    {BRIGHT_YELLOW}📊 Vote Distribution:{RESET}")
                     display_vote_distribution(result['summary']['final_vote_distribution'])
                     
-                # Print the response
-                print(f"   💡 Response:")
-                # Indent the response for better formatting
+                # Print the response with simple indentation
+                print(f"\n    {BRIGHT_RED}💡 Response:{RESET}")
+                # Indent the response content
                 for line in response.split('\n'):
-                    print(f"   {line}")
+                    print(f"        {line}")
                 
-                print("\n" + "="*80)
+                print(f"\n{BRIGHT_CYAN}{'='*80}{RESET}")
                 
             except KeyboardInterrupt:
                 print("\n👋 Goodbye!")
@@ -177,14 +190,14 @@ Examples:
   python cli.py "What is the capital of France?" --config examples/production.yaml
   
   # Use model names directly (single or multiple agents)
-  python cli.py "What is 2+2?" --models gpt-4.1 gemini-2.5-flash
-  python cli.py "What is 2+2?" --models gpt-4.1  # Single agent mode
+  python cli.py "What is 2+2?" --models gpt-4o gemini-2.5-flash
+  python cli.py "What is 2+2?" --models gpt-4o  # Single agent mode
   
   # Interactive mode (no question provided)
-  python cli.py --models gpt-4.1 grok-4
+  python cli.py --models gpt-4o grok-4
   
   # Override parameters
-  python cli.py "Question" --models gpt-4.1 gemini-2.5-flash --max-duration 1200 --consensus 0.8
+  python cli.py "Question" --models gpt-4o gemini-2.5-flash --max-duration 1200 --consensus 0.8
         """
     )
     
@@ -196,7 +209,7 @@ Examples:
     config_group.add_argument("--config", type=str,
                              help="Path to YAML configuration file")
     config_group.add_argument("--models", nargs="+",
-                             help="Model names (e.g., gpt-4.1 gemini-2.5-flash)")
+                             help="Model names (e.g., gpt-4o gemini-2.5-flash)")
     
     # Configuration overrides
     parser.add_argument("--max-duration", type=int, default=None,

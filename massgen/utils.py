@@ -65,14 +65,10 @@ def get_agent_type_from_model(model: str) -> str:
     
     model_lower = model.lower()
     
-    if any(keyword in model_lower for keyword in ["gpt", "openai"]):
-        return "openai"
-    elif any(keyword in model_lower for keyword in ["gemini", "bard"]):
-        return "gemini"
-    elif any(keyword in model_lower for keyword in ["grok"]):
-        return "grok"
-    else:
-        raise ValueError(f"Unknown model: {model}")
+    for key, models in MODEL_MAPPINGS.items():
+        if model_lower in models:
+            return key
+    raise ValueError(f"Unknown model: {model}")
 
 
 def get_available_models() -> list:

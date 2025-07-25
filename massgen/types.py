@@ -182,7 +182,7 @@ class OrchestratorConfig:
     """Configuration for MassGen orchestrator."""
     
     max_duration: int = 600
-    consensus_threshold: float = 1.0
+    consensus_threshold: float = 0.0
     max_debate_rounds: int = 1
     status_check_interval: float = 2.0
     thread_pool_timeout: int = 5

@@ -8,7 +8,7 @@
 
 orchestrator:
   max_duration: 900           # 15 minutes for thorough analysis
-  consensus_threshold: 0.8    # 80% agreement for high confidence
+  consensus_threshold: 0.5    # 50% agreement for high confidence
   max_debate_rounds: 2        # Standard debate rounds
   status_check_interval: 1.0  # Balanced responsiveness
   thread_pool_timeout: 10     # Longer timeout for stability

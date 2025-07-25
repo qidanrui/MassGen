@@ -64,7 +64,7 @@ def create_config_from_models(
     Create a MassGen configuration from a list of model names.
     
     Args:
-        models: List of model names (e.g., ["gpt-4.1", "gemini-2.5-flash"])
+        models: List of model names (e.g., ["gpt-4o", "gemini-2.5-flash"])
         orchestrator_config: Optional orchestrator configuration overrides
         streaming_config: Optional streaming display configuration overrides
         logging_config: Optional logging configuration overrides
