@@ -13,6 +13,8 @@ python cli.py "what's best to do in Stockholm in October 2025" --models gemini-2
 *   Agent 1: `gemini-2.5-flash` (Designated Representative Agent)
 *   Agent 2: `gpt-4o`
 
+[![MassGen Case Study](https://img.youtube.com/vi/TjmaVp2Agfk/0.jpg)](https://www.youtube.com/watch?v=TjmaVp2Agfk)
+
 ## The Collaborative Process
 
 ### Initial Responses
