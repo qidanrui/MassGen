@@ -17,7 +17,7 @@
 <h1 align="center">🚀 MassGen: Multi-Agent Scaling System for GenAI</h1>
 
 <p align="center">
-  <i>MassGen is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks</i>
+  <i>MassGen is a cutting-edge multi-agent system that leverages the power of collaborative AI to solve complex tasks.</i>
 </p>
 
 <p align="center">
