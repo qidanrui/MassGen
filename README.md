@@ -2,6 +2,8 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Discord](https://img.shields.io/discord/1153072414184452236?color=7289da&label=chat&logo=discord&style=flat-square)](https://discord.gg/VVrT2rQaz5)
+
 
 ![logo](assets/logo.svg)
 
